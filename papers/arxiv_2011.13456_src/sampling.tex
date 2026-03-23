@@ -1,0 +1,161 @@
+\section{Solving the reverse SDE}
+After training a time-dependent score-based model $\bfs_\bftheta$, we can use it to construct the reverse-time SDE and then simulate it with numerical approaches to generate samples from $p_0$. %
+
+\subsection{General-purpose numerical SDE solvers}
+
+Numerical solvers provide approximate trajectories from SDEs. Many general-purpose numerical methods exist for solving SDEs, such as Euler-Maruyama and stochastic Runge-Kutta methods~\citep{kloeden2013numerical}, which correspond to different discretizations of the stochastic dynamics. We can apply any of them to the reverse-time SDE for sample generation. %
+
+Ancestral sampling, the sampling method of DDPM (\cref{eqn:ddpm_sampling}), actually corresponds to one special discretization of the reverse-time VP SDE (\cref{eqn:ddpm_sde}) (see \cref{app:reverse_diffusion}). Deriving the ancestral sampling rules for new SDEs, however, can be non-trivial. To remedy this, we propose \emph{reverse diffusion samplers} (details in \cref{app:reverse_diffusion}), which discretize the reverse-time SDE in the same way as the forward one, and thus can be readily derived given the forward discretization.
+As shown in \cref{tab:compare_samplers}, reverse diffusion samplers perform slightly better than ancestral sampling for both SMLD and DDPM models on CIFAR-10 (DDPM-type ancestral sampling is also applicable to SMLD models, see \cref{app:ancestral}.)
+
+
+\subsection{Predictor-corrector samplers}
+Unlike generic SDEs, we have additional information that can be used to improve solutions. Since we have a score-based model $\bfs_{\bftheta^*}(\bfx, t) \approx \nabla_\bfx \log p_t(\bfx)$, we can employ score-based MCMC approaches, such as Langevin MCMC~\citep{parisi1981correlation,grenander1994representations} or HMC~\citep{neal2011mcmc} to sample from $p_t$ directly, and correct the solution of a numerical SDE solver. 
+
+Specifically, at each time step, the numerical SDE solver first gives an estimate of the sample at the next time step, playing the role of a ``predictor''. Then, the score-based MCMC approach corrects the 
+marginal distribution of the estimated sample, playing the role of a ``corrector''. The idea is analogous to Predictor-Corrector methods, a family of numerical continuation techniques for solving systems of equations~\citep{allgower2012numerical}, and we similarly name our hybrid sampling algorithms \emph{Predictor-Corrector} (PC) samplers. Please find pseudo-code and a complete description in \cref{app:pc}. PC samplers generalize the original sampling methods of SMLD and DDPM: the former uses an identity function as the predictor and annealed Langevin dynamics as the corrector, while the latter uses ancestral sampling as the predictor and identity as the corrector. %
+
+\begin{table}
+    \definecolor{h}{gray}{0.9}
+	\caption{Comparing different reverse-time SDE solvers on CIFAR-10. Shaded regions are obtained with the same computation (number of score function evaluations). Mean and standard deviation are reported over five sampling runs. ``P1000'' or ``P2000'': predictor-only samplers using 1000 or 2000 steps. ``C2000'': corrector-only samplers using 2000 steps. ``PC1000'': Predictor-Corrector (PC) samplers using 1000 predictor and 1000 corrector steps.}\label{tab:compare_samplers}
+	\centering
+	\begin{adjustbox}{max width=\linewidth}
+		\begin{tabular}{c|c|c|c|c|c|c|c|c}
+			\Xhline{3\arrayrulewidth} \bigstrut
+			  & \multicolumn{4}{c|}{Variance Exploding SDE (SMLD)} & \multicolumn{4}{c}{Variance Preserving SDE (DDPM)}\\
+			 \Xhline{1\arrayrulewidth}\bigstrut
+			\diagbox[height=1cm, width=3cm]{Predictor}{FID$\downarrow$}{Sampler} & P1000 & \cellcolor{h}P2000 & \cellcolor{h}C2000 & \cellcolor{h}PC1000 & P1000 & \cellcolor{h}P2000 & \cellcolor{h}C2000 & \cellcolor{h}PC1000  \\
+			\Xhline{1\arrayrulewidth}\bigstrut
+            ancestral sampling & 4.98\scalebox{0.7}{ $\pm$ .06}	& \cellcolor{h}4.88\scalebox{0.7}{ $\pm$ .06} &\cellcolor{h} & \cellcolor{h}\textbf{3.62\scalebox{0.7}{ $\pm$ .03}} & 3.24\scalebox{0.7}{ $\pm$ .02}	& \cellcolor{h}3.24\scalebox{0.7}{ $\pm$ .02} &\cellcolor{h} & \cellcolor{h}\textbf{3.21\scalebox{0.7}{ $\pm$ .02}}\\
+        	reverse diffusion & 4.79\scalebox{0.7}{ $\pm$ .07} & \cellcolor{h}4.74\scalebox{0.7}{ $\pm$ .08} & \cellcolor{h} & \cellcolor{h}\textbf{3.60\scalebox{0.7}{ $\pm$ .02}} & 3.21\scalebox{0.7}{ $\pm$ .02} & \cellcolor{h}3.19\scalebox{0.7}{ $\pm$ .02} & \cellcolor{h} &\cellcolor{h}\textbf{3.18\scalebox{0.7}{ $\pm$ .01}}\\
+            probability flow &	15.41\scalebox{0.7}{ $\pm$ .15} &\cellcolor{h}10.54\scalebox{0.7}{ $\pm$ .08}&\cellcolor{h} \multirow{-3}{*}{20.43\scalebox{0.7}{ $\pm$ .07}} & \cellcolor{h}\textbf{3.51\scalebox{0.7}{ $\pm$ .04}} & 3.59\scalebox{0.7}{ $\pm$ .04} & \cellcolor{h}3.23\scalebox{0.7}{ $\pm$ .03} & \cellcolor{h}\multirow{-3}{*}{19.06\scalebox{0.7}{ $\pm$ .06}} & \cellcolor{h}\textbf{3.06\scalebox{0.7}{ $\pm$ .03}}\\
+			\Xhline{3\arrayrulewidth}
+		\end{tabular}
+	\end{adjustbox}
+\end{table}
+
+
+
+We test PC samplers on SMLD and DDPM models (see \cref{alg:pc_smld,alg:pc_ddpm} in \cref{app:pc}) trained with original discrete objectives given by \cref{eqn:ncsn_obj,eqn:ddpm_obj}. %
+This exhibits the compatibility of PC samplers to score-based models trained with a fixed number of noise scales. We summarize the performance of different samplers in \cref{tab:compare_samplers}, where probability flow is a predictor to be discussed in \cref{sec:flow}. Detailed experimental settings and additional results are given in \cref{app:pc}. We observe that our reverse diffusion sampler always outperform ancestral sampling, and corrector-only methods (C2000) perform worse than other competitors (P2000, PC1000) with the same computation (In fact, we need way more corrector steps per noise scale, and thus more computation, to match the performance of other samplers.) For all predictors, adding one corrector step for each predictor step (PC1000) doubles computation but always improves sample quality (against P1000). Moreover, it is typically better than doubling the number of predictor steps without adding a corrector (P2000), where we have to interpolate between noise scales in an ad hoc manner (detailed in \cref{app:pc}) for SMLD/DDPM models. In \cref{fig:computation} (\cref{app:pc}), we additionally provide qualitative comparison for models trained with the continuous objective \cref{eqn:training} on $256\times 256$ LSUN images and the VE SDE, where PC samplers clearly surpass predictor-only samplers under comparable computation, when using a proper number of corrector steps.
+
+
+
+
+
+
+
+
+\subsection{Probability flow and connection to neural ODEs}\label{sec:flow}
+Score-based models enable another numerical method for solving the reverse-time SDE. For all diffusion processes, there exists a corresponding \emph{deterministic process} whose trajectories share the same marginal probability densities $\{p_t(\bfx)\}_{t=0}^T$ as the SDE. This deterministic process satisfies an ODE~(more details in \cref{app:prob_flow_derive}):
+\begin{align}
+    \ud \bfx = \Big[\bff(\bfx, t) - \frac{1}{2} g(t)^2\nabla_\bfx \log p_t(\bfx)\Big] \ud t, \label{eqn:flow}
+\end{align}
+which can be determined from the SDE once scores are known. We name the ODE in \cref{eqn:flow} the \emph{probability flow ODE}.
+When the score function is approximated by the time-dependent score-based model, which is typically a neural network, this is an example of a neural ODE~\citep{chen2018neural}. 
+
+
+
+\textbf{Exact likelihood computation}~ Leveraging the connection to neural ODEs, we can compute the density defined by \cref{eqn:flow}  via the instantaneous change of variables formula \citep{chen2018neural}. This allows us to compute the \emph{exact likelihood on any input data} (details in \cref{app:prob_flow_likelihood}). %
+As an example, we report negative log-likelihoods (NLLs) measured in bits/dim on the CIFAR-10 dataset in \cref{tab:bpd}. We compute log-likelihoods on uniformly dequantized data, and only compare to models evaluated in the same way (omitting models evaluated with variational dequantization~\citep{ho2019flow++} or discrete data), except for DDPM ($L$/$L_\text{simple}$) whose ELBO values (annotated with *) are reported on discrete data. Main results: (i) For the same DDPM model in \citet{ho2020denoising}, we obtain better bits/dim than ELBO, since our likelihoods are exact; (ii) Using the same architecture, we trained another DDPM model with the continuous objective in \cref{eqn:training} (\ie, DDPM cont.), which further improves the likelihood; (iii) With sub-VP SDEs, we always get higher likelihoods compared to VP SDEs; (iv) With improved architecture (\ie, DDPM++ cont., details in \cref{sec:arch}) and the sub-VP SDE, we can set a new record bits/dim of 2.99 on uniformly dequantized CIFAR-10 even \emph{without maximum likelihood training}.
+
+\begin{table}
+\begin{minipage}[t]{0.48\textwidth}
+\vspace{-0.3cm}
+\begin{table}[H]
+\centering
+\caption{NLLs and FIDs (ODE) on CIFAR-10. }\label{tab:bpd}\vspace{-1em}
+\footnotesize
+ \setlength\tabcolsep{3.5pt}
+\begin{adjustbox}{max width=\textwidth}
+    \begin{tabular}{l c c}
+    \toprule
+    Model & NLL Test $\downarrow$ & FID $\downarrow$\\
+    \midrule
+    RealNVP~\citep{dinh2016density} & 3.49 & -\\
+    iResNet~\citep{behrmann2019invertible} & 3.45 & -\\
+    Glow~\citep{kingma2018glow} & 3.35 & - \\
+    MintNet~\citep{song2019mintnet} & 3.32 & - \\
+    Residual Flow~\citep{chen2019residual} & 3.28 & 46.37\\
+    FFJORD~\citep{grathwohl2018ffjord} & 3.40 & -\\
+    Flow++~\citep{ho2019flow++} & 3.29 & -\\
+    DDPM ($L$)~\citep{ho2020denoising} & $\leq$ 3.70\textsuperscript{*} & 13.51\\
+    DDPM ($L_{\text{simple}}$)~\citep{ho2020denoising} & $\leq$ 3.75\textsuperscript{*} & 3.17\\
+    \midrule
+    DDPM & 3.28 & 3.37\\\relax
+    DDPM cont. (VP) & 3.21 & 3.69\\\relax
+    DDPM cont. (sub-VP) & 3.05 & 3.56\\\relax
+    DDPM++ cont. (VP) & 3.16 & 3.93\\\relax
+    DDPM++ cont. (sub-VP) & 3.02 & 3.16\\ \relax
+    DDPM++ cont. (deep, VP) & 3.13 & 3.08\\ \relax
+    DDPM++ cont. (deep, sub-VP) & \textbf{2.99} & \textbf{2.92} \\
+    \bottomrule
+    \end{tabular}
+\end{adjustbox}
+\end{table}
+\end{minipage}\hfil
+\begin{minipage}[t]{0.48\textwidth}
+\vspace{-0.3cm}
+\begin{table}[H]
+\centering
+\caption{CIFAR-10 sample quality.}\label{tab:fid}\vspace{-1em}
+\footnotesize
+ \setlength\tabcolsep{3.5pt}
+\begin{adjustbox}{max width=\textwidth}
+  \begin{tabular}{lcc}
+    \toprule
+    Model & FID$\downarrow$ & IS$\uparrow$  \\
+        \midrule
+      {\bf Conditional} & & \\
+      \midrule
+      BigGAN~\citep{brock2018large} & 14.73 & 9.22 \\
+      StyleGAN2-ADA~\citep{karras2020training} & \textbf{2.42} & \textbf{10.14} \\
+      \midrule
+      {\bf Unconditional} & & \\
+      \midrule
+      StyleGAN2-ADA~\citep{karras2020training} & 2.92 & 9.83 \\
+      NCSN~\citep{song2019generative} & 25.32 & 8.87 $\pm$ .12 \\
+      NCSNv2~\citep{song2020improved} & 10.87 & 8.40 $\pm$ .07\\
+      DDPM~\citep{ho2020denoising} & 3.17 & 9.46 $\pm$ .11\\
+      \midrule
+      DDPM++ & 2.78 & 9.64\\
+      DDPM++ cont. (VP) & 2.55 & 9.58 \\
+      DDPM++ cont. (sub-VP) & 2.61 & 9.56 \\
+      DDPM++ cont. (deep, VP) & 2.41 & 9.68\\
+      DDPM++ cont. (deep, sub-VP) & 2.41 & 9.57\\
+      NCSN++ & 2.45 & 9.73 \\
+      NCSN++ cont. (VE) & 2.38 & 9.83\\
+      NCSN++ cont. (deep, VE) & \textbf{2.20} & \textbf{9.89}\\
+    \bottomrule 
+    \end{tabular}
+\end{adjustbox}
+\end{table}
+\end{minipage}
+\end{table}
+
+\textbf{Manipulating latent representations}~ By integrating \cref{eqn:flow}, we can encode any datapoint $\bfx(0)$ into a latent space $\bfx(T)$. Decoding can be achieved by integrating a corresponding ODE for the reverse-time SDE. As is done with other invertible models such as neural ODEs and normalizing flows~\citep{dinh2016density,kingma2018glow}, we can manipulate this latent representation for image editing, such as interpolation, and temperature scaling (see \cref{fig:prob_flow} and \cref{app:flow}). 
+
+\textbf{Uniquely identifiable encoding}~ Unlike most current invertible models, 
+our encoding is {\em uniquely identifiable}, meaning that with sufficient training data, model capacity, and optimization accuracy, the encoding for an input is uniquely determined by the data distribution \citep{roeder2020linear}. This is because our forward SDE, \cref{eqn:forward_sde}, has no trainable parameters, and its associated probability flow ODE, \cref{eqn:flow}, provides the same trajectories given perfectly estimated scores. We provide additional empirical verification on this property in \cref{app:identifiability}.
+
+\textbf{Efficient sampling}~ As with neural ODEs, we can sample $\bfx(0) \sim p_0$ by solving \cref{eqn:flow} from different final conditions $\bfx(T)\sim p_T$. Using a fixed discretization strategy we can generate competitive samples, especially when used in conjuction with correctors (\cref{tab:compare_samplers},  ``probability flow sampler'', details in \cref{app:prob_flow_sampling}). Using a black-box ODE solver~\citep{dormand1980family} not only produces high quality samples (\cref{tab:bpd}, details in \cref{app:flow}), but also allows us to explicitly trade-off accuracy for efficiency. With a larger error tolerance, the number of function evaluations can be reduced by over $90\%$ without affecting the visual quality of samples (\cref{fig:prob_flow}).
+\begin{figure}
+    \centering
+    \includegraphics[width=1.0\linewidth]{figures/ode_tight}
+    \vspace{-5mm}
+    \caption{{\bf Probability flow ODE enables fast sampling} with adaptive stepsizes as the numerical precision is varied (\textit{left}), and reduces the number of score function evaluations (NFE) without harming quality (\textit{middle}). The invertible mapping from latents to images allows for interpolations (\textit{right}).}
+    \label{fig:prob_flow}
+\end{figure}
+
+
+
+\subsection{Architecture improvements}\label{sec:arch}
+
+
+
+We explore several new architecture designs for score-based models using both VE and VP SDEs (details in \cref{app:arch_search}), where we train models with the same discrete objectives as in SMLD/DDPM. We directly transfer the architectures for VP SDEs to sub-VP SDEs due to their similarity. Our optimal architecture for the VE SDE, named NCSN++, achieves an FID of 2.45 on CIFAR-10 with PC samplers, while our optimal architecture for the VP SDE, called DDPM++, achieves 2.78.
+
+By switching to the continuous training objective in \cref{eqn:training}, and increasing the network depth, we can further improve sample quality for all models. The resulting architectures are denoted as NCSN++ cont. and DDPM++ cont. in \cref{tab:fid} for VE and VP/sub-VP SDEs respectively. Results reported in \cref{tab:fid} are for the checkpoint with the smallest FID over the course of training, where samples are generated with PC samplers. In contrast, FID scores and NLL values in \cref{tab:bpd} are reported for the last training checkpoint, and samples are obtained with black-box ODE solvers. As shown in \cref{tab:fid}, VE SDEs typically provide better sample quality than VP/sub-VP SDEs, but we also empirically observe that their likelihoods are worse than VP/sub-VP SDE counterparts. This indicates that practitioners likely need to experiment with different SDEs for varying domains and architectures.
+
+Our best model for sample quality, NCSN++ cont. (deep, VE), doubles the network depth and sets new records for both inception score and FID on unconditional generation for CIFAR-10. Surprisingly, we can achieve better FID than the previous best conditional generative model without requiring labeled data. With all improvements together, we also obtain the first set of high-fidelity samples on CelebA-HQ $1024\times 1024$ from score-based models (see \cref{app:hq}). Our best model for likelihoods, DDPM++ cont. (deep, sub-VP), similarly doubles the network depth and achieves a log-likelihood of 2.99 bits/dim with the continuous objective in \cref{eqn:training}. To our best knowledge, this is the highest likelihood on uniformly dequantized CIFAR-10.
+

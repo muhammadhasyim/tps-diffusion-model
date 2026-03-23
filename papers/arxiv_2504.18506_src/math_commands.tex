@@ -1,0 +1,87 @@
+\usepackage{derivative}
+\definecolor{fuchsia(web)}{rgb}{0.65, 0.2, 0.65}
+\newcommand{\ak}[1]{{\color{red} \textbf{Aditi: #1}}}
+\newcommand{\mpp}[1]{{\color{fuchsia(web)} \textbf{Michael: #1}}}
+\newcommand{\sr}[1]{{\color{blue} \textbf{Sanjeev: #1}}}
+\newcommand{\ms}[1]{{\color{orange} \textbf{Martin: #1}}}
+\newcommand{\tk}[1]{{\color{olive} \textbf{Toby: #1}}}
+
+
+% \renewcommand*{\eqref}[1]{Eq.~\originaleqref{#1}}
+
+% general commands
+\newcommand{\argmin}{\operatornamewithlimits{argmin}}
+\newcommand{\argmax}{\operatornamewithlimits{argmax}}
+
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\renewcommand{\H}{\mathcal{H}}
+\newcommand{\E}{\operatornamewithlimits{\mathbb{E}}}
+
+\newcommand{\interior}[2][]{\operatorname{int}_{#1}#2}
+\newcommand{\boundary}[2][]{\operatorname{bd}_{#1}#2}
+
+% \newcommand{\eps}{\varepsilon}
+\newcommand{\abs}[1]{\left|#1\right|}
+\newcommand{\norm}[1]{\left\|#1\right\|}
+\newcommand{\inner}[2]{\left\langle #1, #2 \right\rangle}
+\newcommand{\id}{\mathrm{id}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\conv}{\operatorname{conv}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\mat}[1]{\begin{bmatrix}#1\end{bmatrix}}
+
+
+\newcommand{\xx}{\mathbf{x}}
+\newcommand{\yy}{\mathbf{y}}
+\newcommand{\ww}{\mathbf{w}}
+\newcommand{\qq}{\mathbf{q}}
+\newcommand{\pp}{\mathbf{p}}
+\newcommand{\QQ}{\mathbf{Q}}
+\newcommand{\PP}{\mathbf{P}}
+\newcommand{\RR}{\mathbf{R}}
+\newcommand{\MM}{\mathbf{M}} % Vector of masses
+\newcommand{\es}{\mathbf{s}} % \xx when integrating
+
+% Tilde U
+\newcommand{\tU}{\tilde{U}(\xx)}
+
+% Define variable
+\newcommand\myeq{\mathrel{\overset{\makebox[0pt]{\mbox{\normalfont\tiny\sffamily def}}}{=}}}
+\newcommand\derxx[1]{\frac{\partial{#1}}{{\partial \xx}}}
+\newcommand\dderxx[1]{\frac{\partial^2{#1}}{{\partial \xx^2}}}
+% \renewcommand{\R}{\mathbb{R}}
+
+
+
+% \newtheorem{theorem}{Theorem}
+% \newtheorem{lemma}{Lemma}
+% \newtheorem{corollary}[lemma]{Corollary}
+% \newtheorem{conjecture}[lemma]{Conjecture}
+% \newtheorem{proposition}{Proposition}
+% \newtheorem{definition}{Definition}
+    
+% % \theoremstyle{definition}
+% % \newtheorem{definition}[theorem]{Definition}
+% \newtheorem{example}[theorem]{Example}
+    
+% % \theoremstyle{remark}
+% \newtheorem{remark}[theorem]{Remark}
+
+% Shorthand font changes
+\newcommand{\mb}{\mathbf}
+% make bold Greek
+\newcommand{\mbg}{\boldsymbol}
+\newcommand{\mc}{\mathcal}
+\newcommand{\mf}{\mathfrak}
+\newcommand{\md}{\mathds}
+\newcommand{\bb}{\mathbb}
+\newcommand{\mr}{\text}
+    
+% paper-specific commands
+\renewcommand{\S}{\mathcal{S}}
+\newcommand{\A}{\mathcal{A}}
+\newcommand{\dt}{\frac{d}{dt}}
+\renewcommand{\P}{\mathbb{P}}
+\newcommand{\score}{\Psi}
+\newcommand{\ib}{\mathbf{i}}

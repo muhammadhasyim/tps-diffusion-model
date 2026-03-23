@@ -1,0 +1,59 @@
+\label{sec:related}
+
+\paragraph{Deterministic Transport and Normalizing Flows.}
+
+Transport-based sampling and density estimation has its contemporary roots in Gaussianizing data via maximum entropy methods \citep{Friedman1987,Chen2000, tabak2010, tabak2013}. The change of measure under such transformation is the backbone of normalizing flow models. The first neural network realizations of these methods arose through imposing clever structure on the transformation to make the change of measure tractable in discrete, sequential steps \citep{rezende2015, dinh2017density, papamakarios2017, huang2018, durkan2019}. A continuous time version of this procedure was made possible by viewing the map $T= X_t(x)$ as the solution of an ODE  \citep{chen2018, grathwohl2018scalable}, whose parametric drift defining the transport is learned via maximum likelihood estimation. Training this way is intractable at scale, as computing the gradient of the objective via the adjoint method requires simulating an ODE. Various methods have introduced regularization on the path taken between the two densities to make the ODE solves more efficient \citep{finlay2020,wu2021,tong_trajectorynet_2020}, but the fundamental difficulty remains. We also work in continuous time; however, our approach allows us to learn the drift without simulation of the dynamics, and can be formulated at sample generation time through either deterministic or stochastic transport.
+
+\paragraph{Stochastic Transport and Score-Based Diffusion Models (SBDMs).}
+%
+Complementary to approaches based on deterministic maps, recent works have realized that connecting a data distribution to a Gaussian density can be viewed as the evolution of an Ornstein-Ulhenbeck (OU) process which gradually degrades samples from the distribution of interest to Gaussian noise~\citep{dickstein2015, ho2020, Song2019, song2021scorebased}. 
+%
+The OU process specifies a path in the space of probability densities; this path is simple to traverse in the forward direction by addition of noise, and can be reversed if access to the score of the time-dependent density $\nabla\log\rho(t)$ is available.
+%
+This score can be approximated through solution of a least-squares regression problem~\citep{hyvarinen05a, vincent_connection_2011}, and the target can be sampled by reversing the path once the score has been learned.
+%
+Interestingly, the resulting forward and backward stochastic processes have an equivalent formulation (at the distribution level) in terms of a deterministic probability flow equation, first noted by~\cite{Bakry1985, OTTO2000361, Kim2010AGO} and then applied in~\cite{maoutsa2020, song2021mle, kingma2021on, boffi2022}. 
+%
+The probability flow formulation is useful for density estimation and cross-entropy calculations, but it is worth noting that the probability flow and the reverse-time SDE will have densities that differ when using an approximate score.
+%
+The SBDM framework, as it has been originally presented, has a number of features which are not \textit{a~priori} well motivated, including the dependence on mapping to a normal density, the complicated tuning of the time parameterization and noise scheduling \citep{xiao2022tackling, hoogeboom2023simple}, and the choice of the underlying stochastic dynamics \citep{dockhorn2022score, Karras2022edm}.
+%
+
+\paragraph{Stochastic bridges.}
+Starting with~\citep{peluchetti2022nondenoising} there has been some recent effort~\citep{liu2022let,liu2023I2SB,somnath2023aligned} to remove the dependence of SBDMs on the OU process via stochastic bridges, which can be used to connect two arbitrary densities in finite time. 
+%
+As another step in this direction, we observe here that the key idea behind SBDMs -- the bridging of two densities via a time-dependent density whose evolution equation is available -- can be generalized to a much wider class of processes in a straightforward and computationally accessible manner. 
+%
+This viewpoint highlights the key property that the construction of the bridge between the two densities is decoupled from the process used to sample it.
+%construction of the bridge between the two densities, and the definition process introduced afterwards to sample this bridge are separate procedures.}
+
+
+\paragraph{Stochastic Interpolants, Rectified Flows, and Flow matching.}
+Variants of the stochastic interpolant method presented in \cite{albergo2023building} were also presented in \cite{liu2022, lipman2022}. In \cite{liu2022}, a linear interpolant was proposed with a focus on straight paths. This was employed as a step toward rectifying the transport paths \citep{liu2022-ot} through a procedure that improves sampling efficiency but introduces a bias.  In \cite{lipman2022}, the interpolant picture was assembled from the perspective of conditional probability paths connecting to a Gaussian, where a noise convolution was used to improve the learning at the cost of biasing the method. Extensions of \cite{lipman2022} were presented in \cite{tong2023conditional} that generalize the method beyond the Gaussian base density. In the method proposed here, we introduce an unbiased means to incorporate noise into the process, both via the introduction of a latent variable into the stochastic interpolant and the inclusion of a tunable diffusion coefficient in the associated stochastic generative models. We provide theoretical and practical motivation for the presence of these noise terms. 
+
+
+\paragraph{Optimal Transport and Schrödinger Bridges.}
+
+There is both theoretical and practical interest in minimizing the transport cost of connecting $\rho_0$ and $\rho_1$. In the case of deterministic maps, this is characterized by the optimal transport problem, and in the case of diffusive maps, by the Schr\"odinger Bridge problem \citep{villani2009optimal, chen2021}. Formally, these two problems can be related by viewing the Schr\"odinger Bridge as an entropy-regularized optimal transport.
+%
+Optimal transport has primarily been employed as a means to regularize flow-based methods by imposing either a path length penalty \citep{zhang2018, wu2021, finlay2020, tong_trajectorynet_2020} or structure on the parameterization itself \citep{huang2021convex, Yang2022}. 
+%
+A variety of recent works have formulated the Schr\"odinger problem in the context of a learnable diffusion \citep{bortoli2021diffusion, su2023dual, chen2022likelihood}.  
+%
+For the case of Gaussians, recent work has also identified an analytical solution~\citep{bunne_schrodinger_2022}.
+%
+In the interpolant framework, \citep{albergo2023building, liu2022, lipman2022, tong2023conditional} all propose optimal transport extensions to the learning procedure. The method proposed in \cite{liu2022, liu2022-ot} allows one to sequentially lower the transport cost through rectification, at the cost of introducing a bias unless the velocity field is perfectly learned. The method proposed in \cite{albergo2023building} is an unbiased framework at the cost of solving an additional optimization problem over the interpolant function. The statement of optimal transport in \cite{lipman2022} only applies to Gaussians, but is shown to be practically useful in experimental demonstrations. 
+
+
+In the method proposed below, we provide two approaches for optimizing the transport under a stochastic dynamics. Our primary approach, based on the scheme introduced in \cite{albergo2023building}, is presented in Section~\ref{sec:si:schb}. It offers an alternative route to solve the Schr\"odinger bridge problem under the Benamou-Brenier hydrodynamic formulation of transport by maximizing over the interpolant \citep{benamou2000computational}. However, we stress that this additional optimization step is not necessary in practice, as our approach leads to bias-free generative models for any fixed interpolant. In addition, Section~\ref{sec:rect} discusses an unbiased variant of the rectification scheme proposed in \cite{liu2022}.
+
+\paragraph{Convergence bounds.}
+Inspired by the successes of score-based diffusion, significant recent research effort has been expended to understand the control that can be obtained on suitable distances between the distribution of the generative model and the target data distribution, such as $\mathsf{KL}$, $W_2$, or $\mathsf{TV}$. 
+%
+Perhaps the first line of work in this direction is~\cite{song2021mle}, which showed that standard score-based diffusion training techniques bound the likelihood of the resulting SDE model. 
+%
+Importantly, as we show here, the likelihood of the corresponding probability flow is not bounded in general by this technique, as first highlighted in the context of SBDM by~\cite{lu2022higherorder}.
+%
+Control for SBDM-based techniques was later quantified more rigorously under the assumption of functional inequalities in a discretized setting by~\cite{holden_score1}, which were removed by~\cite{holden_score2} and~\cite{sinho_score1} via Girsanov-based techniques.
+%
+Most relevant to the PDE-based methods considered here is~\cite{holden_score3}, which applies similar techniques to our own in the SBDM context to obtain sharp guarantees with minimal assumptions.

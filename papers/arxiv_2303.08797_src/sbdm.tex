@@ -1,0 +1,88 @@
+Score-based diffusion models (SBDM) are based on variants of the Ornstein-Uhlenbeck process
+\begin{equation}
+    \label{eq:sbdm:sde}
+    d Z_\tau = - Z_\tau dt + \sqrt{2} dW_\tau, \qquad Z_{\tau=0} \sim \rho_1,
+\end{equation}
+which has the property that the marginal density of its solution at time $\tau$ converges to a standard normal as $\tau$ tends towards infinity. By learning the score of the density of $Z_\tau$, we can write the associated backward SDE for~\eqref{eq:sbdm:sde}, which can then be used as a generative model -- this backwards SDE is also the one that is used in the stochastic localization process, see~\cite{montanari2023sampling}.
+
+To see the connection with stochastic interpolants, notice that the solution of \eqref{eq:sbdm:sde} from the initial condition $Z_{\tau=0} = x_1\sim \rho_1$ can be written exactly as
+\begin{equation}
+    \label{eq:sbdm:sde:sol}
+    Z_\tau = x_1 e^{-\tau}  + \sqrt{2} \int_0^\tau e^{-\tau+s} dW_s.
+\end{equation}
+As a result, the law of $Z_\tau$ conditioned on $Z_{\tau=0} = x_1$ is given by
+\begin{equation}
+    \label{eq:sbdm:sde:sol:2}
+    Z_\tau \sim {\sf N}(x_1 e^{-\tau}, (1-e^{-2\tau})\Id),
+\end{equation}
+for any time $\tau\in[0,\infty)$. This is also the law of the process
+\begin{equation}
+    \label{eq:sbdm:sde:sol:3}
+    y_\tau = x_1 e^{-\tau} + \sqrt{1-e^{-2\tau}}\, z, \qquad z\sim {\sf N}(0,\Id), \qquad \tau \in [0, \infty).
+\end{equation}
+If we let $x_1\sim \rho_1$ with $x_1\perp z$, the process $y_\tau$ is similar to a one-sided stochastic interpolant, except 
+the density of $y_\tau$ only converges to ${\sf N}(0,\Id)$ as $\tau\to\infty$; by contrast, the one-sided interpolants we introduced in Section~\ref{sec:onesided} converge on the finite interval $[0, 1]$.
+%
+%
+In SBDM, this is handled by capping the evolution of $Z_\tau$ to a finite time interval $[0, T]$ with $T < \infty$, and then by using the backward SDE associated with~\eqref{eq:sbdm:sde} restricted to $[0,T]$. 
+%
+However, this introduces a bias that is not present with one-sided stochastic interpolants, because the final condition used for the backwards SDE in SBDM is drawn from ${\sf N}(0,\Id)$ even though the density of the process~\eqref{eq:sbdm:sde} is not Gaussian at time~$T$.
+
+
+We can, however, turn~\eqref{eq:sbdm:sde:sol:3} into a one-sided linear stochastic interpolant by defining $t=e^{-\tau}$ and by choosing $\alpha(t)$ and $\beta(t)$ in~\eqref{eq:interp:os:lin} to have a specific form. More precisely, evaluating~\eqref{eq:sbdm:sde:sol:3} at $\tau = -\log t$,
+\begin{equation}
+    \label{eq:link:os:sbdm}
+    y_{\tau=-\log t} = \sqrt{1-t^2} z + t x_1 \equiv  x^\OSLIN_t   \quad \text{for} \quad  \alpha(t) = \sqrt{1-t^2}, \quad \beta(t) =t.
+\end{equation}
+With this choice of $\alpha(t)$ and $\beta(t)$, from~\eqref{eq:b:ode:os:lin} we get the velocity field
+\begin{equation}
+    \label{eq:b:sbdm}
+    b_\ODE(t,x) = -\frac{t}{\sqrt{1-t^2}} \eta^\OS_z(t,x) + \eta^\OS_1(t,x) \equiv t s(t,x) + \eta^\OS_1(t,x)
+\end{equation}
+where $\eta_z^\OS$ and $\eta_1^\OS$ are defined in~\eqref{eq:eta:os}. 
+%
+This expression shows that the velocity $b_\ODE$ used in the probability flow ODE~\eqref{eq:ode:1} is well-behaved at all times, including at $t=1$ where $\dot\alpha(t)$ is singular. 
+%
+The same is true for the drift $b_\fwd(t,x) = b_\ODE(t,x) + \eps(t) s(t,x)$ used in the forward SDE~\eqref{eq:sde:1}, regardless of the choice of $\eps \in C^0([0,1])$ with $\eps(t)\ge 0$. 
+%
+This shows that casting SBDM into a one-sided linear stochastic interpolant~\eqref{eq:interp:os:lin} allows the construction of \textit{unbiased} generative models that operate on $t\in[0,1]$.
+%
+This comes at no extra computational cost, since only one of the two functions defined in~\eqref{eq:eta:os} needs to be estimated, which is akin to estimating the score in SBDM. 
+
+It is worth comparing the above procedure to an equivalent change of time at the level of the diffusion process~\eqref{eq:sbdm:sde}, which we now show leads to singular terms that pose numerical and analytical difficulties.
+%
+Indeed, if we define $Z^\rev_t = Z_{\tau=-\log t}$, from~\eqref{eq:sbdm:sde} we obtain
+\begin{equation}
+\label{eq:sde:sbdm:tchange:r}
+d Z^\rev_t = t^{-1} Z^\rev_tdt + \sqrt{2 t^{-1}} dW^\rev_t, \quad Z^\rev_{t=1} \sim \rho_1,
+\end{equation}
+to be solved backwards in time. 
+%
+Because of the factor $t^{-1}$, this SDE cannot easily be solved until $t=0$, which corresponds to $\tau=\infty$ in the original~\eqref{eq:sbdm:sde}. 
+%
+For the same reason, the forward SDE associated with~\eqref{eq:sde:sbdm:tchange:r}
+\begin{equation}
+    \label{eq:sde:sbdm:tchange:f}
+    d Z^\fwd_t = t^{-1} Z^\fwd_tdt + 2 t^{-1}s(t,Z^\fwd_t) dt + \sqrt{2 t^{-1}} dW_t, 
+\end{equation}
+cannot be solved from $t=0$, where formally $Z^\fwd_{t=0} \stackrel{d}{=} Z^\rev_{t=0} = Z_{\tau=\infty} \sim \mathsf N(0,\Id)$.
+%
+This means it cannot be used as a generative model unless we start from some $t>0$, which introduces a bias. 
+%
+Importantly, this problem does not arise with the stochastic interpolant framework, because the construction of the density $\rho(t)$ connecting $\rho_0$ and $\rho_1$ is handled separately from the construction of the process that generates samples from $\rho(t)$.
+%
+By contrast, SBDM combines these two operations into one, leading to the singularity at $t=0$ in the coefficients in~\eqref{eq:sde:sbdm:tchange:r} and \eqref{eq:sde:sbdm:tchange:f}.
+
+\begin{remark}
+    To emphasize the last point made above, we stress that there is no contradiction between having  a singular drift and diffusion coefficient in~\eqref{eq:sde:sbdm:tchange:f}, and being able to write a nonsingular SDE with stochastic interpolants. To see why, notice that the stochastic interpolant tells us that we can change the diffusion coefficient in~\eqref{eq:sde:sbdm:tchange:f} to any nonsingular $\eps\in C^0([0,1])$ with $\eps(t)\ge 0$ and replace this SDE with
+\begin{equation}
+    \label{eq:sde:sbdm:tchange:f:2}
+    d X^\fwd_t = t^{-1} Z^\fwd_tdt + ( t^{-1} +\eps(t)) s(t,X^\fwd_t) dt + \sqrt{2 \eps(t)} dW_t, 
+\end{equation}
+This SDE has the property that $X^\fwd_{t=1}\sim \rho_1$ if $X^\fwd_{t=0}\sim \rho_0$, and its drift is also nonsingular at $t=0$ and given precisely by~\eqref{eq:b:sbdm}. Indeed, using the constraint~\eqref{eq:eta:os:c}, which here reads $x= \sqrt{1-t^2} \eta^\OS_z(t,x) + t \eta^\OS_1(t,x)\equiv -(1-t^2) s(t,x) + t \eta^\OS_1(t,x)$, it is easy to see that
+\begin{equation}
+    \label{eq:sde:sbdm:tchange:f:3}
+    t^{-1} x +  t^{-1} s(t,x) = t s(t,x) + \eta_1^\OS(t,x), 
+\end{equation}
+which is nonsingular at $t=0$.
+\end{remark}

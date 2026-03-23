@@ -1,0 +1,61 @@
+\subsection{Background and motivation}
+\label{sec:back:mot}
+
+Dynamical approaches for deterministic and stochastic transport have become a central theme in contemporary generative modeling research. At the heart of progress is the idea to use ordinary or stochastic differential equations (ODEs/SDEs) to continuously transform samples from a base probability density function (PDF)~$\rho_0$ into samples from a target PDF~$\rho_1$ (or vice-versa), and the realization that inference over the velocity field in these equations can be formulated as an empirical risk minimization problem over a parametric class of functions \citep{grathwohl2018scalable,Song2019,ho2020,song2021scorebased,benhamu2022,albergo2023building,liu2022,lipman2022}.
+
+A major milestone was the introduction of score-based diffusion methods (SBDM) \citep{song2021scorebased}, which map an arbitrary density into a standard Gaussian by passing samples through an Ornstein-Uhlenbeck (OU) process. The key insight of SBDM is that this process can be reversed by introducing a backwards SDE whose drift coefficient depends on the score of the time-dependent density of the process. By learning this score -- which can be done by minimization of a quadratic objective function known as the denoising loss~\citep{vincent_connection_2011} -- the backwards SDE can be used as a generative model that maps Gaussian noise into data from the target. Though theoretically exact, the mapping takes infinite time in both directions, and hence must be truncated in practice.
+
+While diffusion-based methods have become state-of-the-art for tasks such as image generation, there remains considerable interest in developing methods that bridge two \textit{arbitrary} densities (rather than requiring one to be Gaussian), that accomplish the transport \textit{exactly}, and that do so on a \textit{finite} time interval.
+%
+Moreover, while the highest quality results from score-based diffusion were originally obtained using SDEs~\citep{song2021scorebased}, this has been challenged by recent works that find equivalent or better performance with ODE-based methods if the score is learned sufficiently well~\citep{Karras2022edm}.
+%
+If made to match the performance of their stochastic counterparts, ODE-based methods exhibit a number of desirable characteristics, such as an exact, computationally tractable formula for the likelihood and the easy application of well-developed adaptive integration schemes for sampling. 
+%
+It is an open question of significant practical importance to understand if there exists a separation in sample quality between generative models based on deterministic dynamics and those based on stochastic dynamics. 
+
+In order to satisfy the desirable characteristics outlined in the previous paragraph, we develop a framework for generative modeling based on the method proposed in~\cite{albergo2023building}, which is built on the notion of a \textit{stochastic interpolant}~$x_t$ used to bridge  two arbitrary densities $\rho_0$ and $\rho_1$.
+%
+We will consider more general designs below, but as one example the reader can keep in mind:
+\begin{equation}
+    \label{eq:stoch:interp:lin}
+    x_t = (1-t) x_0 + t x_1 + \sqrt{2t(1-t)} z, \quad t \in [0,1],
+\end{equation}
+where $x_0$, $x_1$, and $z$ are random variables drawn independently from $\rho_0$, $\rho_1$, and the standard Gaussian density $\mathsf{N}(0,\Id)$, respectively. The stochastic interpolant~$x_t$ defined in~\eqref{eq:stoch:interp:lin} is a continuous-time stochastic process that, by construction, satisfies $x_{t=0} = x_0\sim \rho_0$ and $x_{t=1} = x_1\sim \rho_1$. Its paths therefore \textit{exactly} bridge between samples  from $\rho_0$ at $t=0$ and from $\rho_1$ at $t=1$. A key observation is that:
+\begin{quote}
+    \textit{The law of the interpolant $x_t$ at any time $t\in[0,1]$ can be realized by many different processes, including an ODE and forward and backward SDEs whose drifts can be learned from data.}
+\end{quote} 
+To see why this is the case, one must consider the probability distribution of the interpolant~$x_t$. As shown below, for a large class of densities $\rho_0$ and $\rho_1$ supported on $\RR^d$, this distribution is absolutely continuous with respect to the Lebesgue measure. Moreover, its time-dependent density~$\rho(t)$ satisfies a first-order transport equation and a family of forward and backward Fokker-Planck equations in which the diffusion coefficient can be varied at will. Out of these equations, we can readily derive generative models that satisfy ODEs and SDEs, respectively, and whose densities at time~$t$ are given by $\rho(t)$.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figs/front_figure-final.pdf}
+    \caption{\textbf{The stochastic interpolant paradigm.} 
+    %
+    Example generative models based on the proposed framework, which connects two densities $\rho_0$ and $\rho_1$ using samples from both.
+    %
+    The design of the time-dependent probability density $\rho(t)$ that bridges between $\rho_0$ and $\rho_1$ is separated from the choice of how to sample it, which can be accomplished with deterministic or stochastic generative models. 
+    %
+    \textit{Left panel:} Sampling with a deterministic (ODE) generative model known as the probability flow equation. 
+    %
+    \textit{Right panel:} Sampling with a stochastic generative model given by an SDE with a tunable diffusion coefficient. 
+    %
+    The probability flow equation and the SDE have different paths, but their time-dependent density $\rho(t)$ is the same.
+    %
+    Moreover, the two equations rely on the same estimates for the velocity and the score. }
+    \label{fig:my_label}
+\end{figure}
+
+Interestingly, the drift coefficients entering these ODEs/SDEs are the unique minimizers of quadratic objective functions that can be  estimated empirically using data from $\rho_0$, $\rho_1$, and $\mathsf{N}(0,\Id)$. The resulting least-squares regression problem allows us to estimate the drift coefficients of the ODE/SDEs, which can then be used to push samples from $\rho_0$ onto new samples from $\rho_1$ and vice-versa. 
+
+\subsection{Main contributions and organization}
+\input{contrib}
+
+\subsection{Related work}
+\input{related}
+
+\subsection{Notation}
+\label{sec:notations}
+
+Throughout, we denote probability density functions as $\rho_0(x)$, $\rho_1(x)$, and $\rho(t,x)$, with $t\in[0,1]$ and $x\in\RR^d$, omitting the function arguments when clear from the context. We proceed similarly for other functions of time and space, such as $b(t,x)$ or $I(t,x_0,x_1)$. We use the subscript $t$ to denote the time-dependency of stochastic processes, such as the stochastic interpolant $x_t$ or the Wiener process $W_t$. To specify that the random variable $x_0$ is drawn from the probability distribution with density $\rho_0$, say, with a slight abuse of notations we use $x_0\sim\rho_0$. Similarly, we use ${\sf N}(0,\Id)$ to denote both the density and the distribution of the Gaussian random variable with mean zero and covariance identity. We denote expectation by $\EE$, and usually specify the random variables this expectation is taken over. With a slight abuse of terminology, we say that the law of the process $x_t$ is $\rho(t)$ if $\rho(t)$ is the density of the probability distribution of $x_t$ at time $t$.
+
+We use standard notation for function spaces: for example, $C^1([0,1])$ is the space of continuously differentiable functions from $[0,1]$ to $\RR$, $(C^2(\RR^d))^d$ is the space of twice continuously differentiable functions from $\RR^d$ to $\RR^d$, and $C^p_0(\RR^d)$ is the space of compactly supported functions from $\RR^d$ to $\RR$ that are continuously differentiable $p$ times. Given a function $b:[0,1]\times \RR^d \to \RR^d$ with value $b(t,x)$ at $(t,x)$, we use $b \in C^1([0,1]; (C^2(\RR^d))^d)$ to indicate that $b$ is continuously differentiable in $t$ for all $(t,x)\in[0,1]\times \RR^d$ and that $b(t,\cdot)$ is an element of $(C^2(\RR^d))^d$ for all $t\in[0,1]$. 

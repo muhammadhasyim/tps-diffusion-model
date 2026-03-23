@@ -1,0 +1,402 @@
+\title{Theory}
+
+\section{Extended Related Work: Transition Path Sampling}
+\label{sec:extended_related_work}
+A rich landscape of tools has been developed for TPS, for which we refer to existing surveys for a more exhaustive description \cite{bolhuis2002transition, dellago2002transition, vanden2010transition}. Traditional shooting methods perturb the initial or intermediate states of a known trajectory to generate new trajectories via a Metropolis-Hasting criterion \cite{mullen2015easy, borrero2016avoiding, jung2017transition, bolhuis2021transition}. These often suffer from high rejection rates, correlated samples, and the need for expensive molecular dynamics (MD) simulations during sampling. Another class of methods is based on adding an adjustable biasing potential to enhance the sampling of slow events, which includes umbrella sampling \cite{torrie1977nonphysical}, metadynamics \cite{Laio2002a}, and more advanced techniques such as eABF \cite{Darve2001a}. These approaches require a carefully constructed, low-dimensional mapping of the problem via collective variables (CVs), which can be challenging, particularly when the characterization of the system around the transition state is uncertain. Attempts were made to design CVs with ML methods \cite{Sultan2018AutomatedLearning,rogal2019neural, chen2018molecular,sun2022multitask,Sipka2023}, yet they remain a challenge for many-atom systems. ML approaches have also been used to learn the biasing potential directly, including approaches based on stochastic optimal control \cite{holdijk2024stochastic, yan2022learning}, differentiable simulation \cite{sipka2023differentiable}, reinforcement learning \cite{das2021reinforcement, rose2021reinforcement, singh2023variational, seong2024transitionpathsamplingimproved, liang2023probing}, and $h$-transform learning \cite{singh2023variational, du2024doob}. In all of these approaches, unlimited access to the underlying potential energy and force field are assumed, but samples from the underlying data distribution are not available. As a result, the methods must be retrained from scratch for every new system of interest. Additionally, expensive, simulation-based training procedures are often employed, limited scalability to larger systems. Interpolation-based methods, such as the Nudged Elastic Band (NEB) method \cite{nebmethod} and the spring method \cite{dellago}, introduce springs between images to construct transition paths (spring method) or to directly locate saddle points (NEB). Recent approaches have used neural networks to parameterize transition paths as continuous functions, using NEB-inspired loss functions to optimize the path \cite{ramakrishnan2025implicit, petersen2025pinn}. A significant challenge for these approaches lies in generating physical initial guess paths, which are inherently unknown a priori. These approaches also typically compute a single minimum energy pathway rather than an ensemble of paths, making the estimation of converged transition rates challenging. Among interpolation-like approaches, the Onsager-Machlup (OM) action has also been explored for TPS. Due to the limited availability of automatic differentiation techniques at the time, Laplacian operators were consistently avoided. This restriction limited its application to very low-dimensional problems \cite{vanden2008geometric, 10.1063/1.3372802}, or led to the development of Laplace-free action formulations \cite{Lee2017}. 
+
+% \section{Diffusion models and OM principle}\label{appendix:diffusion} \ms{move after we derive and define the action properly.}
+% It has been shown that certain diffusion model can be understood as a flavor of Langevin dynamics. Take a simple \cite{DDPM} forward process
+% \begin{equation}
+%     \xx_i = \sqrt{1-\beta_i}\xx_{i-1} + \sqrt{\beta_i}z_{i-1}.
+% \end{equation}
+% It was shown in \cite{arts2023two} that it can be by some manipulation rewritten to a form
+% \begin{equation}
+%     todo
+% \end{equation}
+
+% \subsection{Diffusion models and the score}
+% \begin{enumerate}
+% \item Show equivalence of DDPM training loss to just training against the score
+% \item Brief overview of proof that trained model is actually the score of the distribution, at different depths
+% \end{enumerate}
+
+% \mpp{TODO expand}
+% The DDPM objective minimizes the difference between the data distribution and the model's reverse denoising process. This can be expressed as minimizing the variational bound:
+% \begin{equation}
+%     \mathcal{L}_\text{DDPM}(\theta) = \mathbb{E}_{\tau, x_0, \epsilon} \Bigg[ \|\epsilon - \epsilon_\theta(x_\tau, \tau)\|_2^2  \Bigg],
+% \end{equation}
+% where $\tau \sim \mathrm{Unif}(\{1, \ldots, T_d\})$, $x_0 \sim p(x)$, $\epsilon \sim \mathcal{N}(0, I)$, and 
+% $x_\tau = \sqrt{\bar{\alpha}_\tau} x_0 + \sqrt{1 - \bar{\alpha}_\tau} \epsilon$, where $\bar{\alpha}_\tau : \{1, \ldots, T_d\} \to [0, 1]$ defines a noise variance schedule.
+
+
+\section{Proofs for Score-Related Generative Model Objectives}
+\label{sec:proof_diffusion}
+For the sake of readability, we replicate proofs showing that both the training objectives for DDPM and flow matching models are equivalent to training against the score of a noised version of the data distribution (or in the case of flow matching, an invertible polynomial transformation of this score). See \citet{vincent2011connection} and \citet{lipman2024flow} for example proofs for DDPM and flow matching respectively.
+
+\subsection{A note on the DDPM reverse process}\label{sec:ddpm_sampling}
+
+The sampling process for a DDPM can be written as the terminal condition $\xx^{(0)}$ of the following process:
+\begin{align}
+    \xx^{(T_d)} &\sim \mc N(0, I),\\
+    \xx^{(i - 1)} &= \frac{1}{\sqrt{1-\beta_\tau}}\left(\xx^{(i)} + \frac{\beta_\tau}{\sqrt{1 - \bar{\alpha}_\tau}} \mb{s}_\theta(\xx^{(i)}, i)\right) + \sqrt{\beta_\tau} z.
+\end{align}
+While this process is definable as an Euler-Maruyama discretization of an SDE, it is not well suited for optimization over trajectories over the data distribution, since the vector field $\mb{s}_\theta(\xx^{(i)}, i)$ is changing throughout the trajectory, and iterates near the noise $i=T_d$ will not necessarily follow dynamics determined by the data distribution.
+
+
+\subsection{DDPM and score matching}\label{sec:ddpm_score_proof}
+
+Below is a proof for the equivalence of standard DDPM training to score matching.
+
+\begin{theorem}[DDPM-Score Matching Equivalence]
+\label{thm:score_matching_ddpm}
+Let $p_{\text{data}}(x_0)$ be the data distribution, and let $x_\tau$ be the noised variable defined through the forward process:
+\begin{equation}
+x_\tau = \sqrt{\bar{\alpha}_\tau}x_0 + \sqrt{1 - \bar{\alpha}_\tau}\epsilon, \quad \tau \sim \mathrm{Unif}(\{1, \ldots, T_d\}), \quad x_0 \sim p_{\text{data}}, \quad \epsilon \sim \mathcal{N}(0, I),
+\end{equation}
+where $\bar{\alpha}_\tau \in (0,1)$. Let $p_\tau(x_\tau) = \int p_{\text{data}}(x_0) \mathcal{N}(x_\tau; \sqrt{\bar{\alpha}_\tau}x_0, (1 - \bar{\alpha}_\tau)I) dx_0$ be the marginal distribution of $x_\tau$. Then the DDPM objective, defined as the following:
+\begin{equation}\label{eq:ddpm_loss}
+\mathcal{L}_\text{DDPM}(\theta) \myeq \mathbb{E}_{\tau, x_0, \epsilon} \left[ \|\epsilon - \epsilon_\theta(x_\tau, \tau)\|_2^2 \right],
+\end{equation}
+satisfies the following equality:
+\begin{equation}
+\mathcal{L}_\text{DDPM}(\theta) = \mathbb{E}_{\tau, x_\tau} \left[ (1 - \bar{\alpha}_\tau) \left\| \nabla_{x_\tau} \log p_\tau(x_\tau) - s_\theta(x_\tau, \tau) \right\|_2^2 \right] + C,
+\end{equation}
+where $s_\theta(x_\tau, \tau) \myeq -\epsilon_\theta(x_\tau, \tau)/\sqrt{1 - \bar{\alpha}_\tau}$, and $C$ is a constant independent of $\theta$.
+\end{theorem}
+
+\begin{proof}
+We begin with the DDPM training objective:
+\begin{equation}
+\mathcal{L}_\text{DDPM}(\theta) = \mathbb{E}_{\tau, x_0, \epsilon} \left[ \|\epsilon - \epsilon_\theta(x_\tau, \tau)\|_2^2 \right].
+\end{equation}
+
+The core of the desired result is Tweedie's formula, which relates Gaussian-based denoising to the score of the noised distribution. For any random variable $z$ generated as $z = \mu + \sigma \eta$ where $\mu$ is an arbitrary random vector, $\eta \sim \mathcal{N}(0, I)$, and $\sigma > 0$, Tweedie's formula gives the following posterior expectation:
+\begin{equation}
+\mathbb{E}[\mu | z] = z + \sigma^2 \nabla_z \log p(z),
+\end{equation}
+where $p(z) = \int \mathcal{N}(z; \mu, \sigma^2 I) p(\mu)d\mu$ is the full marginal distribution of $z$. In the forward process, $x_\tau$ is generated via $x_\tau = \sqrt{\bar{\alpha}_\tau}x_0 + \sqrt{1 - \bar{\alpha}_\tau}\epsilon$, which corresponds to:
+\begin{equation}
+\mu = \sqrt{\bar{\alpha}_\tau}x_0, \quad \sigma = \sqrt{1 - \bar{\alpha}_\tau}, \quad z = x_\tau, \quad \eta = \epsilon.
+\end{equation}
+Here, $\mu$ is a random variable (dependent on $x_0$), not a fixed parameter. Applying Tweedie's formula to the marginal distribution $p_\tau(x_\tau)$, we obtain:
+\begin{equation}
+\mathbb{E}\left[\sqrt{\bar{\alpha}_\tau}x_0 \,\big|\, x_\tau\right] = x_\tau + (1 - \bar{\alpha}_\tau)\nabla_{x_\tau} \log p_\tau(x_\tau).
+\end{equation}
+Dividing through by $\sqrt{\bar{\alpha}_\tau}$ gets the posterior of the original sample $x_0$:
+\begin{equation}
+\mathbb{E}[x_0 | x_\tau] = \frac{x_\tau}{\sqrt{\bar{\alpha}_\tau}} + \frac{1 - \bar{\alpha}_\tau}{\sqrt{\bar{\alpha}_\tau}} \nabla_{x_\tau} \log p_\tau(x_\tau).
+\end{equation}
+
+From the forward process definition, we rewrite in terms of $\epsilon$:
+\begin{equation}
+\epsilon = \frac{x_\tau - \sqrt{\bar{\alpha}_\tau}x_0}{\sqrt{1 - \bar{\alpha}_\tau}},
+\end{equation}
+and take conditional expectations given $x_\tau$ to get the following:
+\begin{align}
+    \mathbb{E}[\epsilon | x_\tau] &= \frac{x_\tau - \sqrt{\bar{\alpha}_\tau}\mathbb{E}[x_0 | x_\tau]}{\sqrt{1 - \bar{\alpha}_\tau}},\\
+    &= \frac{x_\tau - \sqrt{\bar{\alpha}_\tau}\left( \frac{x_\tau}{\sqrt{\bar{\alpha}_\tau}} + \frac{1 - \bar{\alpha}_\tau}{\sqrt{\bar{\alpha}_\tau}} \nabla_{x_\tau} \log p_\tau(x_\tau) \right)}{\sqrt{1 - \bar{\alpha}_\tau}},\\
+    &= \frac{x_\tau - x_\tau - (1 - \bar{\alpha}_\tau)\nabla_{x_\tau} \log p_\tau(x_\tau)}{\sqrt{1 - \bar{\alpha}_\tau}},\\
+    &= -\sqrt{1 - \bar{\alpha}_\tau} \nabla_{x_\tau} \log p_\tau(x_\tau).
+\end{align}
+
+Using the law of total expectation, we can expand the DDPM loss conditioned on $x_\tau, \tau$:
+\begin{equation}
+\mathcal{L}_\text{DDPM}(\theta) = \mathbb{E}_{\tau, x_\tau} \left[\mathbb{E}_{\epsilon} \left[ \|\epsilon - \epsilon_\theta(x_\tau, \tau)\|_2^2 \mid x_\tau, \tau \right] \right].
+\end{equation}
+For any random vector $\xi$, $\mathbb{E}[\|\xi - c\|^2]$ is minimized when $c = \mathbb{E}[\xi]$. We can then make the following bias-variance decomposition:
+\begin{equation}
+\mathbb{E}_{\epsilon} \left[ \|\epsilon - \epsilon_\theta(x_\tau, \tau)\|_2^2 \mid x_\tau, \tau \right] = \|\mathbb{E}[\epsilon \mid x_\tau, \tau] - \epsilon_\theta(x_\tau, \tau)\|_2^2 + \mathbb{E}\left[\|\epsilon - \mathbb{E}[\epsilon \mid x_\tau, \tau]\|_2^2 \mid x_\tau, \tau\right].
+\end{equation}
+Since the variance term is independent of $\theta$, substituting $\mathbb{E}[\epsilon\mid x_\tau, \tau]$ and factoring out $-\sqrt{1 - \bar{\alpha}_\tau}$ leads to:
+\begin{equation}
+\mathcal{L}_\text{DDPM}(\theta) = \mathbb{E}_{\tau, x_\tau} \left[ (1 - \bar{\alpha}_\tau) \left\| \nabla_{x_\tau}\log p_\tau(x_\tau) - \left( -\frac{\epsilon_\theta(x_\tau, \tau)}{\sqrt{1 - \bar{\alpha}_\tau}} \right) \right\|_2^2 \right] + C.
+\end{equation}
+By defining $s_\theta(x_\tau, \tau) \coloneqq -\epsilon_\theta(x_\tau, \tau)/\sqrt{1 - \bar{\alpha}_\tau}$, we obtain the score matching objective.
+\end{proof}
+
+\subsection{Flow matching and score matching}\label{sec:proof_flowmatch_score}
+
+We now provide proof for the flow matching setting, showing that the training objective is also similar to a score matching objective, with a simple transformation between the flow matching targets and the scores.
+
+\begin{theorem}[Flow Matching -- Score Matching Conversion]
+\label{thm:score_matching_fm}
+Let $p_{\text{data}}(x_0)$ be the data distribution, and let $x_\tau$ be the noised variable defined through the interpolation process:
+\begin{equation}
+x_\tau = \alpha_\tau x_1 +\sigma_\tau x_0, \quad \tau \sim \mathrm{Unif}([0,1]), \quad x_1 \sim p_{\text{data}}, \quad x_0 \sim \mathcal{N}(0, I),
+\end{equation}
+where $\alpha_\tau, \sigma_\tau : [0,1] \to [0,1]$ are strictly increasing and decreasing functions respectively that satisfy $\alpha_0 = \sigma_1 = 0$, $\alpha_1 = \sigma_0 = 1$. Let $p_\tau(x_\tau) = \int p_{\text{data}}(x_0) \mathcal{N}(x_\tau; \alpha_\tau x_1, \sigma_\tau^2I) dx_0$ be the marginal distribution of $x_\tau$. Then the flow matching objective, defined as the following:
+\begin{equation}
+\mathcal{L}_\text{FM}(\theta) \myeq \mathbb{E}_{\tau, x_0, x_1} \left[ \|u_\theta(x_\tau, \tau) - v_\tau (x_0, x_1)\|_2^2 \right],
+\end{equation}
+where $v_\tau(x_0, x_1) = \dot \alpha_\tau x_1 + \dot \sigma_\tau x_0$ the instance-wise curve velocity. The flow matching objective then satisfies the following equalities:
+\begin{enumerate}
+    \item \label{enum:fm_pf_pt1} We can equivalently train against targets of the unconditional velocities  $u_\tau(\xx) = \E_{\xx_0 \sim p_0, \xx_1 \sim p_1}\left[ \dot{\alpha_t} \xx_1 + \dot{\sigma_t} \xx_0 \mid \xx = \alpha_t \xx_1 + \sigma_t \xx_0\right]$:
+    \begin{equation}
+        \mathcal{L}_\text{FM}(\theta) = \mathbb{E}_{\tau, x_0, x_1} \left[ \|u_\theta(x_\tau, \tau) - u_\tau (x_\tau)\|_2^2 \right] + C,
+    \end{equation}
+    where $C$ is some constant independent of $\theta$, and
+    \item \label{enum:fm_pf_pt2} The equality $\nabla_x \log p_\tau (x) = \frac{\dot \alpha_\tau}{\alpha_\tau}x - \frac{\dot \sigma_\tau \sigma_\tau \alpha_\tau - \dot \alpha_\tau \sigma_\tau^2}{\alpha_\tau} u_\tau(x)$ holds, allowing us to write the flow matching objective in terms of the score:
+    \begin{equation}
+        \mathcal{L}_\text{FM}(\theta) = \mathbb{E}_{\tau, x_0, x_1} \left[ \|u_\theta(x_\tau, \tau) -\left( \frac{\dot \alpha_\tau}{\alpha_\tau} x_\tau - \frac{\dot \sigma_\tau \sigma_\tau \alpha_\tau - \dot \alpha_\tau \sigma_\tau^2}{\alpha_\tau}\nabla_{x_\tau} \log p_\tau (x_\tau) \right)\|_2^2 \right] + C.
+    \end{equation}
+\end{enumerate}
+\end{theorem}
+\begin{proof}
+For part \ref{enum:fm_pf_pt1}, we can expand the flow matching loss integrand by telescoping with respect to $u_\tau(x_\tau)$:
+\begin{align}
+    \|u_\theta(x_\tau, \tau) -  v_\tau(x_0, x_1)\|^2 &= \|u_\theta(x_\tau, \tau)  - u_\tau(x_\tau) + u_\tau(x_\tau) - v_\tau(x_0, x_1)\|^2,\\
+    &= \|u_\theta(x_\tau, \tau) - u_\tau(x_\tau)\|^2 + 2\inner{u_\theta(x_\tau, \tau)  - u_\tau(x_\tau)}{ u_\tau(x_\tau) -  v_\tau(x_0, x_1)} + \|u_\tau(x_\tau) -  v_\tau(x_0, x_1)\|^2.
+\end{align}
+Since $\mathbb{E}_{\tau, x_0, x_1}\|u_\tau(x_\tau) -  v_\tau(x_0, x_1)\|^2$ is constant with respect to $\theta$, it suffices to show the following:
+\begin{equation}
+    \mathbb{E}_{\tau, x_0, x_1}\inner{u_\theta(x_\tau, \tau)  - u_\tau(x_\tau)}{ u_\tau(x_\tau) -  v_\tau(x_0, x_1)} = 0.
+\end{equation}
+Note that by definition we have the following relation between $u$ and $v$:
+\begin{equation}
+\E_{x_0, x_1} \left[ v_\tau(x_0, x_1) \mid x_\tau, \tau\right] = \E_{x_0, x_1} \left[ \dot \alpha_\tau x_1 + \dot \sigma_\tau x_0 \mid x_\tau, \tau\right] = u_\tau(x_\tau).
+\end{equation}
+We can then write the following by expanding the expectation using the tower rule:
+\begin{align}
+    \mathbb{E}_{\tau, x_0, x_1}\inner{u_\theta(x_\tau, \tau)  - u_\tau(x_\tau)}{ u_\tau(x_\tau) -  v_\tau(x_0, x_1)} &= \mathbb{E}_{x_\tau, \tau} \left[\E_{x_0, x_1}\left[\inner{u_\theta(x_\tau, \tau)  - u_\tau(x_\tau)}{ u_\tau(x_\tau) -  v_\tau(x_0, x_1)} \mid x_\tau, \tau\right]\right],\\
+    &= \E_{x_\tau, \tau}\left[\inner{u_\theta(x_\tau, \tau)  - u_\tau(x_\tau)}{ u_\tau(x_\tau) -   \mathbb{E}_{x_0, x_1} \left[v_\tau(x_0, x_1)\mid x_\tau, \tau\right]} \right],\\
+    &= \E_{x_\tau,\tau}\left[\inner{u_\theta(x_\tau, \tau)  - u_\tau(x_\tau)}{ \mb 0} \right],\\
+    &= 0.
+\end{align}
+This concludes part \ref{enum:fm_pf_pt1}. Note that the interpolations $x_\tau = \alpha_\tau x_1 + \sigma_\tau x_0$ also follow proper form for Tweedie's formula, allowing us to write the following:
+\begin{align}
+    \E[\alpha_\tau x_1 | x_\tau, \tau] &= x_\tau + \sigma_\tau^2 \nabla_{x} \log p_\tau (x_\tau),\\
+    \E[ x_1 | x_\tau, \tau] &=  \frac{1}{\alpha_\tau}x_\tau + \frac{\sigma_\tau^2}{\alpha_\tau} \nabla_{x} \log p_\tau (x_\tau).
+\end{align}
+Noting that $x_0 = \frac{x_\tau - \alpha_\tau x_1}{\sigma_\tau}$, we can write $u_\tau$ as the following:
+\begin{align}
+    u_\tau(x) &= \E_{x_0, x_1}\left[ \dot{\alpha_t} x_1 + \dot{\sigma_t} x_0 \mid x_\tau = x \tau\right],\\
+    &=  \dot{\alpha_t} \E_{x_0, x_1}\left[x_1 \mid x_\tau = x, \tau\right] + \dot{\sigma_t} \E_{x_0, x_1}\left[x_0 \mid x_\tau = x, \tau\right] ,\\
+    &= \frac{\dot \sigma_\tau}{\sigma_\tau} x + \left(\dot \alpha_\tau - \frac{\alpha_\tau \dot \sigma_\tau}{\sigma_\tau}\right)\E_{x_0, x_1}\left[x_1 \mid x_\tau = x, \tau\right],\\
+    &= \frac{\dot \sigma_\tau}{\sigma_\tau} x + \left(\dot \alpha_\tau - \frac{\alpha_\tau \dot \sigma_\tau}{\sigma_\tau}\right)\left(\frac{1}{\alpha_\tau}x + \frac{\sigma_\tau^2}{\alpha_\tau} \nabla_{x} \log p_\tau (x)\right),\\
+    &= \frac{\dot \alpha_\tau}{\alpha_\tau} x - \frac{\dot \sigma_\tau \sigma_\tau \alpha_\tau - \dot \alpha_\tau \sigma_\tau^2}{\alpha_\tau}\nabla_{x} \log p_\tau (x).
+\end{align}
+This proves the desired relation between $u_\tau$ and $\nabla \log p_\tau$, and plugging into part \ref{enum:fm_pf_pt1} achieves the desired flow matching loss equality.
+
+\end{proof}
+\section{Derivation of the Onsager-Machlup action} 
+\label{appendix:OM_action}
+\subsection{Overdamped Langevin dynamics}
+We start the description of our system by formulating the well-known Hamilton equations. The variables we are solving are $\xx_i(t): \R^+ \to \R^d$ and the corresponding momenta $\pp_i(t): \R^+ \to \R^d$ with a constant vector $m_i$ representing the mass of every particle $i$ in the system. Hamiltonian equations are formulated as follows
+\begin{equation} \label{eq:md_standard}
+\begin{split}
+   \dot{\xx}_i(t) &= \frac{\pp_i(t)}{m_i}, \\
+   \dot{\pp}_i(t) &= -\frac{\partial U(\xx(t))}{\partial \xx_i}.
+\end{split}
+\end{equation}
+While these equations maintain energy and contain no representation of temperature, a modified SDE, with the term $\mb{W}(t)$ representing a Wiener process and a damping constant $\gamma$:
+\begin{equation} \label{eq:full_langevin}
+\begin{split}
+   \dot{\xx}_i(t) &= \frac{{\pp_i(t)}}{m_i}, \\
+   \dot{\pp}_i(t) &= -\frac{\partial U(\xx(t))}{\partial \xx_i} - \gamma \frac{\pp_i(t)}{m_i} + \sqrt{2 \gamma k_B T} \odv{\mb{W}(t)}{t},
+\end{split}
+\end{equation}
+or equivalently in one second order equation:
+\begin{equation}
+    m_i \Ddot{\xx}_i(t) = -\frac{\partial U(\xx(t))}{\partial \xx_i} - \gamma m_i \dot{\xx}_i + \sqrt{2 m_i \gamma k_B T} \odv{\mb{W}(t)}{t},
+\end{equation}
+can now represent a system that experiences thermal fluctuation. The above form with the symbol $\odv{\mb{W}(t)}{t}$ highlights physical significance, but one can multiply through by $\odif{t}$ to obtain a more standard SDE form. Although the original Hamiltonian system is trapped in an energy well forever, the one guided by Langevin dynamics may overcome barriers between wells in finite time.
+
+A question then arises. Of all the possible paths of fixed physical parameters and time that connect two minima, which is the most probable? How do we calculate probabilities and penalize high energy regions or paths that are making too large steps? The answer is provided by Onsager and Machlup in their works \cite{OMIbasic, OMIIKinetic}. The second reference handles the full equation \eqref{eq:full_langevin}, while the first is a reduction to a so-called overdamped state where the term $\Ddot{\xx}(t)$ can be neglected. After introduction of two auxiliary vector quantities $\zeta_i = m_i \gamma$ and $D_i = \frac{k_b T}{\zeta_i}$ we get the form
+\begin{equation}
+    \odif{\xx}_i = - \frac{1}{\zeta_i} \frac{\partial U(\xx(t))}{\partial \xx_i}\odif{t} + \sqrt{2 D_i} \odif{\mb{W}(t)}.
+\end{equation}
+or equally just with $\mb{F}(\xx(t)) = - \frac{\partial U(\xx(t))}{\partial \xx_i}$
+\begin{equation}
+    \odif{\xx}_i = \frac{1}{\zeta_i} \mb{F}(\xx(t))\odif{t} + \sqrt{2 D_i} \odif{\mb{W}(t)}.
+\end{equation}
+Further, we will follow a more general setting of the Langevin equation consistent with \eqref{eq:overdamped_langevin_main}. To recall:
+\begin{equation}
+    \label{eq:overdamped_langevin_apendix}
+    \odif{\xx} = \frac{1}{\zeta}\mathbf{\Phi(x)}\odif{t} + \sqrt{2 D} \odif{\mb{W}},
+\end{equation}
+and
+\begin{align}
+    \phi(\xx) &:= U(\xx) \\
+    \mathbf{\Phi}(\xx) &:= \mb{F}(\xx) = -\nabla U(\xx)
+\end{align}
+\subsection{Most probable path under Langevin dynamics}
+Considering a single particle (for more particle systems see e.g. \cite{PhysRevResearch.2.023407}), since \eqref{eq:overdamped_langevin_main} is a stochastic differential equation, we can also write a partial differential equation for the probability density of the particle guided by these equations. In this case it is a well-known Fokker-Planck equation (note $
+\frac{\partial}{\partial \xx}$ of a vector will be understood as a divergence operator to save space)
+\begin{equation}\label{eq:fokker_planck}
+    \frac{\partial P}{\partial t} = - \frac{\partial \left( \frac{\mb{\Phi}}{\zeta} P \right)}{\partial \xx} + \frac{ \partial }{\partial \xx} \left(D \frac{\partial P}{\partial \xx} \right).
+\end{equation}
+
+As we will consider only potential forces in this work, let us denote $\mb{\Phi}(\xx) = - \frac{\partial \phi(\xx)}{\partial \xx}$.
+Now we will split the derivation into two parts. 
+
+\paragraph{1. $\mb{\Phi} = 0:$} \
+
+Let us consider the solution in the following form:
+\begin{equation}
+\label{eq:FPSol}
+    P(\xx, t \mid \xx_0) = \left( 4 \pi D t \right)^{-\frac{3}{2}} e^{\frac{- (\xx - \xx_0)^2}{4 D t}}.
+\end{equation}
+Then for the sequence of points in space and time $(\xx^1, t^1), (\xx^2, t^2), \dots (\xx^N, t^N)$ we can write the following probability:
+\begin{equation}
+    P(\xx^1, t^1 \mid \xx^2, t^2 \mid \dots \mid \xx^N, t^N) = \prod_{j=1}^{N} P (\xx^j, t^j - t^{j-1} \mid \xx_0).
+\end{equation}
+Let us denote $t^j - t^{j-1} = \epsilon$ as we pass through a continuum limit in time. The probability can be rewritten by plugging in a solution \eqref{eq:FPSol} into
+\begin{equation}
+    \prod_{j=1}^{N} P (\xx^j, t^j - t^{j-1} \mid \xx_0) = \left( 4 \pi D \epsilon \right)^{-\frac{3}{2} N} \exp \left( -\frac{1}{4 D \epsilon} \sum_{j=1}^{N} (\xx_j - \xx_{j-1})^2 \right).
+\end{equation}
+To make sure we can pass into the limit let us rewrite
+\begin{equation}
+    \epsilon^{-\frac{3}{2}} = e^{-\frac{3}{2} \ln\epsilon}.
+\end{equation}
+We now focus on the argument of the $\exp$ function. We can modify it to the form 
+\begin{equation}
+    \frac{1}{4D} \sum_{j=1}^{N} \left(\frac{\xx_j-\xx_{j-1}}{\epsilon} \right)^2 \epsilon.
+\end{equation}
+By passing into the limit $N \to \infty$ and realizing that epsilon can be rewritten by its definition to $\epsilon = \frac{t}{N}$, we get the following integral form:
+\begin{equation}
+    \frac{1}{4D} \int_{0}^{t} \left(\dot{\xx} \right)^2 dt.
+\end{equation}
+Note however, using the identity $a^{b} = e^{b \ln a}$, the first part of the product goes to infinity:
+\begin{equation}
+    \lim_{N \to \infty} \left( 4 \pi D \frac{t}{N} \right)^{-\frac{3}{2}N} = \infty,
+\end{equation}
+evaluation of this limit directly would be too hasty. One must consider the probability derived in the broader context of integration across the path. In that case, the constant will serve to normalize the probability. The fact that it does not depend on $\xx$ also means that the probability of the path does not, relative to other paths, depend on this prefactor, and only the exponential part is important. To find out more about precise mathematical justifications, we refer the reader to \cite{gelfand-yaglom}. We shall denote the constant before exponential as $C$ from now on because, as it is not dependent on $\xx$, it will not influence our calculations. The final probability of a path is then given as follows:
+\begin{equation}
+    P(\xx,t) = C \exp \left( - \frac{1}{4D} \int_0^t (\dot{\xx}(s))^2 ds \right).
+\end{equation}
+To maximize the likelihood of the path we clearly need to minimize the action
+\begin{equation}
+    S_0(\xx(t)) = \frac{1}{4D} \int_0^t (\dot{\xx}(s))^2 ds.
+\end{equation}
+Intuitively, the most probable path under no drift is the one that does not move from it's origin. The longer the trajectory, the less probable it is.
+\paragraph{2. $\mb{\Phi} \neq 0$:} \
+
+We will recall the assumption $\mb{\Phi} = - \nabla \phi(\xx)$ and shall use a transformation
+\begin{equation}
+\label{eq:useful_transform}
+    P(\xx,t \mid \xx_0) = G(\xx,t, \mid \xx_0) \exp \left(\frac{1}{2D \zeta} \int_{\xx(0)}^{\xx(t)} \mb{\Phi}(\es) d\es \right),
+\end{equation}
+where from the properties of a potential function we can evaluate the integral to
+\begin{equation}
+    - \overline{\phi}(\xx) \myeq \frac{1}{2D \zeta}\int_{\xx(0)}^{\xx(t)} \mb{\Phi}(\es) d\es = \frac{1}{2D \zeta} \int_{\xx(0)}^{\xx(t)} \mb{\Phi}(\es) d\es = \frac{1}{2D \zeta} \left( -\phi(\xx) + \phi(\xx_0) \right).
+\end{equation}
+So for clarity:
+\begin{align}
+    P(\xx,t) &= G(\xx,t) e^{-\overline{\phi}(\xx)}, \\
+    G(\xx,t) &= P(\xx,t) e^{\overline{\phi}(\xx)}, \\
+    \nabla \overline{\phi}(\xx) &= \frac{1}{2D \zeta} \nabla \phi(\xx).
+\end{align}
+We then plug this transformed function into \eqref{eq:fokker_planck}.
+We will now derive the equation that $G(\xx,t)$ has to fulfill. Let us evaluate left-hand side of the \eqref{eq:fokker_planck}
+\begin{equation}
+    \frac{\partial P(\xx, t)}{\partial t} = \frac{\partial G(\xx,t)}{\partial t} e^{-\overline{\phi}(\xx)}.
+\end{equation}
+For the right-hand side lets evaluate first the term:
+    \begin{align}
+    \begin{split}
+    \frac{\partial \left( - \frac{1}{\zeta}\derxx{\phi(\xx)} P(\xx,t) \right)}{\partial \xx}  &= 
+    -  P(\xx,t) \frac{1}{\zeta} \dderxx{\phi(\xx)} - \frac{1}{\zeta}\frac{\partial P(\xx,t)}{\partial \xx} \derxx{\phi(\xx)} ,\\
+    &= - 2D P(\xx,t) \dderxx{\overline{\phi}} -2D \frac{\partial P(\xx,t)}{\partial \xx} \derxx{\overline{\phi}},\\
+    &= -2D G e^{-\overline{\phi}(\xx)} \dderxx{\overline{\phi}} - 2D \derxx{G} e^{-\overline{\phi}(\xx)} \derxx{\overline{\phi}} + 2D P \left( \derxx{\overline{\phi}} \right)^2.
+    \end{split}
+\end{align}
+While the other term can be written as follows:
+\begin{equation}
+    \begin{split}
+        \derxx{P(\xx,t)} &= \derxx{G(\xx,t)} e^{-\overline{\phi}} - G(\xx,t) e^{-\overline{\phi}} \derxx{\overline{\phi}}, \\ &= \derxx{G(\xx,t)} e^{-\overline{\phi}} - P(\xx,t) \derxx{\overline{\phi}}.
+    \end{split}
+\end{equation}
+The second derivative then with function arguments omitted for brevity, yet remaining the same
+\begin{equation}
+\begin{split}
+    D\frac{\partial^2 P}{\partial \xx^2} &= D\dderxx{G} e^{-\overline{\phi}} - D\derxx{G} e^{-\overline{\phi}} \derxx{\overline{\phi}} - D\derxx{P} \derxx{\overline{\phi}}
+    - D P \dderxx{\overline{\phi}}, \\ &= D\dderxx{G} e^{-\overline{\phi}} - 2D \derxx{G} e^{-\overline{\phi}} \derxx{\overline{\phi}} + D P \left(\derxx{\overline{\phi}}\right)^2
+    - D G e^{-\overline{\phi}} \dderxx{\overline{\phi}}.
+\end{split}
+\end{equation}
+After subtracting the terms on the right-hand side, we get the following:
+\begin{equation}
+    \begin{split}
+        \frac{\partial G}{\partial t} e^{-\overline{\phi}} = D\dderxx{G} e^{-\overline{\phi}} - D G e^{-\overline{\phi}} \left(\derxx{\overline{\phi}}\right)^2 + D G e^{-\overline{\phi}} \dderxx{\overline{\phi}}.
+    \end{split}
+\end{equation}
+Or written nicely after exponential cancels and we return to $\phi(\xx)$ from $\overline{\phi}$
+\begin{equation}
+    \frac{\partial G(\xx,t)}{\partial t} = D \dderxx{G(\xx,t)} - G(\xx,t) \left( \frac{1}{4D} \left(\frac{1}{\zeta}\derxx{\phi(\xx)} \right)^2 - \frac{1}{2 \zeta} \dderxx{\phi(\xx)} \right).
+\end{equation}
+This is a well studied diffusion-reaction equation
+\begin{equation}
+    \frac{\partial u(\xx,t)}{\partial t} = D \dderxx{u(\xx,t)} - k u(\xx,t).
+\end{equation}
+Notice for $\phi(\xx) \equiv 0$ we already solved this equation as it is identical to Fokker-Planck where $F=0$. Let us call this solution $u_0$. Another observation is that for this equation we can formulate a solution in the form
+\begin{equation}
+\begin{split}
+    u(\xx,t) = u_0(\xx,t) e^{-\int_0^t k(s) ds}, \\
+    u_0(\xx, t) = C e^{\frac{-( \xx - \xx_0)^2}{4 D t}},
+\end{split}
+\end{equation}
+where $C$ is some arbitrary normalization constant as in the previous solution: 
+\begin{equation}
+    G(\xx,t) = C \exp \left( \frac{-( \xx - \xx_0)^2}{4 D \epsilon} -\int_{\xx(0)}^{\xx(t)}  k(\es) d\es \right),
+\end{equation}
+and the original $P(\xx,t)$ using \eqref{eq:useful_transform}:
+\begin{equation}
+    P(\xx,t) = C \exp \left( \frac{- ( \xx - \xx_0)^2}{4 D t} +\int_{\xx(0)}^{\xx(t)} \left(- k(\xx(\es))+ \frac{1}{2D \zeta} \mb{\Phi}(\es) \right) d\es \right).
+\end{equation}
+Now we repeat the same multiplication of probabilities for small time increments. However, this time, the situation is easier as integrals would simply extend in the sum. Therefore the only limit would be in the first term exactly as done before. The final probability of the path is then as follows:
+\begin{equation}
+    P(\xx, t) = C  \exp \Big[- \frac{1}{4D} \int_0^t  (\dot{\xx})^2 + \left(\frac{1}{\zeta} \frac{\partial \phi}{\partial \xx} \right)^2 - \frac{2D}{\zeta}\frac{\partial^2 \phi}{\partial \xx^2} - 2 \mb{\Phi} d\es \Big].
+\end{equation}
+The negative argument of the exponential will again be an action to minimize:
+\begin{equation}
+    S(\xx(t)) = \frac{1}{4D} \int_0^t  (\dot{\xx})^2 + \left(\frac{1}{\zeta} \frac{\partial \phi}{\partial \xx} \right)^2 - \frac{2D}{\zeta}\frac{\partial^2 \phi}{\partial \xx^2} - 2\mb{\Phi}(\es) d\es.
+\end{equation}
+This can be further modified, by integrating forces along the path and using forces instead of a potential, to the more common form:
+\begin{equation}
+    S(\xx(t)) = \frac{1}{2D}\left(\phi(\xx) - \phi(\xx_0)\right) + \frac{1}{4D} \int_0^t  \dot{\xx}^2 + \left(\frac{1}{\zeta} \frac{\partial \phi}{\partial \xx} \right)^2 - \frac{2D}{\zeta}\frac{\partial^2 \phi}{\partial \xx^2}  d\es.
+\end{equation}
+This procedure to derive the Onsager-Machlup action is similar to that in \cite{mauri}.
+
+\section{Fixed endpoints}
+For the entirety of this paper, we operate with fixed endpoints. This means the actual minimized action will be reduced simply to the following:
+\begin{equation}
+    S(x(t_e)) = \frac{1}{4D} \int_0^t  \dot{\xx}^2 + \left(\frac{1}{\zeta} \frac{\partial \phi}{\partial \xx} \right)^2 - \frac{2D}{\zeta}\frac{\partial^2 \phi}{\partial \xx^2}  d\es.
+\end{equation} 
+The first and simplest strategy to keep endpoint constant is to include a penalty in the form
+\begin{equation}
+    L_p = C_{spring} \big[ (\xx(0) - \overline{\xx}_0)^2 + (\xx(t) - \overline{\xx}_T)^2 \big].
+\end{equation}
+Interestingly, as verified experimentally, the penalty term effectively works the same as using a more simple and straightforward method. The method of choice was to set the endpoint gradients to 0 manually. Only a couple of points will be affected, and the majority of the trajectory is the same for both approaches.
+\section{Numerical discretization}
+Another aspect to consider is the numerical discretization of the action. \cite{Adib2008} discusses the different numerical evaluations of the action stemming from the stochastic nature of the Langevin equation. Namely, the Onsager-Machlup action depends on the discretization convention used for the SDE (It\^{o} or Stratonovich). We consider the Stratonovich convention for this paper, which yields the following Onsager-Machlup action: 
+\begin{equation}
+    S(\xx_0, \xx_1 \dots \xx_n) = \frac{1}{4D} \sum_{j=1}^{N} - \frac{(\xx_j - \xx_{j-1})^2}{\Delta t} + \Delta t\left(\frac{\mb{\Phi}(\xx_j)}{\zeta}\right)^2 + \frac{2D\Delta t}{\zeta} \nabla \cdot \mb{\Phi}.
+\end{equation}
+If the It\^{o} convention was used, there would not be a Jacobian term $\nabla \cdot \mb{\Phi}$ \cite{cugliandolo2017rules}.
+
+To make the multidimensional, multiparticle system discretization clear, we extend the sum along spatial dimensions (index $j$) and we also sum particles (index $k$). The coefficient $\zeta$ is now a vector since it is originally $\zeta_k = \gamma/M_k$ where $M_k$ is the vector of masses. The total action is then,
+
+\begin{equation}
+\begin{split}
+\label{eq:diffusion_action}
+    S[\xx^{(0)}, \dots, \xx^{(L)}] = \sum_{i=1}^{L-1} \sum_{j=1}^{N_{p}} \frac{1}{4D \Delta t}\left\|\xx^{(i+1)}_{j} - \xx^{(i)}_{j} \right\|^2  + \frac{\Delta t}{4D\zeta_j^2} \left\|{\mb{\Phi}}_j(\xx^{(i)})\right\|^2  - \frac{\Delta t}{2\zeta_j}\nabla \cdot {\mb{\Phi}}_j(\xx^{(i)}).
+\end{split}
+\end{equation}
+
+%\section{Transition state theory}
+%\ms{Let's see if we can get a result until tomorrow. If no, we will remove and add to either rebuttals, camera ready etc.}
+%{\color{magenta}The Onsager-Machlup action takes the final time of the trajectory as granted. Therefore, it estimates the most probable path between the reactants and products that has a specific time duration. To estimate the real physical time needed to cross the potential barrier, a reaction rate theory can be invoked \cite{hanggi1990}.}
+
+% Transition state theory (TST) estimates the rate of a chemical reaction based on the shape of the potential barrier between the reactants and products \cite{kramers1940,hanggi1990}.The reaction rate constant can be estimated as
+%\begin{equation}
+%k = \frac{\omega_0 \omega_b}{2\pi \zeta}e^{-\frac{U_b-U_a}{k_B T}}
+%\end{equation}
+%where $\omega^2_0 = MU''(x_0)$ is the angular frequency at the metastable state and $\omega^2_b = -M U''(x_b)$ is the frequency at the top of the barrier ($M$ being the effective mass of the reacting particle).
+%
+%The mean first passage time (MFPT), the average time a random walker starting at the products domain reaches the separatrix for the first time, is then approximately the inverse of the reaction rate, $t_{MFPT} \approx k^{-1}$. In other words, it is possible to estimate the duration of the path between the reactants and the products, using knowledge of the potential shape.
+
+%For non-double-well potentials, the formula for $t_{MFPT}$ is
+%\begin{equation}
+%t_{MFPT}(x) = \frac{\zeta}{k_B T}\int_x^b dy e^{U(y)/k_B T}\int_a^y dz e^{-U(z)/k_B T}
+%\end{equation}
+%where $x$ is the starting position of the random process, $a$ is a reflecting boundary and $b$ is the absorbing boundary (the barrier) position \cite{pontryagin1933,hanggi1990}.

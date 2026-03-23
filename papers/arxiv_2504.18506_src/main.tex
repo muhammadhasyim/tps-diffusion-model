@@ -1,0 +1,181 @@
+%%%%%%%% ICML 2025 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%%
+
+\documentclass{article}
+
+% Recommended, but optional, packages for figures and better typesetting:
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs} % for professional tables
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tcolorbox}
+\usepackage{float}
+
+% hyperref makes hyperlinks in the resulting PDF.
+% If your build breaks (sometimes temporarily if a hyperlink spans a page)
+% please comment out the following usepackage line and replace
+% \usepackage{icml2025} with \usepackage[nohyperref]{icml2025} above.
+\usepackage{hyperref}
+\usepackage[subtle]{savetrees}
+
+
+% Attempt to make hyperref and algorithmic work together better:
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% Use the following line for the initial blind version submitted for review:
+% \usepackage{icml2025}
+
+% If accepted, instead use the following line for the camera-ready submission:
+\usepackage[accepted]{icml2025}
+
+% For theorems and such
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage{xcolor}
+\definecolor{beige}{RGB}{250, 250, 235}
+
+
+% if you use cleveref..
+\usepackage[capitalize,noabbrev]{cleveref}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% THEOREMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\citewithoutparens}[1]{\citeauthor{#1} \citeyear{#1}}
+
+% Todonotes is useful during development; simply uncomment the next line
+%    and comment out the line below the next line to turn off comments
+%\usepackage[disable,textsize=tiny]{todonotes}
+\usepackage[textsize=tiny]{todonotes}
+
+\input{math_commands.tex}
+
+\usepackage{letltxmacro}
+\LetLtxMacro{\originaleqref}{\eqref}
+\renewcommand{\eqref}{Eq.~\originaleqref}
+\newcommand\fref{Fig.~\ref}
+\newcommand\tref{Table~\ref}
+\newcommand\sref{Section~\ref}
+% \newcommand{\ak}[1]{{\textcolor{red}{\textbf{[Aditi: #1]}}}}
+
+% \newcommand{\sr}[1]{{\textcolor{blue}{\textbf{[Sanjeev: #1]}}}}
+
+% \newcommand{\ms}[1]{{\textcolor{purple}{\textbf{[Martin: #1]}}}}
+
+
+% The \icmltitle you define below is probably too long as a header.
+% Therefore, a short form for the running title is supplied here:
+\icmltitlerunning{Action-Minimization Meets Generative Modeling: Efficient Transition Path Sampling with the Onsager-Machlup Functional}
+% Finding most probable paths in free energy landscapes
+
+\begin{document}
+
+\twocolumn[
+\icmltitle{Action-Minimization Meets Generative Modeling: \\ Efficient Transition Path Sampling with the Onsager-Machlup Functional}
+
+% It is OKAY to include author information, even for blind
+% submissions: the style file will automatically remove it for you
+% unless you've provided the [accepted] option to the icml2024
+% package.
+
+% List of affiliations: The first argument should be a (short)
+% identifier you will use later to specify author affiliations
+% Academic affiliations should list Department, University, City, Region, Country
+% Industry affiliations should list Company, City, Region, Country
+
+% You can specify symbols, otherwise they are numbered in order.
+% Ideally, you should not use this facility. Affiliations will be numbered
+% in order of appearance and this is the preferred way.
+\icmlsetsymbol{equal}{*}
+
+
+\begin{icmlauthorlist}
+\icmlauthor{Sanjeev Raja}{equal,eecs}
+\icmlauthor{Martin \v{S}\'{i}pka}{equal,mffUK,prior}
+\icmlauthor{Michael Psenka}{equal,eecs}
+\icmlauthor{Tobias Kreiman}{eecs}
+\icmlauthor{Michal Pavelka}{mffUK}
+\icmlauthor{Aditi S. Krishnapriyan}{eecs,cheme,lbl}
+
+\end{icmlauthorlist}
+
+\icmlaffiliation{eecs}{Dept. of EECS, UC Berkeley}
+\icmlaffiliation{cheme}{Dept. of Chemical and Biomolecular Engineering, UC Berkeley}
+\icmlaffiliation{lbl}{Applied Mathematics and Computational Research, LBNL}
+\icmlaffiliation{mffUK}{Faculty of Mathematics and Physics, Charles University}
+\icmlaffiliation{prior}{Done prior to joining Amazon}
+
+\icmlcorrespondingauthor{Sanjeev Raja, Aditi S. Krishnapriyan}{\{sanjeevr, aditik1\}@berkeley.edu}
+
+% You may provide any keywords that you
+% find helpful for describing your paper; these are used to populate
+% the "keywords" metadata in the PDF but will not be shown in the document
+\icmlkeywords{Transition path sampling, molecular dynamics, generative models, diffusion models, flow matching}
+
+\vskip 0.3in
+]
+% this must go after the closing bracket ] following \twocolumn[ ...
+
+% This command actually creates the footnote in the first column
+% listing the affiliations and the copyright notice.
+% The command takes one argument, which is text to display at the start of the footnote.
+% The \icmlEqualContribution command is standard text for equal contribution.
+% Remove it (just {}) if you do not need this facility.
+
+%\printAffiliationsAndNotice{}  % leave blank if no need to mention equal contribution
+\printAffiliationsAndNotice{\icmlEqualContribution} % otherwise use the standard text.
+
+% \sr{High level things to remember:
+% \begin{enumerate}
+%     \item Make sure all x's and z's are bolded
+%     \item Show gradient of potential with nabla
+% \end{enumerate}
+% }
+\input{_s0_abstract}
+% \input{icml2025/abstractMS}
+\input{_s1_intro}
+\input{_s2_prior_work}
+\input{_s3_theory}
+\input{_s4_methods}
+\input{_s5_results}
+\input{_s6_conclusion}
+% \input{icml2025/_s7_temp_rebuttal}
+\newpage
+\section*{Impact Statement} This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here.
+\section*{Acknowledgments}
+The authors thank Rasmus Lindrup, Aditya Singh, Muhammad Hasyim, Kranthi Mandadapu, Simon Olsson, Soojung Yang, Lukáš Grajciar, Johannes Dietschreit and David Limmer for helpful discussions that benefited this paper, as well as Bowen Jing for assistance with reproducing the min-flux endpoints for the tetrapeptide evaluations. The authors acknowledge support of this work from the U.S. Department of Energy, Office of Science, Energy Earthshot initiatives as part of the Center for Ionomer-based Water Electrolysis at Lawrence Berkeley National Laboratory under Award Number DE-AC02-05CH11231. This work was also supported by the Toyota Research Institute as part of the Synthesis Advanced Research Challenge.  MP and MŠ were supported by the Czech Science Foundation, project 23-05736S.
+\bibliography{references}
+\bibliographystyle{icml2025}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% APPENDIX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\appendix
+\onecolumn
+% \section{Appendix}
+
+
+\input{theory_appendix}
+\input{si_appendix}
+
+\end{document}
+
+

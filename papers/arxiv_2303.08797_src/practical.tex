@@ -1,0 +1,239 @@
+The methods described in the previous sections have efficient numerical realizations.
+%
+Here, we detail algorithms and practical recommendations for an implementation.
+%
+These suggestions can be split into two complementary tasks: learning the drift coefficients, and sampling with an ODE or an SDE.
+
+\subsection{Learning}
+\label{sec:learning}
+
+As described in Section \ref{sec:cont:eq}, there are a variety of algorithmic choices that can be made when learning the drift coefficients in \eqref{eq:transport}, \eqref{eq:fpe}, and  \eqref{eq:fpe:tr}. While all choices lead to exact generative models in the absence of numerical and statistical errors, in practice, the presence of these errors ensures that different choices lead to different generative models, some of which may perform better for specific applications. Here, we describe the various realizations explicitly.
+
+\paragraph{Deterministic generative modeling: Learning $b$ versus learning $v$ and $s$.} Recall from Section~\ref{sec:cont:eq} that the drift $b$ of the transport equation~\eqref{eq:transport} can be written as $b(t, x) = v(t, x) - \gamma(t)\dot{\gamma}(t)s(t, x)$. This raises the practical question of whether it would be better to learn an estimate $\hat{b}$ of $b$ by minimizing the empirical risk
+\begin{equation}
+    \label{eqn:b_empirical}
+    \hat{\mathcal{L}}_b(\hat{b}) = \frac{1}{N}\sum_{i=1}^N\left(\frac{1}{2}|\hat{b}(t_i, x_{t_i}^{i})|^2 - \hat{b}(t_i, x_{t_i}^{i})\cdot \left(\partial_t I(t_i,x_0^i, x_1^i) + \dot{\gamma}(t_i) z^{i}\right)\right),
+\end{equation}
+or to learn estimates of $\hat{v}$ and $\hat{s}$ by minimizing the empirical risks
+\begin{equation}
+    \label{eqn:v_empirical}
+   \hat{\mathcal{L}}_v(\hat{v}) = \frac{1}{N}\sum_{i=1}^N\left(\frac{1}{2}|\hat{v}(t_i, x_{t_i}^{i})|^2 - \hat{v}(t_i, x_{t_i}^{i})\cdot \partial_t I(t_i,x_0^i, x_1^i)\right)
+\end{equation}
+and
+\begin{equation}
+    \label{eqn:s_empirical}
+    \hat{\mathcal{L}}_s(\hat{s}) = \frac{1}{N}\sum_{i=1}^N\left(\frac{1}{2}|\hat{s}(t_i, x_{t_i}^{i})|^2 + \gamma(t_i)^{-1} \hat{s}(t_i, x_{t_i}^{i})\cdot z^{i}\right)
+\end{equation}
+%
+\begin{algorithm}[t!]
+    \caption{Learning $b$ with arbitrary $\rho_0$ and $\rho_1$.}
+    \DontPrintSemicolon
+    \SetKwRepeat{Repeat}{repeat}{until}
+    \SetKwBlock{Init}{Initialize}{}
+    \SetKwBlock{Update}{Update Parameters}{}
+    \textbf{Input:} Batch size $N$, interpolant function $I(t,x_0, x_1)$, coupling $\nu(dx_0, dx_1)$ to sample $x_0, x_1$, noise function $\gamma(t)$, initial parameters $\theta_b$, gradient-based optimization algorithm to minimize $\mathcal L_b $ defined in \eqref{eq:obj:v}, number of gradient steps $N_g$.\\
+    \textbf{Returns}: An estimate $\hat b$ of $b$.\\
+    \setstretch{1.3}
+    %
+    \For{$j=1, \hdots, N_g$}{
+        Draw $N$ samples $(t_i, x_0^i, x_1^i, z^i) \sim \mathsf{Unif}([0, 1])\times\nu \times\mathsf{N}(0, 1)$, for $i=1,\hdots, N$.\\
+        %
+        Construct samples $x_t^i = I(t_i,x_0^i, x_1^i) + \gamma(t_i)z^i$, for $i = 1, \hdots, N$.\\
+        %
+        Take gradient step with respect to $\mathcal L_b\left(\theta_b, \{x_t^i\}_{i=1}^N \right)$. \\
+    }
+    \textbf{Return:} $\hat b$.
+    \label{alg:learning:b}
+\end{algorithm}
+%
+and construct the estimate $\hat{b}(t, x) = \hat{v}(t, x) - \gamma(t)\dot{\gamma}(t)\hat{s}(t, x)$. Above, $x_{t_i}^{i} = I(t_i, x_0^i, x_1^i) + \gamma(t_i) z^{i}$, and $N$~denotes the number of samples $t^i$, $x_0^i$, and $x_1^i$. If the practitioner is interested in a deterministic generative model (for example, to exploit adaptive integration or exact likelihood computation), learning the estimate $\hat{b}$ directly only requires learning a single model, and hence will typically lead to greater efficiency. This recommendation is captured in Algorithm \ref{alg:learning:b}. If both stochastic and deterministic generative models are of interest, it is necessary to learn two models for most choices of the interpolant; we discuss more suggestions for stochastic case below. 
+
+\paragraph{Antithetic sampling and capping.} In practice, the losses for $b$~\eqref{eq:obj:v} and $s$~\eqref{eq:obj:s} can become high-variance near the endpoints $t=0$ and $t=1$ due to the presence of the singular term $1/\gamma(t)$ and the (potentially) singular term $\dot{\gamma}(t)$. This issue can be eliminated by using antithetic sampling, which we found necessary for stable training of objectives involving $\gamma^{-1}(t)$. 
+%
+To show why, we consider the loss~\eqref{eq:obj:s} for $s$, but an analogous calculation can be performed for the loss~\eqref{eq:obj:v} for $b$ or \eqref{eq:obj:eta:0} for $\eta_z$ (even though it is not necessary for this last quantity). 
+%
+We first observe that, by definition of $x_t$ and by Taylor expansion, as $t\to0$ or $t\to1$
+\begin{equation}
+\label{eqn:antithetic_div}
+\begin{aligned}
+    \frac{1}{\gamma(t)}z\cdot s(t, x_t) &= \frac{1}{\gamma(t)}z\cdot s(t, I(t,x_0, x_1) + \gamma(t) z),\\
+    %
+    &= \frac{1}{\gamma(t)}z\cdot \left(s(t, I(t,x_0, x_1)) + \gamma(t)\nabla s(t, I(t,x_0, x_1))z + o(\gamma(t))\right),\\
+    %
+    &= \frac{1}{\gamma(t)}z\cdot s(t, I(t,x_0, x_1)) + z\cdot \nabla s(t, I(t,x_0, x_1))z + o(1).
+\end{aligned}
+\end{equation}
+Even though the conditional mean of the first term at the right-hand side is finite in the limit as $t\to0$ or $t\to1$, its variance diverges. By contrast, let $x_t^+ = I(t,x_0, x_1) + \gamma(t) z$ and $x_t^- = I(t,x_0, x_1) - \gamma(t) z$ with $x_0, x_1$, and $z$ fixed. Then, 
+\begin{equation}
+\label{eqn:antithetic_conv}
+\begin{aligned}
+    &\frac{1}{2\gamma(t)}\left(z\cdot s(t, x_t^+) - z\cdot s(t, x_t^-)\right) \\
+    &= \frac{1}{2\gamma(t)}\left(z\cdot s(t, I(t,x_0, x_1) + \gamma(t) z)) - z\cdot s(t, I(t,x_0, x_1) - \gamma(t) z)\right),\\
+    %
+    &= \frac{1}{2\gamma(t)}z\cdot \left(s(t, I(t,x_0, x_1)) + \gamma(t)\nabla s(t, I(t,x_0, x_1))z + o(\gamma(t))\right)\\
+    &\qquad -\frac{1}{2\gamma(t)}z\cdot \left(s(t, I(t,x_0, x_1)) - \gamma(t)\nabla s(t, I(t,x_0, x_1))z + o(\gamma(t))\right),\\
+    %
+    &= z\cdot \nabla s(t, I(t,x_0, x_1))z + o(1),
+\end{aligned}
+\end{equation}
+so that both the conditional mean and variance are finite in the limit as $t\to0$ or $t\to1$ despite the singularity of $1/\gamma(t)$. 
+%
+In practice, this can be implemented by using $x_t^+$ and $x_t^-$ for every draw of $x_0, x_1$, and $z$ in the empirical discretization of the population loss. 
+
+
+\begin{algorithm}[t!]
+    \caption{Learning $\eta_{z}$  with arbitrary $\rho_0$ and $\rho_1$.}
+    \DontPrintSemicolon
+    \SetKwRepeat{Repeat}{repeat}{until}
+    \SetKwBlock{Init}{Initialize}{}
+    \SetKwBlock{Update}{Update Parameters}{}
+    \textbf{Input:} Batch size $N$, interpolant function $I(t,x_0, x_1)$, a coupling $\nu(dx_0, dx_1)$ to sample $x_0, x_1$, noise function $\gamma(t)$, initial parameters $\theta_{\eta_z}$, gradient-based optimization algorithm to minimize $\mathcal L_{\eta_z} $ defined in \eqref{eq:obj:eta:0}, number of gradient steps $N_g$.\\
+    \textbf{Returns}: An estimate $\hat \eta_z$ of $\eta_z$.\\ 
+    \setstretch{1.3}
+    \For{$j = 1, \hdots, N_g$}{
+        Draw $N$ samples $(t_i, x_0^i, x_1^i, z^i) \sim \mathsf{Unif}([0, 1])\times\nu \times\mathsf{N}(0, 1)$, for $i=1,\hdots, N$.\\
+        %
+        Construct samples $x_t^i = I(t_i,x_0^i, x_1^i) + \gamma(t_i)z^i$, for $i = 1, \hdots, N$.\\
+        %
+        Take gradient step with respect to $\mathcal L_{\eta_z}\left(\theta_{\eta_z}, \{x_t^i\}_{i=1}^N \right)$. \\
+    }
+    \textbf{Return:} $\hat \eta_z$.
+    \label{alg:learning:eta:sde}
+\end{algorithm}
+
+\paragraph{Learning the score $s$ versus learning a denoiser $\eta_z$.}
+When learning $s$, an alternative to antithetic sampling is to consider learning the denoiser $\eta_z$ defined in \eqref{eq:denoiser}, which is related to the score by a factor of $\gamma$. Note that the objective function for the denoiser in \eqref{eq:obj:eta:0}  is well behaved for all $t \in [0,1]$, and can be thought of as a generalization of the DDPM loss introduced in \cite{ho2020}. The empirical risk associated with this loss reads
+\begin{equation}
+    \label{eqn:etaz_empirical}
+    \hat{\mathcal{L}}_{\eta_z}(\hat{\eta}_z) = \frac{1}{N}\sum_{i=1}^N\left(\frac{1}{2}|\hat{\eta}_z(t_i, x_{t_i}^{i})|^2 - \hat{\eta}_z(t_i, x_{t_i}^{i})\cdot z^{i}\right)
+\end{equation}
+A detailed procedure for learning the denoiser $\eta_z$, e.g. for its use in an SDE-based generative model is given in Algorithm \ref{alg:learning:eta:sde}.
+%
+For the case of one-sided spatially-linear interpolants, the procedure becomes particularly simple, which is highlighted in Algorithm~\ref{alg:learning:eta:os}.
+
+ \begin{algorithm}[t!]
+    \caption{Learning $\eta_{z}^\OS$ with Gaussian $\rho_0$.}
+    \DontPrintSemicolon
+    \SetKwRepeat{Repeat}{repeat}{until}
+    \SetKwBlock{Init}{Initialize}{}
+    \SetKwBlock{Update}{Update Parameters}{}
+    \textbf{Input:} Batch size $N$, interpolant function $x^\OSLIN_t $, a coupling $\nu(dx_0, dx_1)$ to sample $z, x_1$, initial parameters $\theta_{\eta_z^\OS}$, gradient-based optimization algorithm to minimize $\mathcal L_{\eta_z^\OS}$ defined in \eqref{eq:obj:eta:0}, number of gradient steps $N_g$.\\
+    \textbf{Returns}: An estimate $\hat \eta_z^\OS$ of $\eta_z^\OS$.\\ 
+    \setstretch{1.3}
+    \For{$j = 1, \hdots, N_g$}{
+        Draw $N$ samples $(t_i, z^i, x_1^i) \sim \mathsf{Unif}([0, 1])\times\nu$, for $i=1,\hdots, N$.\\
+        %
+        Construct samples $x_t^i = \alpha(t_i)z + \beta(t_i)x_1^i$, for $i = 1, \hdots, N$.\\
+        %
+        Take gradient step w.r.t $\mathcal L_{\eta_z^\OS}\left(\theta_{\eta_z^\OS}, \{x_t^i\}_{i=1}^N \right)$. \\
+    }
+    \textbf{Return:} $\hat \eta_z^\OS$.
+    \label{alg:learning:eta:os}
+\end{algorithm}
+
+
+\subsection{Sampling}
+\label{sec:sampling}
+    We now discuss several practical aspects of sampling generative models based on stochastic interpolants.
+    %
+    These are intimately related to the choice of objects that are learned, as well as to the specific interpolant used to build a path between $\rho_0$ and $\rho_1$.
+    %
+    A general algorithm for sampling models built on either ordinary or stochastic differential equations is presented in Algorithm~\ref{alg:sampling}.
+
+\begin{algorithm}[t!]
+    \caption{Sampling general stochastic interpolants.}
+    \DontPrintSemicolon
+    \SetKwBlock{Init}{Initialize}{}
+    \SetKwRepeat{Repeat}{repeat}{until}
+    \textbf{Input:} Number of samples $n$, timestep $\Delta t$, drift estimates $\hat{b}$ and $\hat{\eta}_z$, initial time $t_0$, final time $t_f$, noise function $\gamma(t)$, diffusion coefficient $\epsilon(t)$, SDE or ODE timestepper \texttt{TakeStep}.\\
+    \textbf{Returns}: $\{\hat{x}_1^{(i)}\}_{i=1}^n$, a batch of model samples.\\ 
+    \setstretch{1.0}
+    %
+    %
+    \Init{
+    Set time $t = t_0$.\\
+    %
+    Draw initial conditions $\hat{x}^{(i)}_{t_0} \sim \rho_0$ for $i = 1, \hdots, n$.\\ 
+    %
+    Construct $\hat{s}(t, x) = -\hat{\eta}_z(t, x) / \gamma(t)$.\\
+    %
+    Construct $\hat b_{\fwd}(t, x) = \hat b(t, x) + \epsilon(t) \hat s(t, x)$. \tcp{Reduces to $\hat b$ for $\epsilon(t) = 0$ (ODE).}
+    }
+    \While{$t < t_f$}{
+        Propagate $\hat{x}^{(i)}_{t+\Delta t} = \texttt{TakeStep}(t, \hat{x}^{(i)}_t, b_\fwd, \epsilon, \Delta t)$ for $i = 1, \hdots, n$. \tcp{ODE or SDE integrator.}
+        Update $t = t + \Delta t$.
+    }
+    \textbf{Return}: $\{\hat{x}^{(i)}\}_{i=1}^n$.
+    \label{alg:sampling}
+\end{algorithm}
+
+\paragraph{Using the denoiser $\eta_z$ instead of the score $s$.}
+
+We remarked in Section~\ref{sec:learning} that learning the denoiser $\eta_z$ is more numerically stable than learning the score $s$ directly. 
+%
+We note that while the objective for $\eta_z$ is well-behaved for all $t \in [0, 1]$, the resulting drifts can become singular at $t=0$ and $t=1$ when using $s(t, x) = -\eta_z(t, x) / \gamma(t)$.
+%
+There are several ways to avoid this singularity in practice.
+%
+One method is to choose a time-varying $\epsilon(t)$ that vanishes in a small interval around the endpoints $t=0$ and $t=1$, which avoids this numerical instability.
+%
+An alternative option is to integrate the SDE up to a final time $t_f$ with $t_f < 1$, and then to perform a step of denoising using \eqref{eq:identity:1}. 
+%
+We use this approach in Section~\ref{sec:numerics} below when sampling the SDE.
+
+\paragraph{A denoiser is all you need for spatially-linear one-sided interpolants.}
+\begin{algorithm}[t!]
+    \caption{Sampling spatially-linear one-sided interpolants with Gaussian $\rho_0$.}
+    \DontPrintSemicolon
+    \SetKwBlock{Init}{Initialize}{}
+    \SetKwRepeat{Repeat}{repeat}{until}
+    \textbf{Input:} Number of samples $n$, timestep $\Delta t$, denoiser estimate $\hat{\eta}_z$, initial time $t_0$, final time $t_f$, noise function $\gamma(t)$, diffusion coefficient $\epsilon(t)$, interpolant functions $\alpha(t)$ and $\beta(t)$, SDE or ODE timestepper \texttt{TakeStep}.\\
+    \textbf{Returns}: $\{\hat{x}_1^{(i)}\}_{i=1}^n$, a batch of model samples.\\ 
+    \setstretch{1.0}
+    %
+    %
+    \Init{
+    Set time $t = t_0$.\\
+    %
+    Draw initial conditions $\hat{x}^{(i)}_{t_0} \sim \rho_0$ for $i = 1, \hdots, n$.\\ 
+    %
+    Construct $\hat{s}(t, x) = -\hat{\eta}_z(t, x) / \alpha(t)$.\\
+    %
+    Construct $\hat{b}(t, x) = \dot{\alpha}(t)\hat{\eta}_z^\OS(t, x) + \frac{\dot\beta(t)}{\beta(t)}\left(x - \alpha(t)\hat{\eta}_z^\OS(t, x)\right)$.\\
+    %
+    Construct $\hat b_{\fwd}(t, x) = \hat b(t, x) + \epsilon(t) \hat s(t, x)$. \tcp{Reduces to $\hat b$ for $\epsilon(t) = 0$ (ODE).}
+    }
+    \While{$t < t_f$}{
+        Propagate $\hat{x}^{(i)}_{t+\Delta t} = \texttt{TakeStep}(t, \hat{x}^{(i)}_t, b_\fwd, \epsilon, \Delta t)$ for $i = 1, \hdots, n$. \tcp{ODE or SDE integrator.}
+        Update $t = t + \Delta t$.
+    }
+    \textbf{Return}: $\{\hat{x}^{(i)}\}_{i=1}^n$.
+    \label{alg:sampling_os}
+\end{algorithm}
+
+
+As shown in~\eqref{eq:b:os:solved}, and as considered in Section~\ref{sec:denoiser}, the denoiser $\eta_z^{\OS}$ is sufficient to represent the velocity field $b$ appearing in the probability flow equation~\eqref{eq:ode:1}.
+
+Using this definition for $b$ and the relationship $s(t, x) = -\eta_z(t, x) / \gamma(t)$, we state the following ordinary and stochastic differential equations for sampling
+%
+\begin{equation}
+\begin{aligned}
+    \text{ODE}:& \quad \dot X_t = \dot \alpha(t) \eta^\OS_z(t,X_t)  + \frac{\dot \beta(t)}{\beta(t)} \big (X_t- \alpha(t) \eta^\OS_z(t,X_t) \big ) \\
+    \text{SDE}:& \quad dX^\fwd_t =  \big ( \dot \alpha(t) \eta^\OS_z(t,X^\fwd_t)  + \frac{\dot \beta(t)}{\beta(t)} \big (X^\fwd_t- \alpha(t) \eta^\OS_z(t,X^\fwd_t) \big ) - \frac{\epsilon(t)}{\alpha(t)} \eta^\OS_z(t,X^\fwd_t) \big ) dt \\
+    &\qquad\qquad + \sqrt{2 \epsilon(t)} dW_t.
+\end{aligned}
+\end{equation}
+Because $\beta(0) = 0$, the drift is numerically singular in both equations. 
+%
+However, $b(t=0, x)$ has a finite limit
+\begin{equation}
+    \label{eqn:b_nonsing}
+    b(t=0, x) = \dot\alpha(0) x + \dot \beta(0) \mathbb E[x_1],
+\end{equation}
+as originally given in~\eqref{eq:b:lin:t1}.
+%
+Equation~\eqref{eqn:b_nonsing} can be estimated using available data, which means that when learning a one-sided interpolant, ODE and SDE-based generative models can be defined exactly on the interval $t \in [0,1]$ using only a score or a denoiser without singularity. 
+
+The factor of $\alpha(t)^{-1}$ in the final term of the SDE could pose numerical problems at $t=1$, as $\alpha(1) = 0$. As discussed in the paragraph above, a choice of $\epsilon(t)$ which is such that $\epsilon(t)/\alpha(t) \rightarrow C$  for some constant $C$ as $t\rightarrow 1$ avoids any issue.
+
+An algorithm for sampling with only the denoiser $\eta_z^\OS$ is given in Algorithm~\ref{alg:sampling_os}.

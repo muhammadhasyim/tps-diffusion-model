@@ -1,0 +1,72 @@
+% \newcommand{\draftnote}[1]{{\color{red} #1}}
+% \newcommand{\todo}[1]{{\color{red} [todo: #1]}}
+\newcommand{\eric}[1]{{\color{red}{[eve:} #1]}}
+\newcommand{\michael}[1]{{\color{blue} [Michael: #1]}}
+\definecolor{ForestGreen}{RGB}{34,139,34}
+\newcommand{\nb}[1]{\textcolor{ForestGreen}{[nb: #1}]}
+% \newcommand{\new}[1]{{\color{orange}{#1}}}
+%\newcommand{\new}[1]{{\color{purple} #1}}
+\newcommand{\new}[1]{#1}
+%\newcommand{\newnb}[1]{{\color{ForestGreen}{#1}}}
+\newcommand{\newnb}[1]{#1}
+\newcommand{\fwd}{\mathsf{F}}
+\newcommand{\rev}{\mathsf{B}}
+\newcommand{\ODE}{{}}%{\mathsf{D}}
+
+\newcommand{\T}{\mathsf{T}}
+\newcommand{\KL}[2]{\mathsf{KL}(#1\: \Vert \: #2)}
+\newcommand{\cross}[2]{\mathsf{H}(#1\:\Vert\:#2)}
+\newcommand{\fisher}[2]{\mathsf{FI}(#1\: \Vert \: #2)}
+\newcommand{\norm}[1]{\left|#1\right|}
+\newcommand{\Law}{\mathsf{Law}}
+%\newcommand{\Id}{\mathsf{Id}}
+
+\newcommand{\Id}{\text{\it Id}}
+\newcommand{\brdg}{\mathsf{b}}
+\newcommand{\diff}{\mathsf{d}}
+
+\DeclareMathOperator{\supp}{supp}
+% \DeclareMathOperator{\Id}{Id}
+
+
+\def\CC{{\mathbb{C}}}
+\def\EE{{\mathbb{E}}}
+\def\NN{{\mathbb{N}}}
+\def\PP{{\mathbb{P}}}
+\def\RR{{\mathbb{R}}}
+\def\eps{\epsilon}
+\def\seps{\sqrt{2\epsilon}}
+
+
+%\newtheorem{theorem}{Theorem}
+%\newtheorem{corollary}[theorem]{Corollary}
+%\newtheorem{proposition}[theorem]{Proposition}
+%\newtheorem{assumption}{Assumption}
+%\newtheorem{definition}{Definition}
+%\newtheorem{lemma}[theorem]{Lemma}
+%\newtheorem{claim}[theorem]{Claim}
+%\newtheorem{remark}[theorem]{Remark}
+%\newtheorem{example}{Example}
+%\newtheorem{ansatz}{Ansatz}
+
+%% Use amsthm's \newtheorem for compatibility with older TeX Live versions
+%% thmtools' restatable environment will still work with these
+%% Undefine any pre-existing theorem environments that amsthm may have created
+%\makeatletter
+%\let\theorem\relax
+%\let\endtheorem\relax
+%\let\c@theorem\relax
+%\makeatother
+%\newtheorem{corollary}[theorem]{Corollary}
+%\newtheorem{proposition}[theorem]{Proposition}
+
+\newtheorem{assumption}[theorem]{Assumption}
+\numberwithin{equation}{section}
+
+\newcommand{\OS}{\mathsf{os}}
+% \newcommand{\OS}{{\sc OS}}
+\newcommand{\MIR}{\mathsf{mir}}
+\newcommand{\LIN}{\mathsf{lin}}
+\newcommand{\OSLIN}{\mathsf{os,lin}}
+\newcommand{\DEN}{\mathsf{den}}
+\newcommand{\REC}{\mathsf{rec}}

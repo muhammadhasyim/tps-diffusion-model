@@ -1,0 +1,84 @@
+\section{Score-based generative modeling with SDEs}
+Perturbing data with multiple noise scales is key to the success of previous methods. We propose to generalize this idea further to an infinite number of noise scales, such that perturbed data distributions evolve according to an SDE as the noise intensifies. %
+An overview of our framework is given in \cref{fig:toy}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth, trim=16 0 12 14, clip]{figures/teaser.pdf}
+    \caption{\textbf{Overview of score-based generative modeling through SDEs}. We can map data to a noise distribution (the prior) with an SDE (\cref{sec:sde_perturb}), and reverse this SDE for generative modeling (\cref{sec:sde_reverse}). We can also reverse the associated probability flow ODE (\cref{sec:flow}), which yields a deterministic process that samples from the same distribution as the SDE. Both the reverse-time SDE and probability flow ODE can be obtained by estimating the score $\nabla_\bfx \log p_t(\bfx)$ (\cref{sec:training}).}
+    \label{fig:toy}
+\end{figure}
+
+\subsection{Perturbing data with SDEs}\label{sec:sde_perturb}
+Our goal is to construct a diffusion process $\{\bfx(t)\}_{t=0}^T$ indexed by a continuous time variable $t\in [0,T]$, such that $\bfx(0) \sim p_{0}$, for which we have a dataset of \iid samples, and $\bfx(T) \sim p_T$, for which we have a tractable form to generate samples efficiently. In other words, $p_0$ is the data distribution and $p_T$ is the prior distribution. This diffusion process can be modeled as the solution to an It\^{o} SDE:
+\begin{align}
+    \ud \bfx = \bff(\bfx, t) \ud t + {g}(t) \ud \bfw, \label{eqn:forward_sde}
+\end{align}
+where $\bfw$ is the standard Wiener process (\aka, Brownian motion), $\bff(\cdot, t): \mbb{R}^d \to \mbb{R}^d$ is a vector-valued function called the \emph{drift} coefficient of $\bfx(t)$, and ${g}(\cdot): \mbb{R} \to \mbb{R}$ is a scalar function known as the \emph{diffusion} coefficient of $\bfx(t)$. For ease of presentation we assume the diffusion coefficient is a scalar (instead of a $d \times d$ matrix) and does not depend on $\bfx$, but our theory can be generalized to hold in those cases (see \cref{app:general_sde}). The SDE has a unique strong solution as long as the coefficients are globally Lipschitz in both state and time~\citep{oksendal2003stochastic}. %
+We hereafter denote by $p_t(\bfx)$ the probability density of $\bfx(t)$, and use $p_{st}(\bfx(t) \mid \bfx(s))$ to denote the transition kernel from $\bfx(s)$ to $\bfx(t)$, where $0 \leq s < t \leq T$.
+
+Typically, $p_T$ is an unstructured prior distribution that contains no information of $p_0$, such as a Gaussian distribution with fixed mean and variance. There are various ways of designing the SDE in \cref{eqn:forward_sde} such that it diffuses the data distribution into a fixed prior distribution. We provide several examples later in \cref{sec:sde_examples} that are derived from continuous generalizations of SMLD and DDPM.
+
+\subsection{Generating samples by reversing the SDE}\label{sec:sde_reverse}
+By starting from samples of $\bfx(T) \sim p_T$ and reversing the process, we can obtain samples $\bfx(0)\sim p_0$. %
+A remarkable result from~\citet{Anderson1982-ny} states that the reverse of a diffusion process is also a diffusion process, running backwards in time and given by the reverse-time SDE:
+\begin{align}
+    \ud \bfx = [\bff(\bfx, t) - g(t)^2  \nabla_{\bfx}  \log p_t(\bfx)] \ud t + g(t) \ud \bar{\bfw},\label{eqn:backward_sde}
+\end{align}
+where $\bar{\bfw}$ is a standard Wiener process
+when time flows backwards from $T$ to $0$, and $\ud t$ is an infinitesimal negative timestep. Once the score of each marginal distribution, $\nabla_\bfx \log p_t(\bfx)$, is known for all $t$, we can derive the reverse diffusion process from \cref{eqn:backward_sde} and simulate it to sample from $p_0$.
+
+
+\subsection{Estimating scores for the SDE}\label{sec:training}
+The score of a distribution can be estimated by training a score-based model on samples with score matching~\citep{hyvarinen2005estimation,song2019sliced}. To estimate $\nabla_\bfx \log p_t(\bfx)$, we can train a time-dependent score-based model $\bfs_\bftheta(\bfx, t)$ via a continuous generalization to \cref{eqn:ncsn_obj,eqn:ddpm_obj}:
+\begin{align}
+   \bftheta^* = \argmin_\bftheta 
+   \mbb{E}_{t}\Big\{\lambda(t) \mbb{E}_{\bfx(0)}\mbb{E}_{\bfx(t) \mid \bfx(0) }
+   \big[\norm{\bfs_\bftheta(\bfx(t), t) - \nabla_{\bfx(t)}\log p_{0t}(\bfx(t) \mid \bfx(0))}_2^2 \big]\Big\}%
+   . \label{eqn:training}
+\end{align}
+Here $\lambda: [0, T] \to \mbb{R}_{>0}$ is a positive weighting function, $t$ is uniformly sampled over $[0, T]$, $\bfx(0) \sim p_0(\bfx)$ and $\bfx(t) \sim p_{0t}(\bfx(t) \mid \bfx(0))$. With sufficient data and model capacity, score matching ensures that the optimal solution to \cref{eqn:training}, denoted by $\bfs_{\bftheta^\ast}(\bfx, t)$, equals $\nabla_\bfx \log p_t(\bfx)$ for almost all $\bfx$ and $t$. As in SMLD and DDPM, we can typically choose $\lambda \propto 1/{\mbb{E}\big[\norm{\nabla_{\bfx(t)}\log p_{0t}(\bfx(t) \mid \bfx(0))}_2^2\big]}$. Note that \cref{eqn:training} uses denoising score matching, but other score matching objectives, such as sliced score matching~\citep{song2019sliced} and finite-difference score matching~\citep{pang2020efficient} are also applicable here. 
+
+We typically need to know the transition kernel $p_{0t}(\bfx(t) \mid \bfx(0))$ to efficiently solve \cref{eqn:training}. When $\bff(\cdot, t)$ is affine, the transition kernel is always a Gaussian distribution, where the mean and variance are often known in closed-forms and can be obtained with standard techniques (see Section 5.5 in \citet{sarkka2019applied}). For more general SDEs, we may solve Kolmogorov's forward equation~\citep{oksendal2003stochastic} to obtain $p_{0t}(\bfx(t) \mid \bfx(0))$. Alternatively, we can simulate the SDE to sample from $p_{0t}(\bfx(t) \mid \bfx(0))$ and replace denoising score matching in \cref{eqn:training} with sliced score matching for model training, which bypasses the computation of $\nabla_{\bfx(t)} \log p_{0t}(\bfx(t) \mid \bfx(0))$ (see \cref{app:general_sde}).
+
+
+
+
+\subsection{Examples: VE, VP SDEs and beyond}\label{sec:sde_examples}
+The noise perturbations used in SMLD and DDPM can be regarded as discretizations of two different SDEs. %
+Below we provide a brief discussion and relegate more details to \cref{app:sde_derive}.
+
+When using a total of $N$ noise scales, each perturbation kernel $p_{\sigma_i}(\bfx \mid \bfx_0)$ of SMLD corresponds to the distribution of $\bfx_i$ in the following Markov chain:
+\begin{align}
+\bfx_i = \bfx_{i-1} + \sqrt{\sigma_{i}^2 - \sigma_{i-1}^2} \bfz_{i-1}, \quad i=1,\cdots,N \label{eqn:ncsn},
+\end{align}
+where $\bfz_{i-1} \sim \mcal{N}(\bfzero, \bfI)$, and we have introduced $\sigma_0 = 0$ to simplify the notation.
+In the limit of $N \to \infty$, $\{\sigma_i\}_{i=1}^N$ becomes a function $\sigma(t)$, $\bfz_i$ becomes $\bfz(t)$, and the Markov chain $\{\bfx_i\}_{i=1}^N$ becomes a continuous stochastic process $\{\bfx(t)\}_{t=0}^1$, where we have used a continuous time variable $t \in [0, 1]$ for indexing, rather than an integer $i$. The process $\{\bfx(t)\}_{t=0}^1$ is given by the following SDE
+\begin{align}
+\ud \bfx = \sqrt{\frac{\ud \left[ \sigma^2(t) \right]}{\ud t}}\ud \bfw. \label{eqn:ncsn_sde}
+\end{align}
+Likewise for the perturbation kernels $\{p_{\alpha_i}(\bfx \mid \bfx_0)\}_{i=1}^N$ of DDPM, the discrete Markov chain is
+\begin{align}
+    \bfx_i = \sqrt{1-\beta_{i}} \bfx_{i-1} + \sqrt{\beta_{i}} \bfz_{i-1}, \quad i=1,\cdots,N. \label{eqn:ddpm}
+\end{align}
+As $N\to \infty$, \cref{eqn:ddpm} converges to the following SDE,
+\begin{align}
+\ud \bfx = -\frac{1}{2}\beta(t) \bfx~ \ud t + \sqrt{\beta(t)} ~\ud \bfw. \label{eqn:ddpm_sde}
+\end{align}
+
+Therefore, the noise perturbations used in SMLD and DDPM correspond to discretizations of SDEs \cref{eqn:ncsn_sde,eqn:ddpm_sde}. Interestingly, the SDE of \cref{eqn:ncsn_sde} always gives a process with exploding variance when $t \to \infty$, whilst the SDE of \cref{eqn:ddpm_sde} yields a process with a fixed variance of one when the initial distribution has unit variance (proof in \cref{app:sde_derive}). Due to this difference, we hereafter refer to \cref{eqn:ncsn_sde} as the Variance Exploding (VE) SDE, and \cref{eqn:ddpm_sde} the Variance Preserving (VP) SDE. 
+
+Inspired by the VP SDE, we propose a new type of SDEs which perform particularly well on likelihoods (see \cref{sec:flow}), given by
+\begin{align}
+    \ud \bfx = -\frac{1}{2}\beta(t) \bfx~ \ud t + \sqrt{\beta(t)(1 - e^{-2\int_0^t \beta(s)\ud s})} \ud \bfw.\label{eqn:subvp_sde}
+\end{align}
+When using the same $\beta(t)$ and starting from the same initial distribution, the variance of the stochastic process induced by \cref{eqn:subvp_sde} is always bounded by the VP SDE at every intermediate time step (proof in \cref{app:sde_derive}). For this reason, we name \cref{eqn:subvp_sde} the sub-VP SDE.
+
+Since VE, VP and sub-VP SDEs all have affine drift coefficients, their perturbation kernels $p_{0t}(\bfx(t) \mid \bfx(0))$ are all Gaussian and can be computed in closed-forms, as discussed in \cref{sec:training}. This makes training with \cref{eqn:training} particularly efficient. 
+
+
+
+
+
+
+

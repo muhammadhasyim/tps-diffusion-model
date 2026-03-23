@@ -1,0 +1,8 @@
+\section{Conclusion}
+We presented a framework for score-based generative modeling based on SDEs. Our work enables a better understanding of existing approaches,  new sampling algorithms, exact likelihood computation, uniquely identifiable encoding, latent code manipulation, and brings new conditional generation abilities to the family of score-based generative models.
+
+While our proposed sampling approaches improve results and enable more efficient sampling, they remain slower at sampling than GANs~\citep{goodfellow2014generative} on the same datasets. Identifying ways of combining the stable learning of score-based generative models with the fast sampling of implicit models like GANs remains an important research direction. Additionally, the breadth of samplers one can use when given access to score functions introduces a number of hyper-parameters. Future work would benefit from improved methods to automatically select and tune these hyper-parameters, as well as more extensive investigation on the merits and limitations of various samplers.
+
+\subsubsection*{Acknowledgements}
+We would like to thank Nanxin Chen, Ruiqi Gao, Jonathan Ho, Kevin Murphy, Tim Salimans and Han Zhang for their insightful discussions during the course of this project. This research was partially supported by NSF (\#1651565, \#1522054, \#1733686),
+ONR (N00014\-19\-1\-2145), AFOSR (FA9550\-19\-1\-0024), and TensorFlow Research Cloud. Yang Song was partially supported by the Apple PhD Fellowship in AI/ML.

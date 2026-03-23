@@ -1,0 +1,314 @@
+\section{Score-based generative modeling with SDEs}
+Perturbing data with multiple noise scales is at the crux of the success of previous methods. We propose to generalize this idea further to an infinite number of noise scales, such that perturbed data distributions evolve according to an It\^{o} process as the noise intensifies. %
+
+Note that when using a total of $N$ noise scales, each perturbation kernel $p_{\sigma_i}(\bfx \mid \bfx_0)$ in \cref{sec:ncsn} corresponds to the marginal distribution of $\bfx_i$ in the following Markov chain:
+\begin{align}
+\bfx_i = \bfx_{i-1} + \sqrt{\sigma_{i}^2 - \sigma_{i-1}^2} \bfz_i, \quad i=1,\cdots,N \label{eqn:ncsn},
+\end{align}
+where $\bfz_i \sim \mcal{N}(\bfzero, \bfI)$, and we have introduced $\sigma_0 = 0$ to simplify the equation. Let $r \triangleq (\nicefrac{\sm}{\sM})^2$. Because $\{\sigma_i\}_{i=1}^N$ is a geometric sequence, we have $\sigma_i = \sm r^{\frac{i-1}{2(N-1)}}$. In the limit of $N \to \infty$, the Markov chain $\{\bfx_i\}_{i=1}^N$ becomes a continuous process $\bfx(t)$, where we use a continuous time variable $t \in [0, 1]$ for indexing, rather than an integer $i \in \{1, 2, \cdots, N\}$. Let $\Delta t = \frac{1}{N-1}$, and $\bfx(\frac{i-1}{N-1}) = \bfx_i$. As $\Delta t \to 0$, \cref{eqn:ncsn} can be written as the following for $t \in \{\frac{1}{N-1}, \frac{2}{N-1}, \cdots, 1\}$ via Taylor expansion:
+\begin{align*}
+    \bfx(t) = \bfx(t-\Delta t) + \sm \sqrt{r^t - r^{t-\Delta t}}\bfz_i \approx \bfx(t-\Delta t) + \sm \sqrt{(r^{t-\Delta t}\ln r) \Delta t}~\bfz(t),
+\end{align*}
+and in the limit of $\Delta t = 0$, it converges to the following SDE for $t \in [0,1]$:
+\begin{align}
+\ud \bfx = \sm \bigg( \frac{\sM}{\sm} \bigg)^t \sqrt{2 \log \frac{\sM}{\sm}}\ud \bfw, \label{eqn:ncsn_sde}
+\end{align}
+where $\bfw$ is the standard Wiener process. Likewise for perturbation kernels $\{p_{\alpha_i}(\bfx \mid \bfx_0)\}_{i=1}^N$ in \cref{sec:ddpm}, the discrete Markov chain is
+\begin{align}
+    \bfx_i = \sqrt{1-\beta_{i}} \bfx_{i-1} + \sqrt{\beta_{i}} \bfz_i, \quad i=1,\cdots,N. \label{eqn:ddpm}
+\end{align}
+and the corresponding SDE can be obtained through a similar analysis (see Appendix):
+\begin{align}
+\ud \bfx = -\frac{1}{2}(\bbetam + t(\bbetaM - \bbetam)) \bfx(t) \ud t + \sqrt{\bbetam + t(\bbetaM - \bbetam)} \ud \bfw, \label{eqn:ddpm_sde}
+\end{align}
+where $\bbetam = (N-1) \betam$ and $\bbetaM = (N-1) \betaM$.
+
+So far, we have demonstrated that the noise perturbations used in \citet{song2019generative} and \citet{ho2020denoising} both correspond to discretizations of SDEs. The SDE of \cref{eqn:ddpm_sde} yields a process with constant variance, as long as $p(\bfx_0)$ has variance one (proof in Appendix). In contrast, the SDE of \cref{eqn:ncsn_sde} always gives a process with exploding variance. Due to this difference, we hereafter refer to \cref{eqn:ncsn_sde} the variance exploding (VE) SDE, and \cref{eqn:ddpm_sde} the variance preserving (VP) SDE.
+
+In general, we can consider noise peturbations that evolve according to any SDE:
+\begin{align}
+    \ud \bfx = \bff(\bfx(t), t) \ud t + \mbf{G}(\bfx(t), t) \ud \bfw. \label{eqn:forward_sde}
+\end{align}
+Here $\bff(\cdot, t): \mbb{R}^d \to \mbb{R}^d$ is a vector-valued function called the \emph{drift} coefficient, $\mbf{G}(\cdot, t): \mbb{R}^d \to \mbb{R}^{d\times d}$ is a matrix-valued function known as the \emph{dispersion} coefficient. %
+In this work we follow the It\^{o} interpretation of SDEs. Under some regularity conditions~\citep{oksendal2003stochastic}, the solution to an SDE is an It\^{o} diffusion process $\bfx(t)$. We denote by $p_t(\bfx)$ the (marginal) probability density of $\bfx(t)$, and use $p_{st}(\bfx(t) \mid \bfx(s))$ to denote the transition kernel from time $s$ to $t$.%
+
+We can use a continuous diffusion process to gradually diffuse an unknown distribution $p_0(\bfx_0)$, for which we have a dataset of \iid samples, to a known prior distribution $p_T(\bfx_T)$, for which we have a tractable form and can easily generate samples. 
+
+
+
+By starting from $p_T(\bfx_T)$ and reversing the diffusion process, we can obtain $p_0(\bfx_0)$. This reverse process should yield the same trajectory of marginal probability densities $\{p_t(\bfx)\}_{t=0}^T$ as the forward SDE (\cref{eqn:forward_sde}), except that the evolution of $p_t(\bfx)$ is in the opposite time direction. A remarkable result from~\citet{Anderson1982-ny} states that the reverse of a diffusion process is also a diffusion process, running backwards in time. Moreover, the reverse diffusion process can be derived from the forward process, once the score of each marginal distribution, $\nabla_\bfx \log p_t(\bfx^t)$, is known for all $t$.
+\begin{theorem}[\citet{Anderson1982-ny}, informal]\label{thm:reverse_sde}
+The reverse process to \cref{eqn:forward_sde} is given by
+\begin{align}
+    \resizebox{0.935\textwidth}{!}{$\displaystyle\ud \bfx_t = \{\bff(\bfx_t, t) - \nabla \cdot [\bfG(\bfx_t, t) \bfG(\bfx_t,t)\tran] - \bfG(\bfx_t,t)\bfG(\bfx_t,t)\tran  \nabla_\bfx  \log p_t(\bfx_t)\} \ud t + \mbf{G}(\bfx_t, t) \ud \bar{\bfw}_t$},\label{eqn:backward_sde}
+\end{align}
+where $\{\bar{\bfw}_t\}_{t=T}^0$ is a standard Wiener process when time flows backwards from $T$ to $0$.\footnote{See Appendix for a rigorous statement.}
+\end{theorem}
+Throughout the paper we define $\nabla\cdot \mbf{F}(\bfx) := (\nabla \cdot \bff^1(\bfx), \nabla\cdot \bff^2(\bfx), \cdots, \nabla\cdot \bff^d(\bfx))\tran$ for a matrix-valued function $\mbf{F}(\bfx) := (\bff^1(\bfx), \bff^2(\bfx), \cdots, \bff^d(\bfx))\tran$. \cref{thm:reverse_sde} implies that the reverse diffusion is completely determined by the drift and dispersion coefficients of the forward process, as well as the \textbf{score} of its marginal probability density at each time step. Using \cref{thm:reverse_sde}, we can easily reverse \cref{eqn:forward_sde} to get samples from $p_0(\bfx_0)$, by simulating the trajectories of \cref{eqn:backward_sde}. The sampling procedure only requires 1) \textbf{score estimation} to obtain $\nabla_\bfx \log p_t(\bfx)$ of the forward SDE (\cref{eqn:forward_sde}), and 2) a \textbf{numerical SDE solver} to integrate the reverse-time SDE (\cref{eqn:backward_sde}).
+
+\section{Estimating scores of the SDE}
+The score of a distribution can be estimated by training a score-based model on samples with score matching~\citep{hyvarinen2005estimation, song2019sliced, song2019generative}. To estimate $\nabla_\bfx \log p_t(\bfx)$ with this approach, we shall choose a forward SDE (\cref{eqn:forward_sde}) whose perturbation kernel $p_{0t}(\bfx_t \mid \bfx_0)$ is solvable, so that we can easily generate training data from $p_t(\bfx)$ given data samples of $p_0(\bfx)$. One such example is linear SDEs.
+\begin{proposition}[\citet{sarkka2019applied}, exact solution to linear SDEs]\label{prop:linear}
+When the drift and dispersion coefficients in \cref{eqn:forward_sde} possess the form $\bff(\bfx_t, t) = \bfF(t)\bfx_t + \bfu(t)$ and $\bfG(\bfx_t, t) = \bfL(t)$, the transition kernel is $p_{0t}(\bfx_t \mid \bfx_0) = \mcal{N}(\bfx_t \mid \bfm(t), \bfsigma(t))$, where $\bfm(t)$ and $\bfsigma(t)$ are obtained by solving the following linear ODEs:
+\begin{gather*}
+\frac{\ud \bfm(t)}{\ud t} = \bfF(t)\bfm(t) + \bfu(t), \quad \bfm(0) = \bfx_0,\\
+\frac{\ud \bfsigma(t)}{\ud t} = \bfF(t)\bfsigma(t) + \bfsigma(t)\bfF(t) + \bfL(t) \bfL(t)\tran, \quad \bfsigma(0) = \bfzero.
+\end{gather*}
+\end{proposition}
+Typically we only have a dataset for $p_0(\bfx_0)$, but when an SDE is linear, we can employ the perturbation kernel provided by \cref{prop:linear} to directly obtain training data from $p_t(\bfx_t)$. Specifically, we first randomly select a data point $\bfx_0 \sim p_0(\bfx_0)$, and then draw $\bfx_t$ from the perturbation kernel $p_{0t}(\bfx_t \mid \bfx_0)$. Based on samples from $p_t(\bfx_t)$, we can use the following (infinite) mixture of score matching objectives to train a time-dependent score-based model $\bfs_\bftheta(\bfx, t)$ parameterized by $\bftheta$:
+\begin{align}
+    \min_\bftheta \mbb{E}_{\bfx_0 \sim p_0(\bfx_0)}\mbb{E}_{t\sim \mcal{U}(0, T)} \mbb{E}_{\bfx_t \sim p_{0t}(\bfx \mid \bfx_0)}[\lambda(t) \mcal{L}_{\text{SM}}(\bfs_\bftheta(\bfx_t, t), \bfx_0, \bfx_t)], \label{eqn:training}
+\end{align}
+where $\lambda: [0, T] \to \mbb{R}_{>0}$ is a positive weighting function, %
+$\mcal{U}(0, T)$ denotes a uniform distribution over $[0, T]$, and $\mcal{L}_{\text{SM}}$ is a score matching loss function. With sufficient data, model capacity, and optimization accuracy, score matching ensures that the optimal solution to \cref{eqn:training}, denoted by $\bfs_{\bftheta^\ast}(\bfx, t)$, equals $\nabla_\bfx \log p_t(\bfx)$ for almost all $\bfx$ and $t$. Typical examples of $\mcal{L}_{\text{SM}}$ include denoising score matching (DSM,~\citet{vincent2011connection}), which can be written as 
+\begin{align}
+    \mathcal{L}_{\text{SM}} := \norm{\bfs_\bftheta(\bfx_t, t) - \nabla_{\bfx_t}\log p_{0t}(\bfx_t \mid \bfx_0)}_2^2. \label{eqn:dsm}
+\end{align}
+Other alternatives for $\mcal{L}_{\text{SM}}$ include sliced score matching~\citep{song2019sliced} and finite-difference score matching~\citep{pang2020efficient}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.333\linewidth]{figures/NCSN_var.pdf}%
+    \includegraphics[width=0.32\linewidth]{figures/ddpm_mean.pdf}%
+    \includegraphics[width=0.32\linewidth]{figures/ddpm_var.pdf}
+    \caption{Comparison of discrete-time perturbation kernels vs. continuous ones. \textbf{Left} compares the variance of perturbation kernels at different time steps on NCSN; \textbf{middle} compares the mean coefficients (the ratio of the mean to $\bfxd$) of perturbation kernels on DDPM; and \textbf{right} compares the variance of perturbation kernels on DDPM. }
+    \label{fig:discretization}
+\end{figure}
+
+The training objectives of NCSN and DDPM can be unified as discretized approximations to \cref{eqn:training} when $\mcal{L}_{\text{SM}}$ is denoising score matching (\cref{eqn:dsm}). Using \cref{prop:linear}, we can analytically compute the perturbation kernels induced by the SDE of NCSN and DDPM. For NCSN, we have
+\begin{align}
+    p(\bfx_t \mid \bfxd) = \mcal{N}\bigg(\bfx_t; \bfxd, \sm^2 \bigg(\frac{\sM}{\sm} \bigg)^{2t}\bfI_d\bigg), \label{eqn:ncsn_sde_perturb}
+\end{align}
+while for DDPM,
+\begin{align}
+    p(\bfx_t \mid \bfxd) = \mcal{N}\bigg(\bfx_t ; e^{-\frac{1}{2}\bbetam t - \frac{1}{4}t^2 (\bbetaM-\bbetam)}\bfxd , \bfI_d - \beta_0 e^{\frac{1}{2}t(t-2)\bbetam-\frac{1}{2}t^2\bbetaM}\bfI_d\bigg).\label{eqn:ddpm_sde_perturb}
+\end{align}
+The original perturbation kernels $q_{\sigma_i}(\bfx \mid \bfxd)$ and $q_{\beta_i}(\bfx \mid \bfxd)$ for NCSN/DDPM are discretizations of \cref{eqn:ncsn_sde_perturb,eqn:ddpm_sde_perturb} at time steps $\{0, \nicefrac{1}{N-1}, \cdots, \nicefrac{N-2}{N-1}, 1\}$. 
+\cref{fig:discretization} shows the near perfect agreement of discrete-time and continuous-time kernels when the number of noise scales $N$ is large. 
+
+Our training method generalizes the original ones in NCSN/DDPM to an infinite number of noise scales, allowing flexible discretization and variable number of noise scales for sampling.
+
+
+
+
+
+\section{Solving the reverse SDE}
+After training a time-dependent score-based model, we can use it to construct the reverse SDE and then solve it to generate samples from $p_0(\bfx_0)$. Crucially, the additional knowledge of scores enables special numerical methods not applicable to general SDEs. These new methods not only provide better sample quality and efficiency, but also allow for exact likelihood computation, flexible manipulation of latent representations, and uniquely identifiable encoding/compression.
+
+\subsection{General numerical solvers}
+Numerical solvers provide approximate samples of trajectories from SDEs. Many general methods exist for the numerical integration of SDEs, based on different discretization and approximation strategies. Examples include Euler-Maruyama, an analog to Euler's method for ODEs, and stochastic counterparts to Runge-Kutta methods~\citep{kloeden2013numerical}. As per our previous discussion, the perturbed datapoints of NCSN/DDPM (Eqs.~\eqref{eqn:ncsn} and \eqref{eqn:ddpm}) follow discretized trajectories of forward SDEs (\cref{eqn:ncsn_sde,eqn:ddpm_sde}). For the reverse SDE, we propose to use a closely paralleled discretization strategy, which enjoys simpler implementation and easier adaptation to models with other types of discrete noise scales. Suppose the following is a given discretization of the forward SDE \cref{eqn:forward_sde}:
+\begin{align}
+    \bfx_{i+1} - \bfx_i = \bfa_i(\bfx_i) + \bfA_i(\bfx_{i})\bfz_i, \label{eqn:discrete_forward}
+\end{align}
+where $\bfz_i \sim \mcal{N}(\bfzero, \bfI_d)$. We propose to discretize the backward SDE (\cref{eqn:backward_sde}) as below
+\begin{align}
+    \bfx_{i} - \bfx_{i+1} = -\bfa_{i+1}(\bfx_{i+1}) + \bfA_{i+1}(\bfx_{i+1})\bfA_{i+1}(\bfx_{i+1})\tran \nabla_\bfx \log p(\bfx_{i+1}, t_{i+1}) + \bfA_i(\bfx_{i}) \bfz_i. \label{eqn:discrete_backward}
+\end{align}
+For NCSN, this gives the following method for sampling
+\begin{align}
+    \bfx_i = \begin{cases}
+        \bfe \sim \mcal{N}(\bfzero, \sM^2\bfI_d), &\quad i = N\label{eqn:ncsn_reverse_diffusion}\\
+        \bfx_{i+1} + (\sigma_{i+1}^2 - \sigma_i^2) \bfs_\bftheta(\bfx_{i+1}, t_{i+1}) + \sqrt{\sigma_{i+1}^2 - \sigma_i^2} \bfz_i, &\quad i=0,1,\cdots,N-1.
+    \end{cases}
+\end{align}
+While similarly for DDPM, the discretized reverse SDE is
+\begin{align}
+    \bfx_i = \begin{cases}
+        \bfe \sim \mcal{N}(\bfzero, \bfI_d), &\quad i = N\label{eqn:ddpm_reverse_diffusion}\\
+        (2 - \sqrt{1-\beta_{i+1}})\bfx_{i+1} + \beta_{i+1} \bfs_\bftheta(\bfx_{i+1}, t_{i+1}) + \sqrt{\beta_{i+1}}\bfz_i,&\quad i=0,1,\cdots,N-1.
+    \end{cases}
+\end{align}
+We call these new sampling algorithms the \emph{reverse diffusion} sampling method. Note that the original sampling method of DDPM matches \cref{eqn:ddpm_reverse_diffusion} when for all $i$ we have $\beta_i \to 0$, because
+\begin{align*}
+    &\frac{1}{\sqrt{1-\beta_{i+1}}}(\bfx_i + \beta_{i+1} \bfs_\bftheta) \approx \bigg( 1 + \frac{1}{2}\beta_{i+1} \bigg)(\bfx_i + \beta_{i+1} \bfs_\bftheta) \approx \bigg(1 + \frac{1}{2}\beta_{i+1} \bigg) \bfx_{i} + \beta_{i+1}\bfs_\bftheta \\
+    =& \bigg[2 - \bigg(1 - \frac{1}{2}\beta_{i+1}\bigg) \bigg] \bfx_{i} + \beta_{i+1}\bfs_\bftheta \approx (2 - \sqrt{1-\beta_{i+1}})\bfx_{i} + \beta_{i+1}\bfs_\bftheta.
+\end{align*}
+Therefore, the original sampling method of DDPM is essentially a different discretization to the reverse SDE. However, the derivation of our new reverse diffusion sampler (\cref{eqn:ddpm_reverse_diffusion}) is simpler, and more readily available once a discrete forward process like \cref{eqn:ncsn} or \cref{eqn:ddpm} is given. Empirically, this reverse diffusion sampling process works comparably well or better to the original DDPM sampling method. In fact, for the same DDPM model on CIFAR-10, reverse diffusion achieves an FID score of $3.21\pm 0.02$, while the original sampler achieves $3.24\pm 0.02$ (\cref{tab:compare_samplers})
+
+\subsection{Predictor-corrector samplers}
+Different from solving general SDEs, we have extra information that can be readily leveraged to improve the solution. Since we have a score-based model $\bfs_\bftheta(\bfx, t) \approx \nabla_\bfx \log p_t(\bfx)$, we can employ score-based MCMC approaches, such as Langevin MCMC~\citep{parisi1981correlation,grenander1994representations} and HMC~\citep{neal2011mcmc}, to sample from $p_t(\bfx_t)$ directly and correct the solution of a numerical SDE solver. At each time step, the numerical SDE solver gives an estimate of the sample at the next time step, playing the role of a ``predictor''. The score-based MCMC approach corrects the estimated sample using the score-based model, playing the role of a ``corrector''. We therefore name these hybrid sampling algorithms \emph{Predictor-Corrector} (PC) methods.
+
+\begin{figure}
+\includegraphics[width=\linewidth]{figures/algorithms.pdf}
+\end{figure}
+
+\if0
+\algnewcommand{\LineComment}[1]{\Statex \(\triangleright\) #1}
+\algrenewcommand\algorithmicindent{0.7em}%
+\begin{minipage}[t]{.49\textwidth}
+    \begin{algorithm}[H]
+           \caption{PC sampling for NCSN}
+           \label{alg:ncsn}
+            \begin{algorithmic}[1]
+               \State $\bfx_N \sim \mcal{N}(\bfzero, \sM^2 \bfI_d)$
+               \For{$i=N-1$ {\bfseries to} $0$}
+                 \State{$\bfx_i' \gets \bfx_{i+1} + (\sigma_{i+1}^2 - \sigma_i^2) \bfs_\bftheta(\bfx_{i+1}, t_{i+1})$}
+                 \State{$\bfz \sim \mcal{N}(\bfzero, \bfI_d)$}
+                 \State{$\bfx_i \gets \bfx_i' + \sqrt{\sigma_{i+1}^2 - \sigma_i^2} \bfz$}
+                 \For{$j=1$ {\bfseries to} $M$}
+                    \State{$\bfz \sim \mcal{N}(\bfzero, \bfI_d)$}
+                    \State{$\bfx_{i} \gets \bfx_{i} + \delta_i \bfs_\bftheta(\bfx_{i}, t_{i}) + \sqrt{2\delta_i}\bfz$}
+                 \EndFor
+               \EndFor
+               \State {\bfseries return} $\bfx_0$
+            \end{algorithmic}
+    \end{algorithm}
+\end{minipage}
+\begin{minipage}[t]{.49\textwidth}
+    \begin{algorithm}[H]
+           \caption{PC sampling for DDPM}
+           \label{alg:ncsn}
+            \begin{algorithmic}[1]
+               \State $\bfx_N \sim \mcal{N}(\bfzero, \bfI_d)$
+               \For{$i=N-1$ {\bfseries to} $0$}
+               \vspace{0.33em}
+                 \State{\resizebox{\linewidth}{!}{$\bfx_i' \gets (2 - \sqrt{1-\beta_{i+1}})\bfx_{i+1} + \beta_{i+1} \bfs_\bftheta(\bfx_{i+1}, t_{i+1})$}}\vspace{0.35em}
+                 \State{$\bfz \sim \mcal{N}(\bfzero, \bfI_d)$}
+                 \State{$\bfx_i \gets \bfx_i' + \sqrt{\beta_{i+1}} \bfz$}
+                 \For{$j=1$ {\bfseries to} $M$}
+                    \State{$\bfz \sim \mcal{N}(\bfzero, \bfI_d)$}
+                    \State{$\bfx_{i} \gets \bfx_{i} + \epsilon_i \bfs_\bftheta(\bfx_{i}, t_{i}) + \sqrt{2\epsilon_i}\bfz$}
+                 \EndFor
+               \EndFor
+               \State {\bfseries return} $\bfx_0$
+            \end{algorithmic}
+    \end{algorithm}
+\end{minipage}
+\fi
+
+
+
+When using the reverse diffusion sampling method as the predictor, and annealed Langevin MCMC as the corrector, we have Alg.~1 and Alg.~2 for NCSN and DDPM respectively, where $M$ represents the number of Langevin sampling steps per noise scale. In addition, we use $\{\delta_i\}_{i=0}^{N-1}$ and $\{\epsilon_i\}_{i=0}^{N-1}$ to denote step size schedules for Langevin dynamics. In our experiments, we take the schedule of annealed Langevin dynamics in \citet{song2019generative}, but modify it slightly in order to achieve better empirical performance (see Appendix for details). Algs.~1 and 2 generalize the original sampling methods of NCSN and DDPM: We can recover annealed Langevin dynamics for NCSN by removing the predictor part, or regain the reverse diffusion sampling method for DDPM by removing the corrector, which equals the original DDPM sampling method in the limit of small time steps.
+
+\paragraph{Error analysis} The error of sampling with the reverse-time SDE comes from two sources: discretization of the SDE, and estimation of the true scores. We can use a finer discretization and/or a higher-order numerical solver to reduce the discretization error, but this might lead to larger estimation errors since using more discretization steps amounts to evaluating score-based models at more time steps. The estimation errors of the score-based model at multiple time steps can compound. This estimation error can be reduced by incorporating the corrector step, because if the sampler used for the corrector step is accurate (which can be controlled by tuning the step sizes and number of sampling steps of the MCMC), the final samples will only come from the score-based model for the smallest noise scale, and are asymptotically agnostic to the estimation errors of other scores. PC samplers have the benefit of avoiding the accumulation of estimation errors over time.
+
+\paragraph{PC improves performance} We train an NCSN and a DDPM model using the architecture in \cite{ho2020denoising} on CIFAR-10. Results in \cref{tab:compare_samplers} confirm that the reverse diffusion sampling method outperforms the DDPM sampling method. In addition, no matter what type of predictor method is used, adding corrector always gives better performance at the cost of more computation. \todo{results with the same computation.}
+
+\paragraph{Predictor vs. corrector} We conduct an empirical study to demonstrate that in many cases, it is beneficial 
+to split computation between the predictor and the corrector, rather than allocating all computation to either the predictor (as done in DDPM) or the corrector (as done in NCSN). As an illustration, we train a score-based model on $256\times 256$ LSUN bedrooms with the SDE of NCSN, and report the results of different computation allocation in \cref{fig:computation}.
+\begin{figure}
+    \centering
+    \includegraphics[width=0.6\linewidth]{figures/computation.pdf}
+    \caption{Predictor-corrector sampling for LSUN bedrooms. The vertical axis corresponds to the total computation, and the horizontal axis represents the amount of computation allocated to the corrector. Samples are the best when computation is split between the predictor and corrector. \todo{change it to 4x4 grids on both bedrooms and church/celeba-hq. }}
+    \label{fig:computation}
+\end{figure}
+
+\begin{table}
+	\caption{The performance of various samplers applied to NCSN/DDPM models trained on CIFAR-10. Results are averaged over 5 different set of samples. \todo{make this a bar plot instead of a table?}}\label{tab:compare_samplers}
+	\centering
+	\begin{adjustbox}{max width=\textwidth}
+		\begin{tabular}{cccc}
+			\Xhline{3\arrayrulewidth} \bigstrut
+			Predictor & Corrector & Model & FID \\
+			\Xhline{1\arrayrulewidth}\bigstrut
+			reverse diffusion	& Yes &	NCSN & $3.60 \pm 0.02$\\
+            DDPM sampling & Yes	& NCSN	& $3.62 \pm 0.03$\\
+            gradient flow &	Yes	& NCSN	& $3.51 \pm 0.04$\\
+            reverse diffuion & No & NCSN & $4.79 \pm 0.07$\\
+            gradient flow & No & NCSN & $15.41 \pm 0.15$\\
+            DDPM sampling & No & NCSN &	$4.98 \pm 0.06$\\
+            reverse diffusion &	Yes & DDPM & $3.18 \pm 0.01$\\
+            gradient flow & Yes & DDPM & $3.06 \pm 0.03$\\
+            DDPM sampling &	Yes	& DDPM & $3.21 \pm 0.02$\\
+            reverse diffuion & No & DDPM & $3.21 \pm 0.02$\\
+            gradient flow & No & DDPM & $3.59 \pm 0.04$\\
+            DDPM sampling & No & DDPM & $3.24 \pm 0.02$\\
+			\Xhline{3\arrayrulewidth}
+		\end{tabular}
+	\end{adjustbox}
+\end{table}
+
+
+\subsection{Probability flow sampling}
+The score-based model enables another numerical method for solving the reverse-time SDE. %
+For all diffusion processes, there exists a corresponding \emph{deterministic process} whose trajectories induce the same evolution of densities. This deterministic process satisfies an ODE given by deterministic particle flows, which can be derived from the SDE once scores are known. Therefore, we can produce data samples by integrating the associated ODE for the reverse-time SDE, and then collecting endpoints of the resulting trajectories. 
+
+\begin{theorem}[Probability flows for SDEs]
+Given the same $p_0(\bfx_0)$, particles flowing according to the following ODE share the same trajectories of densities as the SDE in \cref{eqn:forward_sde}:
+\begin{align}
+    \ud \bfx_t = \bigg\{\bff(\bfx_t, t) - \frac{1}{2} \nabla \cdot [\bfG(\bfx_t, t)\bfG(\bfx_t, t)\tran] - \frac{1}{2} \bfG(\bfx_t, t)\bfG(\bfx_t, t)\tran \nabla_\bfx \log p_t(\bfx_t)\bigg\} \ud t \label{eqn:flow}.
+\end{align}
+\end{theorem}
+
+For sample generation, we can either solve the ODE with a fixed discretization strategy (named flow\textsubscript{d}) like the one in NCSN/DDPM, or a black-box integrator with adaptive step sizes and error control (named flow\textsubscript{c}) like in neural ODEs. Both sampling methods can generate reasonable samples with competitive FIDs, as demonstrated in \cref{tab:compare_samplers}. We can explicitly trade accuracy for efficiency with black-box solvers. With a larger error tolerance, the number of function evaluations for a black-box solver can be just $1/10$-th of other sampling methods. \todo{add experimental results here.}
+
+\subsubsection{Exact likelihood computation}
+Deterministic probability flows turn our time-dependent score-based model into a neural ODE~\citep{chen2018neural}. Leveraging this connection, we can compute the likelihood of our particle flow dynamics via the instantaneous change of variables formula:
+\begin{theorem}[Likelihood of particle flows]
+\begin{multline}
+\log p_0(\bfx_0) = \log p_T(\bfx_T) + \\
+\int \nabla \cdot \bff(\bfx_t, t) - \frac{1}{2} \nabla^2 \cdot [\bfG(\bfx_t, t)\bfG(\bfx_t, t)\tran] - \frac{1}{2} \nabla \cdot [\bfG(\bfx_t, t)\bfG(\bfx_t, t)\tran \nabla_\bfx \log p_t(\bfx_t)]  \ud t
+\end{multline}\label{eqn:likelihood}
+\end{theorem}
+\begin{wraptable}[8]{l}{0.4\textwidth}
+\vspace{-2em}
+\centering
+\caption{NLL on CIFAR-10}\label{tab:bpd}
+\begin{adjustbox}{max width=0.4\textwidth}
+    \begin{tabular}{l c}
+    \toprule
+    Model & NLL \\
+    \midrule
+    DDPM ($L_{\text{simple}}$) & $\leq 3.75$\\
+    DDPM (ELBO) & $\leq 3.70$\\
+    \midrule
+    NCSN cont. & $3.66 \pm 0.0038$\\
+    DDPM cont. & $3.40 \pm 0.0040$\\
+    \bottomrule
+    \end{tabular}
+\end{adjustbox}
+\end{wraptable}
+Here $\nabla^2 := \nabla \cdot \nabla$. The divergence $\nabla \cdot \bfa(\bfx)$ is oftentimes hard to compute, but has an unbiased estimator via Hutchinson's trace estimator~\citep{hutchinson1990stochastic}, \ie, $\nabla \cdot \bfa(\bfx) = \mbb{E}[\bfe \tran \nabla \bfa(\bfx) \bfe]$, where $\bfe$ is a Gaussian or Rademacher random variable, and $\nabla \bfa(\bfx)$ denotes the Jacobian of $\bfa(\bfx)$. Using \cref{eqn:likelihood} and Hutchinson's trace estimator, we can compute the exact likelihood on a test dataset with very small errors~\citep{grathwohl2019scalable}.
+
+We report negative log-likelihoods (NLLs) measured in bits/dim in \cref{tab:bpd}. The likelihoods computed via particle flows are on uniform dequantized data. For DDPM, we obtain better bits/dim compared to the upper bound given by ELBO, since our likelihoods are exact.
+
+\subsubsection{Latent representations}
+By integrating \cref{eqn:flow}, we can encode any datapoint $\bfx_0$ into a latent space $\bfx_T$. Decoding can be achieved by integrating a corresponding ODE for the reverse-time SDE. Same as other invertible models such neural ODEs and normalizing flows~\citep{dinh2016density,song2019mintnet}, we can manipulate this latent representation for image editing, such as interpolation, and temperature scaling. \todo{Add experimental results}
+
+There is one special difference from other invertible models: our representation is uniquely identifiable, meaning that with sufficient training data, model capacity, and optimization accuracy, the encoding for a same input always stays the same. This is because our forward SDE, \cref{eqn:forward_sde}, is prescribed without trainable parameters, and its associated particle flow ODE, \cref{eqn:flow}, provides the same trajectories given perfectly estimated scores. \todo{add a quick figure to verify this.}
+
+
+\section{Controllable generation}
+The continuous structure of our framework allows us to not only produce data samples from $p_0(\bfx_0)$, but also control this sampling process for a multitude of other tasks. Let $p_t(\bfx_t \mid \bfy)$ be the posterior distribution of $p_t(\bfx_t)$ given the additional information $\bfy$. We provide a principled method to sample from $p_0(\bfx_0 \mid \bfy)$ at test time for an unconditional score-based model, without re-training it on additional information. The method can be applied to image inpainting, colorization, class-conditional sample generation and others by training a single time-dependent score-based model.
+
+
+\begin{theorem}[Conditional reverse-time SDE]
+Trajectories of the reverse-time SDE
+\begin{multline}
+\ud \bfx_t = \{\bff(\bfx_t, t) - \nabla \cdot [\bfG(\bfx_t, t) \bfG(\bfx_t,t)\tran] - \bfG(\bfx_t,t)\bfG(\bfx_t,t)\tran  \nabla_\bfx  \log p_t(\bfx_t)\\ - \bfG(\bfx_t,t)\bfG(\bfx_t,t)\tran  \nabla_\bfx  \log p_t(\bfy \mid \bfx_t)\} \ud t + \mbf{G}(\bfx_t, t) \ud \bar{\bfw}_t
+\end{multline}
+satisfy the marginal probability $p_t(\bfx_t \mid \bfy)$ at time $t$.
+\end{theorem}
+
+
+\subsection{Class-conditional sampling}
+When $\bfy$ represents class labels, we can train a time-dependent classifier $p_t(\bfy \mid \bfx_t)$ for class-conditional sampling. Since the forward SDE is tractable, we can easily create a pair of training data $(\bfx_t, \bfy)$ by first sampling $(\bfx_0, \bfy)$ from a dataset and then obtaining $\bfx_t \sim p_{0t}(\bfx_t \mid \bfx_0)$. Afterwards, we may employ a mixture of cross-entropy losses over different time steps, like \cref{eqn:training}, to train the time-dependent classifier $p_t(\bfy \mid \bfx_t)$.
+
+\todo{add pictures}
+
+\subsection{Imputation} 
+Imputation is a special case of conditional sampling. Denote by $\Omega(\bfx)$ and $\bar{\Omega}(\bfx)$ the known and unknown dimensions of $\bfx$ respectively, and let $\bff_\Omega(\cdot, t)$ and $\bfG_\Omega(\cdot, t)$ denote $\bff(\cdot, t)$ and $\bfG(\cdot, t)$ restricted to the known dimensions. When $\bff(\cdot, t)$ is element-wise (true for NCSN/DDPM), $\bff_\Omega(\cdot, t)$ denotes the same element-wise function applied only to the known dimensions. When $\bfG(\cdot, t)$ is diagonal (true for NCSN/DDPM), $\bfG_\Omega(\cdot, t)$ is the sub-matrix of known dimensions. 
+
+We aim to sample from $p(\bar{\Omega}(\bfx_0) \mid \Omega(\bfx_0) = \bfy)$. Let $\bfz_t = \Omega(\bfx_t)$. The SDE for $\bfz_t$ can be written as
+\begin{align*}
+\ud \bfz_t = \bff_\Omega(\bfz_t, t) dt + \bfG_\Omega(\bfz_t, t) \ud \bfw_t,
+\end{align*}
+The reverse diffusion, given $\Omega(\bfx_0) = \bfy$, is
+\begin{align*}
+\ud\bfz_t = (\bff_\Omega(\bfz_t, t) - \bfG_\Omega(\bfz_t, t)\bfG_\Omega(\bfz_t, t)\tran \nabla_\bfz \log p_t(\bfz_t \mid \Omega(\bfz_0) = \bfy))\ud t + \bfG_\Omega(\bfz_t, t)\ud\bar{\bfw}_t.
+\end{align*}
+Although $p_t(\bfz_t \mid \Omega(\bfx_0) = \bfy)$ is in general intractable, it can be approximated by
+\begin{align*}
+p_t(\bfz_t \mid \Omega(\bfx_0) = \bfy) &= \int p_t(\bfz_t \mid \Omega(\bfx_t), \bfy) p_t(\Omega(\bfx_t) \mid \bfy) \ud \Omega(\bfx_t) \\
+&= \mathbb{E}_{p_t(\Omega(\bfx_t) \mid \bfy)}[p_t(\bfz_t \mid \Omega(\bfx_t), \bfy)]\\
+&\approx \mathbb{E}_{p_t(\Omega(\bfx_t) \mid \bfy)}[p_t(\bfz_t \mid \Omega(\bfx_t))]\\
+&\approx p_t(\bfz_t \mid \Omega'(\bfx_t)),
+\end{align*}
+where $\Omega'(\bfx_t) \sim p_t(\Omega(\bfx_t) \mid \bfy)$.
+Therefore,
+\begin{align*}
+\nabla_\bfz \log p_t(\bfz_t \mid \Omega(\bfx_0)=\bfy) &\approx \nabla_\bfz \log p_t(\bfz_t \mid \Omega'(\bfx_t)) \\
+&= \nabla_\bfz \log p_t([\bfz_t; \Omega'(\bfx_t)]).
+\end{align*}
+
+Colorization is a special case of imputation, except for the known data dimensions are coupled. We can decouple these data dimensions with an orthogonal linear transformation, and perform imputation in the transformed space. \todo{include proof-of-concept images.}

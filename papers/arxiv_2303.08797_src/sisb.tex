@@ -1,0 +1,131 @@
+Recently, there has been a surge of interest in the construction of generative models through diffusive bridge processes~\citep{peluchetti2022nondenoising,liu2022let, somnath2023aligned}. In this section, we connect these approaches with our own, highlighting that stochastic interpolants allow us to manipulate certain bridge processes in a simpler and more direct manner. We also show that this perspective leads to a generative process that samples any target density $\rho_1$ by pushing a point mass at any $x_0\in \RR^d$ through an SDE. We begin by introducing a new kind of interpolant:
+
+\begin{definition}[Diffusive interpolant]
+    \label{def:diff:interp} 
+     Given two probability density functions $\rho_0, \rho_1 : {\RR^d} \rightarrow \RR_{\geq 0}$, a \textit{diffusive interpolant} between $\rho_0$ and $\rho_1$ is a stochastic process $x^\diff_t$ defined as
+\begin{equation}
+    \label{eq:diffinterp}
+    x^\diff_t = I(t,x_0,x_1) + \sqrt{2a(t)} B_t,  \qquad t\in [0, 1],
+\end{equation}
+where: 
+\begin{enumerate}[leftmargin=0.15in]
+\item $I(t,x_0,x_1)$ is as in Definition~\ref{def:interp};
+\item $(x_0,x_1)\sim \nu$ with $\nu$ satisfying~\eqref{eq:margin:mu} in Definition~\ref{def:interp};
+\item $a(t)\in C^2([0,1])$ with $a(0) >0$ and $a(t)\ge 0 $ for all $t\in(0,1]$, and;
+\item $B_t$ is a standard Brownian bridge process, independent of $x_0$ and $x_1$. 
+\end{enumerate}
+\end{definition}
+
+Pathwise, \eqref{eq:diffinterp} is different from the stochastic interpolant introduced in Definition~\ref{def:interp}: in particular, $x^\diff_t$ is continuous but not differentiable  in time. At the same time, since $B_t$ is a Gaussian process with mean zero and variance $\EE B^2_t = t(1-t)$, \eqref{eq:diffinterp} has the same single-time statistics and time-dependent density~$\rho(t,x)$ as the stochastic interpolant~\eqref{eq:stochinterp} if we set $\gamma(t) = \sqrt{2a(t)t(1-t)}$, i.e.
+\begin{equation}
+\label{eq:bb}
+x_t = I(t,x_0,x_1)+ \sqrt{2a(t)t(1-t)} z \quad \text{with} \quad (x_0,x_1)\sim \nu, \  z \sim {\sf N}(0,\Id),\  (x_0,x_1) \perp z.
+\end{equation}
+As a result,~\eqref{eq:diffinterp} and~\eqref{eq:bb} lead to the \textit{same} generative models.  Technically, it is easier to work with~\eqref{eq:bb} than with~\eqref{eq:diffinterp}, because it avoids the use of It\^o calculus, and enables direct sampling of $x_t$ using samples from $\rho_0$, $\rho_1$, and $\mathsf{N}(0,\Id)$. 
+%
+However, \eqref{eq:diffinterp} sheds light on some interesting properties of the generative models based on~\eqref{eq:bb}, i.e. stochastic interpolants with $\gamma(t) = \sqrt{2a(t)t(1-t)}$.
+%
+To see why, we now re-derive the transport equation for the density $\rho(t, x)$ shared by~\eqref{eq:diffinterp} and~\eqref{eq:bb} using the relation~\eqref{eq:diffinterp} \new{using Fourier analysis}.
+%
+For simplicity, we focus on the case where $a(t)$ is constant in time, i.e. we set $a(t)=a>0$ in~\eqref{eq:diffinterp}. 
+
+To begin, recall that the Brownian Bridge $B_t$  can be expressed in terms of the Wiener process $W_t$ as $B_t = W_t - tW_{t=1}$.
+%
+Moreover, it satisfies the SDE obtained by conditioning on $B_{t=1}=0$ via Doob's $h$-transform~\citep{doob1984potential}:
+\begin{equation}
+    \label{eq:dobb}
+    dB_t = - \frac{B_t} {1-t} dt + dW_t, \qquad B_{t=0}=0.
+\end{equation}
+A direct application of It\^o's formula implies that
+\begin{equation}
+    \label{eq:dobb:2}
+    de^{ik\cdot x_t^\diff} = ik \cdot \Big( \partial_t I(t,x_0,x_1) - \frac{\sqrt{2a}B_t} {1-t} \Big) e^{ik\cdot x_t^\diff}  dt - a|k|^2 e^{ik\cdot x_t^\diff}  dt + \sqrt{2a}ik\cdot dW_t e^{ik\cdot x_t^\diff}.
+\end{equation}
+Taking the expectation of this expression and using the independence between $(x_0,x_1)$ and $B_t$, we deduce that
+\begin{equation}
+    \label{eq:dobb:3}
+    \partial_t \EE e^{ik\cdot x_t^\diff} = ik \cdot \EE \Big(\Big( \partial_t I(t,x_0,x_1) - \frac{\sqrt{2a}B_t} {1-t} \Big) e^{ik\cdot x_t^\diff} \Big)  - a|k|^2 \EE e^{ik\cdot x_t^\diff}.
+\end{equation}
+Since for all fixed $t\in [0,1]$ we have $B_t \stackrel{d}{=} \sqrt{t(1-t)}z$ and $x^\diff_t \stackrel{d}{=} x_t $ with $x_t$ defined in~\eqref{eq:bb}, the time derivative \eqref{eq:dobb:3} can also be written as
+\begin{equation}
+    \label{eq:dobb:4}
+    \partial_t \EE e^{ik\cdot x_t} = ik \cdot \EE \Big(\Big(\partial_t I(t,x_0,x_1) - \frac{\sqrt{2at}\, z} {\sqrt{1-t} }\Big) e^{ik\cdot x_t} \Big)  - a|k|^2 \EE e^{ik\cdot x_t}.
+\end{equation}
+Moreover, since by definition of their probability density we have $\EE e^{ik\cdot x_t^\diff}=\EE e^{ik\cdot x_t} = \int_{\RR^d} e^{ik\cdot x}\rho(t,x)dx$, we can deduce from~\eqref{eq:dobb:4} that $\rho(t)$ satisfies
+\begin{equation}
+    \label{eq:dobb:5}
+    \partial_t \rho+\nabla \cdot(u \rho) = a \Delta \rho,
+\end{equation}
+where we defined
+\begin{equation}
+    \label{eq:u:def}
+    u(t,x) = \EE\Big( \partial_t I(t,x_0,x_1) - \frac{\sqrt{2at} \, z} {\sqrt{1-t}}\Big| x_t = x\Big).
+\end{equation}
+For the interpolant $x_t$ in~\eqref{eq:bb},  we have from the definitions of $b$ and $s$ in~\eqref{eq:b:ode:def} and \eqref{eq:s:def} that
+\begin{equation}
+    \label{eq:sbdoob}
+    \begin{aligned} 
+    b(t,x) &= \EE\Big( \partial_t I(t,x_0,x_1) + \frac{a(1-2t) z} {\sqrt{2t(1-t)}}\Big| x_t = x\Big),\\
+    s(t,x) &= \nabla \log\rho(t,x) = - \frac1{\sqrt{2at(1-t)}}\EE(z| x_t = x),
+    \end{aligned}
+\end{equation}
+As a result, $u-s=b$ and~\eqref{eq:dobb:5} can also be written as the TE~\eqref{eq:transport} using $\Delta \rho = \nabla \cdot(s \rho)$.
+%
+
+\paragraph{Conditional sampling.}
+Remarkably, the drift $u$ defined in~\eqref{eq:u:def} remains non-singular for all $t\in [0, 1]$ (including $t=0$) even if $\rho_0$ is replaced by a point mass at $x_0$; by contrast, both $b$ and $s$ are singular at $t=0$ in this case.
+%
+Hence, the  SDE associated with the FPE~\eqref{eq:dobb:5} provides us with a generative model that samples $\rho_1$ from a base measure concentrated at a single $x_0$ (i.e. such that the density $\rho_0$ is replaced by a point mass measure at $x=x_0$). 
+%
+We formalize this result in the following theorem:
+
+\begin{restatable}{theorem}{diffgen}
+    \label{thm:diff}
+    Assume that $I(t,x_0,x_1) = x_0$ for $t\in [0,\delta]$ with some $\delta \in (0,1]$.
+    Given any  $a>0$, let
+\begin{equation}
+    \label{eq:u:def:x0}
+    u^\diff(t,x,x_0) = \EE_{x_1,z}\Big( \partial_t I(t,x_0,x_1) - \frac{\sqrt{2a t} \, z} {\sqrt{1-t}}\Big| x_t = x\Big),
+\end{equation}
+where $x_t$ is given by~\eqref{eq:bb} and where $\EE_{x_1,z}(\cdot|x_t=x)$ denotes an expectation over $x_1\sim \rho_1 \perp z\sim \mathsf{N}(0,\Id)$ conditioned on $x_t=x$ with $x_0\in \RR^d$ fixed.
+Then $u^\diff(\cdot, \cdot, x_0) \in C^0([0,1];(C^p(\RR^d))^d)$ for any $p\in \NN$ and $x_0 \in \RR^d$.
+%
+Moreover, the solutions to the forward SDE
+\begin{equation}
+    \label{eq:diff:sde}
+    dX_t^\diff = u^\diff(t,X_t^\diff, x_0) dt + \sqrt{2a} \, dW_t, \qquad X_{t=0}^\diff = x_0,
+\end{equation}
+are such that $X^\diff_{t=1} \sim \rho_1$.
+\end{restatable}
+
+Note that the additional assumption we make on $I(t,x_0,x_1)$ is consistent with the requirements in Definition~\ref{def:interp} and Assumption~\ref{as:rho:I}: this additional assumption is made for simplicity and can probably be relaxed to $\partial_tI(t=0,x_0,x_1) = 0$.
+
+The proof of Theorem~\ref{thm:diff} is given in Appendix~\ref{app:diff}.
+It relies on the calculations that led to \eqref{eq:u:def}, along with the observation that at $t=0$ and $x=x_0$,
+\begin{equation}
+    \label{eq:u:def:x0:t0}
+    u^\diff(t=0,x_0,x_0) = \EE_{x_1}\left(\partial_t I(t=0,x_0,x_1) \right),
+\end{equation}
+whereas at $t=1$ and any $x\in\RR^d$, we have
+\begin{equation}
+    \label{eq:u:def:x0:t1}
+    u^\diff(t=1,x,x_0) = \partial_t I(t=1,x_0,x) + 2a \nabla \log \rho_1(x),
+\end{equation}
+which are both well-defined. 
+%
+To put the result in Theorem~\eqref{thm:diff} in perspective, observe that no probability flow ODE with $b\in C^0([0,1];(C^p(\RR^d))^d)$ can achieve the same feat as the diffusion in~\eqref{eq:diff:sde}.
+%
+This is because the solutions of such an ODE are unique, and therefore can only map $x_0$ onto a single point at time $t=1$. 
+%
+%To the best of our knowledge, \eqref{eq:diff:sde} is the first instance of an SDE that maps a point mass at $x_0$ into a density $\rho_1$ in finite time, and whose drift can be estimated by quadratic regression.
+%
+Moreover, $u^\diff(t,x,x_0)$ is the unique minimizer of the objective function
+%
+\begin{equation*}
+    \label{eq:udiff:obj}
+    \mathcal{L}_{u^\diff} [\hat u^{\diff}] = \int_0^1 \EE_{x_1,z} \left( |\hat u^d(t,x_t,x_0)|^2 - 2\Big( \partial_t I(t,x_0,x_1) - \frac{\sqrt{2a t} z} {\sqrt{(1-t)}}\Big)\cdot \hat u^d(t,x_t,x_0)\right) dt.
+\end{equation*}
+
+% \begin{remark}[Doob h-transform]
+% In principle, the  approach above can be generalized to any stochastic bridge $B_t^{x_0,x_1}$, which can be obtained from any SDE by conditioning its solution to satisfy $B_{t=0}^{x_0,x_1}=x_0$ and $B_{t=1}^{x_0,x_1}=x_1$ with the help of Doob's $h$-transform. In general, however, this construction cannot be made explicit, because the $h$-transform is typically not available analytically. One approach would be to learn it, as proposed e.g. in~\cite{peluchetti2022nondenoising,bortoli2021diffusion}, but this adds an additional layer of difficulty that is avoided by the approach above. 
+% \end{remark}

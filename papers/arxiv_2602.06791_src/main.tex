@@ -1,0 +1,1071 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{braket}
+\usepackage{dsfont}
+\usepackage{color}
+\usepackage[colorlinks = true, citecolor = blue, linkcolor = blue, urlcolor=blue]{hyperref}
+\usepackage[normalem]{ulem}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{svg}
+% \usepackage[inkscapeformat=png]{svg}
+% Recommended, but optional, packages for figures and better typesetting:
+\usepackage{microtype}
+\usepackage{booktabs} % for professional tables
+
+% hyperref makes hyperlinks in the resulting PDF.
+% If your build breaks (sometimes temporarily if a hyperlink spans a page)
+% please comment out the following usepackage line and replace
+% \usepackage{icml2025} with \usepackage[nohyperref]{icml2025} above.
+\usepackage{hyperref}
+
+% Attempt to make hyperref and algorithmic work together better:
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% Initial blind version submitted for review:
+% \usepackage{icml2026}
+% If arXiv use:
+\usepackage[preprint]{icml2026}
+
+
+% For theorems and such
+
+% if you use cleveref..
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+
+\usepackage{soul}
+\usepackage{subcaption}
+% \usepackage{subfigure}
+
+\usepackage{verbatim}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\usepackage[export]{adjustbox}
+
+\usepackage{multicol}
+
+\lstset{ 
+    language=Python, 
+    basicstyle=\ttfamily\footnotesize, 
+    keywordstyle=\color{blue}, 
+    stringstyle=\color{red}, 
+    commentstyle=\color{green}, 
+    numbers=left, 
+    numberstyle=\tiny\color{gray}, 
+    stepnumber=1, 
+    numbersep=5pt, 
+    backgroundcolor=\color{lightgray!20}, 
+    frame=single, 
+    breaklines=true, 
+    showstringspaces=false
+}
+%
+% Macros
+%
+\DeclareMathOperator{\Tr}{\operatorname{Tr}}
+\newcommand{\traj}[1]{X_{0:#1}}
+\newcommand{\realtraj}{\mathbf{x}}
+\newcommand{\unrealtraj}{\mathbf{X}}
+\newcommand{\realtoken}{x}
+\newcommand{\unrealtoken}{X}
+\newcommand{\obs}{\phi}
+\newcommand{\UnwantedSet}{\mathcal{D}}
+\newcommand{\KL}{D_{\text{KL}}(P_\theta|P_\bias)}
+\newcommand{\KLopen}[2]{D_{\text{KL}}(#1 \,| \,#2)}
+\newcommand{\bias}{\lambda}
+\newcommand{\EV}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\pdf}{p}
+\newcommand{\Maxent}{\Prob'_{\bias}}
+\newcommand{\Tilted}{\tilde{\Prob}_{\bias}}
+\newcommand{\Tiltednorm}{\Prob_{\bias}}
+\newcommand{\base}{\Prob}
+\newcommand{\transition}{X_{t}|X_{0:t-1}}
+\newcommand{\weights}{\mathbf{w}}
+\newcommand{\model}{\mathcal{M}_{\weights}}
+\newcommand{\probmodel}{\Prob_{\mathcal{M}}}
+\newcommand{\pdfmodel}{p_{\mathcal{M}}}
+\newcommand{\argmin}{\operatorname{argmin}}
+\newcommand{\logsumexp}{\operatorname{logsumexp}}
+\newcommand{\dataavg}{\overline{O}}
+
+% JPG general macros 
+%
+\newcommand{\tocite}[1]{{\color{gray}{\bf [cite #1]}}}
+%
+\newcommand{\ssp}{\nobreak\hspace{0.1em}}
+%
+\newcommand{\er}[1]{Eq.\ssp\eqref{#1}}
+\newcommand{\ers}[2]{Eqs.\ssp(\ref{#1}-\ref{#2})}
+\newcommand{\era}[2]{Eqs.\ssp(\ref{#1}) and (\ref{#2})}
+\newcommand{\eraa}[3]{Eqs.\ssp(\ref{#1}), (\ref{#2}) and (\ref{#3})}
+%
+\newcommand{\Er}[1]{Equation\ssp\eqref{#1}}
+\newcommand{\Ers}[2]{Equations\ssp(\ref{#1}-\ref{#2})}
+\newcommand{\Era}[2]{Equations\ssp(\ref{#1}) and (\ref{#2})}
+\newcommand{\Eraa}[3]{Equations\ssp(\ref{#1}), (\ref{#2}) and (\ref{#3})}
+%
+
+% Project specific macros 
+%
+\newcommand{\bZ}{{\bm{Z}}}
+%
+\newcommand{\hy}{\hat{y}}
+%
+\newcommand{\I}{{\mathcal I}}
+\newcommand{\Q}{{\mathcal Q}}
+\newcommand{\X}{{\mathcal X}}
+\newcommand{\Y}{{\mathcal Y}}
+\newcommand{\Z}{{\mathcal Z}}
+%
+\newcommand{\vZ}{\vec{Z}}
+%
+\newcommand{\Indf}{\mathbb I}
+
+
+\begin{document}
+
+\twocolumn[
+    \icmltitle{Rare Event Analysis of Large Language Models}
+    %
+    \begin{icmlauthorlist}
+        \icmlauthor{Jake McAllister Dorman}{SoPA-UoN}
+        \icmlauthor{Edward Gillman}{SoPA-UoN}
+        \icmlauthor{Dominic C. Rose}{SoPA-UoN}  
+        \icmlauthor{Jamie F. Mair}{SoPA-UoN}
+        \icmlauthor{Juan P. Garrahan}{SoPA-UoN}
+    \end{icmlauthorlist}
+    %
+    \icmlaffiliation{SoPA-UoN}{School of Physics and Astronomy, University of Nottingham, Nottingham, NG7 2RD, UK}
+    %
+    \vskip 0.3in
+]
+
+\icmlcorrespondingauthor{Jake McAllister Dorman}{jake.dorman@nottingham.ac.uk}
+
+
+\printAffiliationsAndNotice{}
+
+\newif\ifshowcomments
+\showcommentsfalse  % Change to \showcommentsfalse to hide all comments
+
+\ifshowcomments
+    \newcommand{\jd}[1]{\textcolor{red}{[JD: #1]}}           % Jake Dorman - Red
+    \newcommand{\jpg}[1]{\textcolor{blue}{[JPG: #1]}}        % Juan P. Garrahan - Blue
+    \newcommand{\eg}[1]{\textcolor{green!60!black}{[EG: #1]}} % Edward Gillman - Green
+    \newcommand{\jfm}[1]{\textcolor{purple}{[JFM: #1]}}      % Jamie Mair - Purple
+    \newcommand{\dr}[1]{\textcolor{orange}{[DR: #1]}}        % Dominic Rose - Orange
+\else
+    \newcommand{\jd}[1]{}
+    \newcommand{\jpg}[1]{}
+    \newcommand{\eg}[1]{}
+    \newcommand{\jfm}[1]{}
+    \newcommand{\dr}[1]{}
+\fi
+
+\begin{abstract}
+Being probabilistic models, during inference large language models (LLMs) display {\em rare events}: behaviour that is far from typical but highly significant. By definition all rare events are hard to see, but the enormous scale of LLM usage means that events completely unobserved during development are likely to become prominent in deployment. Here we present an end-to-end framework for the systematic analysis of rare events in LLMs. We provide a practical implementation spanning theory, efficient generation strategies, probability estimation and error analysis, which we illustrate with concrete examples. We outline extensions and applications to other models and contexts, highlighting the generality of the concepts and techniques presented here.
+\end{abstract}
+
+\icmlkeywords{Machine Learning, ICML}
+
+
+\section{Introduction}
+
+\textit{Rare events} are occurrences that are both important and atypical in systems whose outcomes are distributed. They are relevant across the sciences, an important example being the processes that mediate physical systems undergoing phase transitions. Three key questions about rare events are the following: (i) how likely are rare events; (ii) what are their properties; and (iii) since they are by definition atypical, what are efficient ways to access and study them. Question (i) concerns the estimation of statistical properties of the rare events, which we thus call \textit{rare event estimation}. Questions (ii) and (iii) concern the study of the structure and properties of the rare events themselves, which we call \textit{rare event exploration}. The answers to these can provide deep physical insights, inform critical safety measures, or guide the design of interventions mitigating negative effects.
+In traditional statistics, examples include the estimation of rare disease prevalence, the accident rate of commercial aircraft, or the frequency of faults in high volume manufacturing \cite{mcgrath2024binomial}. In computational chemistry and statistical physics, powerful techniques have been developed in the context of molecular dynamics. Collectively, we call these questions, studies and mathematical/computational tools \textit{Rare Event Analysis} (REA).
+
+As LLMs have become increasingly widespread, the effects of unlikely but important events in the responses they generate become ever more relevant. Yet, rare event analysis for LLMs is still in its infancy \cite{wu2025estimating,jones2025forecasting}.
+Often, in freshly trained LLMs, undesirable outputs
+occur frequently and are only made improbable through dedicated post-training and guardrails \cite{mazeika2024harmbench, lambert2025tulu}. This ``alignment'' makes the undesirable responses atypical, pushing them toward the tails of the distribution of output. However, the scale of current deployment of LLMs is such that events so unlikely to be almost impossible to observe during model testing will occur with non-negligible frequency when models are released for public use.
+
+\textbf{Aims and Objectives:} The primary aim of this work is to provide a \textit{practical} starting point for firmly establishing Rare Event Analysis of LLMs.
+By practical we mean that the methods and conceptual frameworks presented here can be used broadly by developers, researchers and engineers working on large foundation models, as well as application builders in critical domains, to begin to understand the properties of rare events, and how to control them, in their models and services.
+
+\textbf{Outline:} We identify four key stages in REA of LLMs. For each of these stages we present a complete end-to-end study. These are:
+(1) Formulating LLMs in terms of stochastic processes, including specifying relevant distributions and sampling strategies; see Sect.~\ref{sec:theory}.
+(2) The setup for numerical experiments, including specification of the class of rare events to be studied; see Sect.~\ref{sec:setup}.
+(3) Rare event estimation, including their expectations and probabilities; see Sect.~\ref{sec:results}.
+(4) Rare event exploration, including their properties and structure; see Sect.~\ref{sec:analysis}.
+% \begin{itemize}
+%     \item Formulating LLMs in terms of stochastic processes, including specifying relevant distributions and sampling strategies; see Sect.~\ref{sec:theory}.
+%     \item The setup for our numerical experiments, including specification of the specific class of rare events that we study in LLMs; see Sect.~\ref{sec:setup}.
+
+%     \item Rare event estimation, including their expectations and probabilities; see Sect.~\ref{sec:results}.
+
+%     \item Rare event exploration, including their properties and structure; see Sect.~\ref{sec:analysis}. 
+% \end{itemize}
+
+For concreteness and practicality we study the TinyStories model \cite{eldan2023tinystories:} and focus on the rare events, that is, atypical values, of two quantifiers (or \textit{observables}) of text completions. The first is the automated readability index (ARI) \cite{kincaid1975derivation}, a well-known linguistic measure of text complexity. The second one is the Log-Probability of a completion. Throughout, we provide practical details on theory, on sampling (i.e., generation) strategies, probability estimation and error analysis.
+
+In general, REA presents significant challenges. A systematic exploration of atypical behaviour in a stochastic system is computationally demanding in the best of cases, and can become prohibitive for large or slow systems. This is certainly the case when performing REA in LLMs. It is therefore important when describing an end-to-end analysis such as the one presented here to make clear the technical limitations at every stage. This also demands a balance between theoretical rigour and practical implementation details, and acknowledging the limitations of accessible computational resources. One approach would be to only consider a fully solvable toy problem which might allow an exhaustive theoretical analysis, at the expense of oversimplification and lack of practical relevance. At the other end, one could consider only a large scale LLM which might correspond to a realistic scenario but which, due to its scale, would prevent us from demonstrating the REA techniques. By utilizing TinyStories here, we aim for a mid-point between these two extremes that demonstrates the theory and its application in a scenario representative of reality. In our view this is the best way to achieve our primary aim of providing a practical starting point for the field by demonstrating an end-to-end implementation of REA. As will be evident below, the ultimate implementation for industry standard LLMs will require the widespread collaboration of experts and deep technical contributions across fields.
+
+
+\textbf{Summary of Contributions:} (1) We present for the first time a complete end-to-end application of rare event analysis to LLMs.
+(2) We provide a practical guide to implementation of these methods including theory, generation strategies, probability estimation and error analysis.
+(3) We analyse the probabilities of rare completions in TinyStories models for two observables of practical interest: ARI and Log-Probability.
+(4) We provide an example of exploratory data analysis (EDA) of the realisations of these rare completions.
+(5) We outline extensive directions for improvements to the algorithms, and applications to other models and contexts.
+% \textbf{List of acronyms:} 
+% ARI~=~automated readability index.
+% CI~=~confidence interval.
+% DPO~=~direct preference optimization.
+% EDA~=~exploratory data analysis.
+% GR~=~Gelman-Rubin. 
+% KL~=~Kullback-Leibler.
+% LLM~=~large language model.
+% Log-Prob~=~logarithm of the joint probability of a completion.
+% MBAR~=~multistate Bennett acceptance ratio.
+% MC~=~Monte Carlo.
+% MCMC~=~Markov chain Monte Carlo.
+% MH~=~Metropolis-Hastings.
+% PMF~=~probability mass function.
+% REA~=~rare event analysis.
+% RLHF~=~reinforcement learning from human feedback.
+% SMC~=~sequential Monte Carlo.
+% TPS~=~transition path sampling.
+
+\section{Relation to Other Work}
+
+In the context of physical sciences, a number of techniques have been developed to study rare events, particularly for estimating the free energy in molecular dynamics simulations \cite{frenkel2023understanding}. This includes methods such as umbrella sampling \cite{vardi1985empirical, torrie1977nonphysical, thiede2016eigenvector}, thermodynamic integration \cite{kirkwood1935statistical,gelman1998simulating}, and the Multistate Bennett Acceptance Ratio (MBAR) estimator \cite{shirts2008statistically,shirts2017reweighting} which we use in this work.
+Such methods rely on combining samples from multiple biased simulations to improve estimates. The samples themselves are typically generated using Markov Chain Monte Carlo (MCMC) methods \cite{andrieu2003an-introduction,brooks2011handbook} such as Metropolis-Hastings (MH) \cite{metropolis1953equation,hastings1970monte}, often applying techniques such as simulated annealing \cite{bertsimas1993simulated}, parallel tempering or replica exchange \cite{earl2005parallel} to improve exploration of the state space. The version of MH we consider is Transition Path Sampling (TPS) \cite{bolhuis2002transition,hedges2009dynamic}, originally designed for sampling trajectories of dynamical systems. While MCMC is standard, there are a number of important alternative sampling methods such as Sequential Monte Carlo (SMC) \cite{doucet2001sequential,cerou2012sequential} and particle filtering or cloning \cite{giardina2011simulating}. 
+
+Error analysis for rare event probabilities is an active area of research. This includes standard sampling problems \cite{dembinski2022bias,mcgrath2024binomial}, MCMC methods \cite{flegal2010batch,rosenthal2018simple,jian2022markov} and the application of MBAR to correlated data \cite{dinner2020stratification,li2023understanding,ding2024bayesian}. Here, we apply bootstrap methods to build confidence intervals (CIs) around MBAR estimates \cite{davison1997bootstrap} and Wilson intervals for direct sampling \cite{wilson1927probable}.
+
+Regarding rare event probability estimation for LLMs, the most closely related works are those of \cite{wu2025estimating} and \cite{jones2025forecasting}. The former focuses on the limited setting of estimating the probability of generating a single rare token by varying the prompt, while here we consider full completions and more general observables. The latter work shows how for a production LLM (Claude 3/3.5) rare event probability estimates on a small set of test prompts can be extrapolated to a much larger set of deployment prompts. The results of \cite{jones2025forecasting} gives an important practical justification for the work we present here: we focus on accurate rare event probability estimation and error quantification for single/few prompt settings. We show how, even with strong resource limitations, detailed estimates of rare event probabilities can be obtained by applying rare event sampling methods. The results of \cite{jones2025forecasting} then suggest that such detailed few-prompt estimates can be effectively combined with extrapolation methods to provide accurate rare event probabilities in practical deployment settings.
+
+In addition to the work on rare event estimation for LLMs, a number of works in related fields exist. Both SMC \cite{lew2023sequential,loula2025syntactic} and TPS \cite{faria2024quest:, faria2025sample} have been applied previously for constrained/biased generation, while in the field of extreme value theory, initial connections have been made to response lengths in LLMs \cite{jiao2025analyzing}. More broadly,
+the Reinforcement Learning from Human Feedback (RLHF) \cite{bai2022training} and Direct Preference Optimization (DPO) \cite{rafailov2023direct} methods for alignment share objective functions to those used in rare event sampling, namely that of a time-integrated ``reward'' function with a Kullback-Leibler (KL) divergence regularisation. This provides a further link to a variational perspective \cite{chetrite2015variational,jack2015effective} for REA that has been approached with reinforcement learning (RL) \cite{rose2021a-reinforcement,das2021reinforcement,gillman2024combining,pamulaparthy2025towards}.
+\section{Background on Rare Event Methods}
+\label{sec:theory}
+
+\begin{figure*}[t]
+    \newcommand{\Orange}{\color[HTML]{E97132}}
+    \newcommand{\Blue}{\color[HTML]{4A86E8}}
+    \newcommand{\Red}{\color[HTML]{FF0000}}
+    \newcommand{\Green}{\color[HTML]{4EA72E}}
+
+    \addtolength{\tabcolsep}{-3pt}
+    \begin{tabular}{rll}
+        {\Large (a)} \, 0 & {\Orange The sky is} {\Blue blue. It makes me want to sing.}                 &                     \\
+        Prop.             & {\Orange The sky is} {\Blue blue. It makes me want to} {\Green sleep.}       & {\Green \checkmark} \\
+        1                 & {\Orange The sky is} {\Blue blue. It makes me want to sleep.}                &                     \\
+        Prop.             & {\Orange The sky is} {\Green a giant dome covering the whole world.}         & \Green \checkmark   \\
+        2                 & {\Orange The sky is} {\Blue a giant dome covering the whole world.}          &                     \\
+        Prop.             & {\Orange The sky is} {\Blue a giant dome covering} {\Red us like a blanket.} & \Red $\times$       \\
+        3                 & {\Orange The sky is} {\Blue a giant dome covering the whole world.}          &                     \\
+        Prop.             & {\Orange The sky is} {\Green gray and weeping rain onto the streets.}        & \Green \checkmark   \\
+        4                 & {\Orange The sky is} {\Blue gray and weeping rain onto the streets.}         &                     \\
+    \end{tabular}
+    \addtolength{\tabcolsep}{3pt}
+    %\hfill
+    \begin{subfigure}[c]{1\columnwidth}
+        \centering
+        \includegraphics[]{tps_example_plot.pdf}
+    \end{subfigure}
+
+    \caption{
+        \textbf{(a) Text generation}: Shown is a single ``trace'' of the text produced by the TPS text generation process. The prompt (orange) remains fixed throughout, while the completion (blue) varies. At each step an edit to the completion is proposed that is either accepted (green), or rejected (red), leading to no change.
+        \textbf{(b) Evolution of the observable in a TPS trajectory}: Automated readability index (blue, see Sec. \ref{sec:setup}) and its cumulative average (orange, dashed) along the TPS trajectory shown in (a).
+    }
+    \label{fig:tps_trace}
+\end{figure*}
+
+\subsection{Language Models as Stochastic Processes}
+Suppose we have a prompt $\realtraj_{1:t} = (x_1, \dots, x_t)$ consisting of $t$ tokens $x_i$. An LLM produces a distribution over all tokens in the vocabulary of the model, equal to the probability that the token follows the given prompt.
+We denote the corresponding probability mass function (PMF) as $\pdfmodel(\realtoken_{t+1} | \realtraj_{1:t})$. A \textit{completion} to this prompt, $\realtraj_{t+1:T} = (x_{t+1}, \dots, x_T)$, is then generated by sequentially sampling from this distribution.
+The probability of this completion is then given by,
+\begin{align}
+    \pdfmodel(\realtraj_{t+1 : T} | \realtraj_{1:t})
+     & =
+    \prod_{\tau=t}^{T-1} \pdfmodel(\realtoken_{\tau + 1} | \realtraj_{1 : \tau}) \,.
+    \label{eq:llm_prob}
+\end{align}
+The form \eqref{eq:llm_prob} is sometimes called {\em autoregressive} and we refer to the sequence $\realtraj_{1:T}$ as a trajectory.
+
+Since it is always fixed during generation, for brevity we will suppress explicit conditioning on the prompt from now on, except when useful for clarity.
+
+\subsection{Importance Sampling}
+Consider an expectation under the distribution of the model,
+\begin{align}
+    \bar{f}
+     & \coloneqq
+    \EV_{\pdfmodel}\left[ f(\realtraj_{1:T}) \right]
+    =
+    \sum_{\realtraj_{t+1 : T}} f(\realtraj_{1:T}) \pdfmodel(\realtraj_{t+1 : T})
+    \,, \nonumber \\
+     & =
+    \sum_{\realtoken_{T}} \dots \sum_{\realtoken_{t+1}}  f(\realtraj_{1:T}) \pdfmodel(\realtraj_{t+1:T} | \realtraj_{1:t})
+    \,.
+    \label{eq:exp_f}
+\end{align}
+If $f$ is a binary function such as,
+\begin{align}
+    f(\realtraj_{1:T}) = \Indf[\obs(\realtraj_{1:T}) \in \UnwantedSet],
+\end{align}
+for some observable $\obs$, set $\UnwantedSet$, and where $\Indf(\cdot)$ is the indicator function taking value 1 if the condition is true and 0 otherwise, then $\bar{f}$ is the probability that the observable takes values in the set $\UnwantedSet$. If $\pdfmodel$ assigns sufficiently small probabilities to values $\realtraj_{1:T}$ where $f(\realtraj_{1:T}) = 1$, then an empirical estimate of Eq.~\eqref{eq:exp_f} will almost certainly give zero.
+
+To remedy this, suppose instead that we have a distribution with PMF $\pdf^*$ (the ``biased'' or ``tilted'' distribution) that gives much greater probability mass to regions where $f = 1$.
+We can then instead evaluate \eqref{eq:exp_f} as,
+\begin{align}
+    \bar{f} = \EV_{\pdf^*}\left[w(\realtraj_{1:T}) f(\realtraj_{1:T}) \right] \,,
+    \label{eq:exp_f_is}
+\end{align}
+where now samples are taken from $\pdf^*$ and weighted by
+\begin{align}
+    w(\realtraj_{1:T})
+    \coloneqq
+    \frac{\pdfmodel(\realtraj_{t+1:T} | \realtraj_{1:t})}{\pdf^*(\realtraj_{t+1:T} | \realtraj_{1:t})}
+    \,.
+    \label{eq:importance_weights}
+\end{align}
+This is known as \textit{importance sampling}.
+
+Importance sampling can be generalised to included samples from multiple biased distributions, $\{ \pdf_{\bias_k}^{*} \}_{k=1}^K,$ each with bias $\bias_k$, by defining a mixture distribution,
+\begin{align}
+    \pdf_{\text{Mix}}^{*}(\unrealtraj_{t+1:T})
+    \coloneqq
+    \sum_{k=1}^K \alpha_{k} \pdf_{\bias_k}^{*}(\unrealtraj_{t+1:T})
+    \, ,
+\end{align}
+with $\sum_k \alpha_k = 1$. Setting $\pdf^* = \pdf_{\text{Mix}}^{*}$ in Eqs.~\eqref{eq:exp_f_is}, \eqref{eq:importance_weights} gives,
+\begin{align}
+    \bar{f} & = \EV_{\pdf_{\text{Mix}}^{*}}\left[ w_{\text{Mix}}(\realtraj_{1:T}) f(\realtraj_{1:T}) \right], \nonumber          \\
+            & = \sum_{k=1}^K \alpha_k \EV_{\pdf_{\bias_k}^{*}}\left[ w_{\text{Mix}}(\realtraj_{1:T}) f(\realtraj_{1:T}) \right].
+    \label{eq:exp_f_umbrella}
+\end{align}
+This is often referred to as umbrella sampling \cite{torrie1977nonphysical,dinner2020stratification,li2023understanding}.
+
+\subsection{Exponentially Reweighted Distributions}
+
+Whilst any distribution with a greater or equal support to that of $\pdfmodel$ can be used for importance sampling, we will consider the distribution defined by exponential reweighting according to the trajectory observable $\phi$, with PMF
+\begin{align}
+    \pdf_\bias(\realtraj_{t+1:T})
+    \coloneqq
+    \frac{1}{Z(\lambda)} e^{-\lambda \obs(\realtraj_{1:T})} \pdfmodel(\realtraj_{t+1:T}) \,,
+    \label{eq:rw_dist}
+\end{align}
+where $\bias$ is the \textit{bias} (or \textit{tilting} parameter), and $Z(\bias)$ is a normalisation constant commonly referred to as the \textit{partition function}.
+By changing $\bias$ this choice of distribution encourages sampling of rare events while keeping the samples generated representative of the original model. In
+statistics, this is known as the exponential family and has a number of important properties \cite{murphy2022probabilistic}.
+Normalisation of $\pdf_\bias$, i.e. requiring $\EV_{\pdf_\bias}[1] = 1$, gives,
+\begin{align}
+    Z(\bias)
+    =
+    \sum_{\realtoken_{T}} \dots \sum_{\realtoken_{t+1}}
+    \exp[- \lambda \obs(\realtraj_{1:T})]\pdfmodel(\realtraj_{t+1:T})
+    \,.
+\end{align}
+For large $T$ or high dimensional data, exact calculation of $Z(\bias)$ is often impossible. $Z(\bias)$ must then be treated as unknown and estimated.
+
+Using Eq.~\eqref{eq:rw_dist} for umbrella sampling gives $w_{\text{Mix}}$ as
+\begin{align}
+    w_{\text{Mix}}(\realtraj_{1:T}) = \left(\sum_{j=1}^K \alpha_j Z^{-1}(\bias_j) e^{-\bias_j \obs(\realtraj_{1:T})}\right)^{-1} \,.
+\end{align}
+This depends on the unknown partition functions $Z(\bias_j),$ which must therefore be estimated in order to evaluate the expectation \eqref{eq:exp_f_umbrella}. Note that all biased distributions must obey,
+\begin{align}
+    \EV_{\pdf_{\bias_k}}[1] = 1, \quad \forall k = 1, \dots, K.
+    \label{eq:normalisation_constraints_umbrella}
+\end{align}
+Applying the umbrella sampling formula \eqref{eq:exp_f_umbrella} to these constraints \eqref{eq:normalisation_constraints_umbrella} gives simultaneous equations for $Z(\bias_k),$
+\begin{align}
+    Z(\bias_k)
+    =
+    \sum_{j=1}^K
+    \alpha_j \EV_{\pdf_{\bias_j}}
+    \left[
+        w_{\text{Mix}}(\realtraj_{1:T}) e^{-\bias_k \obs(\realtraj_{1:T})}
+        \right]
+    \, .
+    \label{eq:mbar_equations}
+\end{align}
+Since the right-hand side of \eqref{eq:mbar_equations} depends on all $\{ Z(\bias_j) \}_{j=1}^K$ through $w_{\text{Mix}},$ these equations must be solved self-consistently along with \eqref{eq:exp_f_umbrella} to obtain estimates of the partition functions and the desired expectation.
+
+In practice, one applies MCMC to obtain samples from the distributions in these equations, and the resulting estimates are consistent estimates for any choice of $\alpha_k$ \cite{dinner2020stratification}. Choosing $\alpha_k = N_k^{-1},$ where $N_k$ is the number of samples obtained from $\pdf_{\bias_k},$ is optimal when the samples are uncorrelated \cite{shirts2008statistically}. The resulting method is known as MBAR.
+
+\subsection{Monte Carlo for Sequences and Transition Path Sampling}
+
+
+% \begin{figure*}[t]
+%     \newcommand{\Orange}{\color[HTML]{E97132}}
+%     \newcommand{\Blue}{\color[HTML]{4A86E8}}
+%     \newcommand{\Red}{\color[HTML]{FF0000}}
+%     \newcommand{\Green}{\color[HTML]{4EA72E}}
+
+%     \addtolength{\tabcolsep}{-3pt}   
+%     \begin{tabular}{rll}
+%     {\Large (a)} \, 0  & {\Orange The sky is} {\Blue blue. It makes me want to sing.}& \\
+%     Prop. & {\Orange The sky is} {\Blue blue. It makes me want to} {\Green sleep.}& {\Green \checkmark}\\
+%     1     & {\Orange The sky is} {\Blue blue. It makes me want to sleep.}& \\
+%     Prop. & {\Orange The sky is} {\Green a giant dome covering the whole world.}& \Green \checkmark\\
+%     2     & {\Orange The sky is} {\Blue a giant dome covering the whole world.} &  \\
+%     Prop. & {\Orange The sky is} {\Blue a giant dome covering} {\Red us like a blanket.}& \Red $\times$ \\
+%     3     & {\Orange The sky is} {\Blue a giant dome covering the whole world.} &  \\
+%     Prop. & {\Orange The sky is} {\Green gray and weeping rain onto the streets.} & \Green \checkmark \\
+%     4     & {\Orange The sky is} {\Blue gray and weeping rain onto the streets.} & \\
+%     \end{tabular}
+%     \addtolength{\tabcolsep}{3pt}
+%     %\hfill
+%     \begin{subfigure}[c]{1\columnwidth}
+%         \centering
+%         \includegraphics[]{tps_example_plot_1.pdf}
+%     \end{subfigure}
+
+%     \caption{
+%         \textbf{(a) Text generation}: Shown is a single ``trace'' of the text produced by the TPS text generation process. The prompt (orange) remains fixed throughout, and at each step a new completion is proposed that is either accepted (green), leading to a change in the text, or rejected (red), leading to no change. 
+%         \textbf{(b) Evolution of the observable in a TPS trajectory}: ARI (blue) and its running average (orange, dashed) along the TPS trajectory shown in (a).
+%         \jpg{Replace in figure for {\bf running average}}
+%         }
+%     \label{fig:tps_trace}
+% \end{figure*}
+
+
+Metropolis-Hastings provides a general method to sample from a target distribution, $\pdf^*$, by constructing a
+Markov chain (MC) whose stationary distribution is $\pdf^*$. This is achieved by sequentially proposing new states through a \textit{proposal distribution function}, $\pdf_{\text{Prop}}(\realtraj_{\text{new}} | \realtraj_{\text{old}}),$ and accepting these proposals with a probability determined by an \textit{acceptance function}, $A(\realtraj_\text{new}, \realtraj_\text{old})$.
+If the proposal is accepted, the state is set to the proposal and is otherwise unchanged. A single iteration of proposal and acceptance/rejection gives one ``step'' of the MC. The MH approach determines a form for the acceptance function such that the resulting MC dynamics obeys \textit{detailed balance} with respect to $\pdf^*$, meaning it is guaranteed to sample from $\pdf^*$ when run for a sufficient number of steps. The average of samples $f(x_t)$ from this MC then gives an almost-sure and
+asymptotically normal estimator for $\bar{f} = \EV_{\pdf^*}[f(X)]$ \cite{brooks2011handbook}.
+
+When the objects of interest are ordered sequences, as is the case for LLMs, a convenient variant of MH is TPS \cite{bolhuis2002transition}. In particular, suppose we are on step $i$, with current state, $\realtraj_{1:T}^{(i)} = (\realtoken_1, \dots, \realtoken_T)$. TPS generates a proposal by first truncating this trajectory at some index $\tau \in [1, T)$ and then autoregressively sampling from some distribution, generating a new trajectory, $\tilde{\realtraj}_{1:\tilde{T}} = (\realtoken_1, \dots, \realtoken_{\tau-1}, \tilde{\realtoken}_{\tau}, \dots, \tilde{\realtoken}_{\tilde{T}})$, see Appendix \ref{appendix:algorithms} for details. This process is shown in the context of LLMs in Fig.~\ref{fig:tps_trace}.
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{cum_trajs.pdf}
+    \caption{
+        \textbf{Observables in annealing TPS trajectories}.
+        (a) Cummulative average of the ARI along TPS trajectories for the TinyStories LLM. We show both positive (orange) and negative (blue) biases, generated as described in Sect.~\ref{sec:setup}. The cummulative average resets when the bias changes. The annealing schedule consists of $10$ values of the bias increasing in magnitude, with each bias being run for $4 \times 10^4$ TPS steps, totaling $4 \times 10^5$ samples per bias. The first $10\%$ of each chain is discarded as ``burn-in'', and we discard all samples from any bias with a GR statistic of greater than $1.1$ to avoid non-convergence (thus discarded samples are shown by the shaded red regions). The mean value of the ARI for the unbiased ``temperature $1$'' distribution is shown by the green dashed line. On average $50$ tokens are generated per step of TPS, resulting in approximately $4 \times 10^8$ tokens generated.
+        (b) Same for the Log-Probs observable.}
+    \label{fig:cum_trajs}
+\end{figure*}
+
+
+\section{Experimental Setup} \label{sec:setup}
+
+As a concrete study of rare event analysis for LLMs, we consider the TinyStories-8M  model. By training on LLM-generated children's stories with limited vocabulary but sophisticated concepts, the TinyStories models
+are capable of producing human-like text with only a few million parameters \cite{eldan2023tinystories:}. This makes them ideal for initial developments of REA with sampling-based methods and, even in a resource limited setting, we
+are able to generate millions of samples. When using direct sampling, such quantities are sufficient for statistical analysis of distribution close to typicality. However, to explore the tails of the distribution and thus rare events, specialised sampling methods are required. To give an idea of the computational cost required, the histograms we report in Sect.~\ref{sec:results} require of the order of $10^9$ tokens to be generated. For comparison, for its flagship LLM Gemini, Google reports processing of the order of $10^{15}$ tokens per month
+\cite{hassabis2025we-processed} so that equivalent histograms for Gemini would require about one second of their total worldwide processing.
+
+We consider completions from the TinyStories-8M  model generated using direct / ancestral sampling, that is ``temperature $1.0$'' decoding \cite{shi2024a-thorough}. All completions consist of $100$ tokens generated from the fixed prompt: ``\textit{Once upon a time, in a big forest, there lived a rhinoc}'', consisting of the first $16$ tokens of an entry in the validation split of the TinyStories dataset. Comparative results for a range of prompts are provided in Appendix~\ref{app:comparison}. Rare events are then quantified in terms of the extreme values of two observables of interest computed over the prompt-completion pair.
+
+The first observable is the logarithm of the joint probability (Log-Prob) for the completion given the prompt. This provides an intrinsic measure of how likely a given completion is for a pre-trained model under a ``temperature $1$'' decoding strategy. It thus yields important insights into the model itself. Extreme values
+of the Log-Prob correspond to completions that are either very likely/unlikely, with the former being a common focus for the development of decoding algorithms \cite{shi2024a-thorough}.
+
+The second observable is the automated readability index (ARI) \cite{kincaid1975derivation}. This is a standard linguistic metric of readability defined as
+\begin{equation}
+    \text{ARI}(x) = 4.71 \cdot \frac{c(x)}{w(x)} + 0.5 \cdot \frac{w(x)}{s(x)} - 21.43,
+\end{equation}
+where $x$ denotes the input text, and $c(x), w(x)$ and $s(x)$ are the number of characters, words and sentences in $x$, respectively. The ARI quantifies the expected reading age required to understand a text: an ARI of $1$ corresponds with ages five to six, while an ARI of $14$ corresponds with a university age student. Related measures are used as part of
+regulatory guidance / requirements for communications in some countries, c.f.\ Chapter 8 of Ref.~\cite{fca2022fg22/5:}, making extreme readability scores of practical interest. Given that the TinyStories models are trained to produce text aimed at children, completions with high ARI scores should be both unlikely and can be considered as an example of ``unwanted'' behavior for this model, i.e. a failure in its ``alignment''. We compute the ARI over the entire prompt-completion pair, with a cap at $15$. This is linguistically motivated, since in common use ARI is taken as an integer between $1$ and $14$, rounded down. We also found that this cap improved the performance of the MCMC by mitigating the impact of very rare completions with both very high ARI values and high Log-Prob values that lead to very low acceptance rates.
+
+We compare completions generated through two methods: direct sampling and TPS. Using direct sampling we generate $4.2$ million completions, corresponding to approximately $420$ million tokens generated from the model per observable. These are i.i.d.\ samples of the distribution of interest.
+
+\begin{figure*}[th!]
+    \centering
+    \includegraphics[width=\textwidth]{reweighted_histograms.pdf}
+    \caption{
+        \textbf{Distributons of observables for the TinyStories-8M model}.
+        (a) Number of counts (red) for values of the ARI from all the biased simulations. This is the raw input to MBAR for reconstructing the true distribution. For comparison, we show the distribution of the ARI in the training data (green). The shaded areas indicate values of ARI with fewer than 10 samples in the training data.
+        (b) Inferred normalised density (blue) of the ARI, using MBAR with the accepted samples generated through TPS in Figure~\ref{fig:cum_trajs}, plus an additional $2 \times 10^5$ samples from direct sampling (totalling about $7 \times 10^6$ out of about $8 \times 10^6$ generated completions, on average $50$ tokens generated per completion). The shaded areas demarcate the $96 \%$ CI. For comparison we also show the corresponding distribution of ARI (orange) from direct sampling ($4.1 \times 10^6$ completions, $100$ tokens per completion).
+        (c,d) Same for Log-Probs.
+        \jpg{
+            We should emphasise that the distributions are clearly non-Gaussian, and thus that there are pronounced tails, at least on one side of each. This is explicitly an indication of more probable rare behaviour, and implicitly one of correlations (as that is the usual mechanism to avoid Gaussianity, with the non-Markovian nature of LLMs making this easier to achive as there are built in long-range interactions).
+        }
+    }
+    \label{fig:reweighted_histograms}
+\end{figure*}
+
+Direct sampling is inefficient, as it generates many more samples than needed for typical values, and too few (or no) samples for atypical values, preventing the exploration of the tails of the distribution. More efficient is to use TPS by targeting the exponentially tilted distribution \eqref{eq:rw_dist} using the observable of interest for $\obs$ for different values of $\bias$, and then reconstructing the original distribution.
+
+We do this by considering both positive and negative biases $\bias$ to target both tails of the distribution. Each of these are connected in two separate chains under TPS dynamics via an ``annealing'' protocol, which gradually increases the magnitude of the bias after a fixed number of steps, see e.g.~\cite{mair2023training}. This aims to improve convergence by gradually changing the bias so that each fixed bias TPS segment starts closer to its target distribution. Fig.~\ref{fig:cum_trajs} displays the corresponding running averages of the chains, and illustrates the schedule used.
+% Like in any MC scheme, the samples obtained along an MC trajectory can be correlated, but for large enough number of sample (that is large enough MC sweeps) one can obtain accurate averages. 
+
+To construct the estimates for the rare event probabilities in Sect.~\ref{sec:results} below we use MBAR via the \textit{pymbar} package \cite{shirts2008statistically, beauchamppymbar:} to combine the TPS samples with an additional $2 \times 10^5$ directly sampled completions. This corresponds to a total exceeding $4 \times 10^8$ tokens generated for each observable, matching the number of tokens generated through direct sampling and allowing for a fair comparison of the two methods. We take steps that are routine in more standard MC simulations, such as preprocessing the TPS samples by discarding the first $10\%$ of each TPS trajectory as ``burn-in'' (to ensure the remaining TPS samples are representative of the target distribution), and use the Gelman-Rubin (GR) statistic as a convergence diagnostic, removing all samples where  $\text{GR} \ge 1.1$ \cite{roy2020convergence}. See Appendix~\ref{appendix:convergence} for details.
+
+For the rare completion exploratory data analysis presented in Sect.~\ref{sec:analysis} below, we generate an additional $2.1 \times 10^6$ completions using TPS with the same annealing schedule for the bias $\bias$, but with a reduced $2 \times 10^4$ steps per bias.
+\section{Rare Completion Probability Estimation}\label{sec:results}
+
+\begin{figure*}[th!]
+    \centering
+    \includegraphics[width=\textwidth]{error_analysis.pdf}
+    \caption{
+        \textbf{Error analysis}.
+        (a) Relative half width CI $\text{CI}^{(1/2)}$ for the MBAR (blue) and direct (orange) estimates,
+        for ARI (left panel) and Log-Probs (right panel). To allow for comparison, two estimates for the heights of bins with no counts from direct sampling are used: half the height of the smallest non-zero bin from the direct sampling (green), and the heights from the MBAR estimate (red). The latter represents our best guess for the true bin heights in the tails, and the relative error shows the dramatic improvement provided by the MBAR estimate.
+        (b) Difference between the bin heights, $\Delta h$, using the full TPS trajectories, $h_f$, and the height using only the first half (per bias in the annealing schedule) of the TPS trajectories, $h_h$, after burn-in. The change is normalised in two ways: by the histogram heights computed using the full dataset (top), and by the confidence interval half-width $\text{CI}^{(1/2)}$ (bottom).}
+    \label{fig:errors}
+\end{figure*}
+
+We can estimate the marginal probabilities for $\phi(\realtraj_{1:T})$ to reside in the interval $s_l = [a_l, a_{l+1})$ via the expectations,
+\begin{align}
+    p(\phi(\realtraj_{1:T}) \in s_l)
+    =
+    \mathbb{E}_{\pdfmodel} \left[ \Indf[\phi(\realtraj_{1:T}) \in s_l] \right]
+    \, .
+    \label{eq:marginal_density}
+\end{align}
+Dividing by the interval widths gives a histogram representation of the marginal probability density, allowing for visualisation and analysis of the tails of the distribution. In the limit of infinitely many, infinitesimally small intervals, this recovers the full marginal density \cite{dinner2020stratification}.
+
+The resulting histograms are displayed in Fig.~\ref{fig:reweighted_histograms}. While the direct histogram contains only a few samples in the tails, with many bins containing no samples at all, the MBAR histogram contains counts across the range, and allows for probing densities orders of magnitude smaller than accessible via direct sampling. For the ARI, while the direct histogram is limited to the range of the training data, the MBAR histogram extends well beyond this, allowing for insights into how the model generalises to these regions. We note that these distributions are strongly non-gaussian, a common trait when correlations are present, as here due to sequential token generation, leading to increased likelihood of rare outcomes.
+
+Interval estimates for each expectation are constructed as 96\% confidence intervals (CIs) using percentile bootstrap on the independent simulation chains \cite{davison1997bootstrap}.
+Given $M$ TPS trajectories, we sample with replacement $M$ times to construct a ``bootstrap replica''. For $100$ replicas we recompute the density estimates (including preprocessing with burn-in and GR). For each replica we recompute the density estimates (including preprocessing with burn-in and GR). Taking 100 replicas total, the smallest/largest third percentile of the estimates give the lower/upper bound of the CI shown as shaded areas in Fig.~\ref{fig:reweighted_histograms}.
+
+The very low values of probability estimates for rare events means that a key evaluation of estimate quality are the widths of CIs relative to the estimated value \cite{mcgrath2024binomial}.
+These are displayed for the two histograms in Fig.~\ref{fig:errors}(a), with the MBAR histogram CIs as described above and a 96\% CI based on the Wilson interval \cite{wilson1927probable} used for the direct histogram.
+As can be seen, in the tails the MBAR histogram displays significantly smaller relative CI widths than the direct histogram, although rigorous interpretation in terms of coverage probabilities requires care \cite{mcgrath2024binomial}.
+
+Fig.~\ref{fig:errors}(b) displays analysis of the change in statistical bias. The top row compares the final estimates with the change in bin height estimates when doubling the number of MCMC steps, to better sample the target distributions and reduce bias. While the ratio is generally small, some are close to $1$ in the tails. This indicates that while the results in the tails may change substantially with more steps, they are likely of the right order of magnitude.
+
+To improve estimates, we may either increase the steps per MCMC chain or run more parallel chains. While the former reduces both bias and variance, the later only reduces variance.
+To determine which to increase, we compare the change in bias to the CI half-widths in the bottom row of Fig.~\ref{fig:errors}(b), finding the change varies from comparable to slightly smaller than the CI half-widths.
+This suggests that here focusing on increasing steps within each MCMC chain could lead to a larger reduction in statistical error, as both statistical bias and variance contribute to the overall error, rather than increasing the number of independent chains.
+
+\section{Rare Completion Exploration}
+\label{sec:analysis}
+
+
+While the methods for rare event probability estimation in Sect.~\ref{sec:results} are broadly applicable across domains, rare event exploration, i.e. the analysis of concrete realisations of rare events, is highly domain dependent. For example, in AI safety studies, one might generate dangerous completions to aid the development of specialised guardrails and filters. To present a useful analysis here applicable across domains, we focus on EDA techniques applied to rare completions. Such techniques provide an important starting point for any exploration analysis of rare completions, upon which domain-specific investigations can build.
+
+We consider completions for the TinyStories-8M  generated using TPS with exponential reweighting and a bias value towards high ARI. This produces remarkably rare completions that can display extreme ARI values. Fig.~\ref{fig:observable_analysis} compares the resulting
+ARI scores against log probabilities and consecutive token repeats, $\text{Repeats}(\realtraj_{1:T}) = \sum_{t=1}^{T-1} \Indf[\realtoken_{t+1} = x_t]$. This is motivated by our observation of highly repetitive text in extreme ARI completions (see below), and is of interest more generally e.g. for decoding strategies \cite{holtzman2020the-curious}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{ari_logprobs_repeats.pdf}
+    \caption{
+        \textbf{ARI versus Log-Probs}. The ARI and Log-Probs of samples generated by biasing towards ARI, with the colour representing the number of consecutive token repeats.
+        The 0.9999 quartile for the ARI in the training data is shown by the red, dashed line.
+        Inset: Mean (line) and standard deviation (shaded) of the repeat counts per bin, where bins are determined by ARI scores.
+    }
+    \label{fig:observable_analysis}
+\end{figure}
+
+While the bulk of the distribution shows a weak negative correlation between ARI and Log-Probability, as expected from the training data, there is a clear excursion of high ARI completions, well
+beyond the regime of the training data but nonetheless having high log probabilities \jfm{Perhaps best to show maximum or quartile info of the ARIs in the training data?}. These completions thus represent a form of extrapolation, and their characterisation can provide insights into the model's learnt rules.
+For instance, as can be seen from the colour map and inset, these completions are often highly repetitive, with one completion reading: ``\textit{eros. He had a friend named Trurururu. Trururururururu was very slow, so the other rhinrururururururururururu complained to Trurururururu...} [`\textit{ru}' continues 50 more times]''.
+Despite the fact that this text is out of distribution with respect to the training data and would never be produced by a human, is still assigned a high probability by the model. This suggests that, when extrapolating outside the regime of the training data, the model falls back on basic patterns that favour repetition to yield acceptable likelihoods. In addition to mechanistic insights, such analyses can also guide development by revealing failure modes.
+For example, to protect against undesirably high ARI trajectories, an inexpensive runtime filter could be to limit the allowed number of consecutive token repeats.
+\section{Conclusion and Outlook}
+
+We have presented a complete framework to analyse rare events in LLMs. Using this framework we have demonstrated how to estimate the probability of completions that are orders of magnitude less likely than those detectable by direct sampling. We have shown how to achieve this using efficient sampling techniques that overcome the prohibitive computational cost of brute force sampling. We have also shown that by accessing rare completions systematically, one can probe model behavior in out-of-distribution regimes.
+
+For expediency we have focussed on a class of small LLMs, but our results show that the computational costs (in token-budgets) of the analysis presented here could be extended to larger LLMs at a cost that is modest compared to production usage and training budgets. Therefore, especially with algorithmic improvements, the methods here could be directly employed for critical applications such as safety analysis. Overall, we have thus demonstrated the potential for rigorous and extensive rare event analysis for LLMs, drawing on techniques from across sciences and statistics.
+
+There are many potential algorithmic improvements, for example borrowing methods from statistical mechanics. These include: adaptive run-times based on convergence diagnostics \cite{roy2020convergence}, parallel tempering (replica exchange) \cite{earl2005parallel}, and optimisation of biases/samples/MBAR weights \cite{klimovich2015guidelines,li2023understanding}. More sophisticated proposal distributions such as infilling (i.e. stochastic bridges) \cite{bavarian2022efficient,mair2023training} and fine-tuned models \cite{rose2021a-reinforcement} would improve performance when considering longer generations. Additionally, many improvements to statistical error estimation are possible with sophisticated bootstrap methods \cite{davison1997bootstrap}, Bayesian approaches \cite{ding2024bayesian}, and asymptotic analysis \cite{li2023understanding}.
+
+Looking ahead to REA for production LLMs, it will be important to consider the variablity of user prompts. Promisingly, recent work has shown that rare event properties in a deployment setting with many diverse prompts can be extrapolated from only a few test prompts \cite{jones2025forecasting}, and such extrapolation could be combined with the methods presented here. Additionally, fine-tuning proposal models for a wide range of prompts would substantially reduce costs relative to tackling each prompt independently. Beyond probability estimation, rare event methods can be used to discover prompts associated with rare outcomes \cite{wu2025estimating}. This has applications to automated red teaming, or for finding prompts that give high-quality completions. Rare event methods can also probe out-of-distribution behaviour to analyse how LLMs extrapolate beyond training data, potentially revealing underlying rules governing generation or highlighting failure modes \cite{yang2024generalized,lu2025out-of-distribution}. Finally, we note that in many practical applications, the choice and construction of biasing functions will be a major consideration. This is familiar from the use of reward models in alignment, and will be particularly important for REA when the properties of interest are sparsely non-zero. In those cases, effective REA requires constructing smoothly varying proxies that correlate well with the property of interest, for example via domain-expert insights or reward models.
+
+% \section*{Acknowledgements}
+% We would like to thank...
+
+% \section*{Impact Statement}
+% This paper presents work whose goal is to advance the field of machine learning. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here.
+
+% \section{Conclusion and Outlook}
+% We have demonstrated that rare-event sampling methods commonly used in fields such as molecular dynamics, including MCMC and MBAR, can be successfully applied to the problem of rare-event probability estimation in LLMs.
+% Using these methods, we have been able to produce estimates of the probabilities of rare events in the TinyStories-8M  model that are orders of magnitude rarer than what is detectable with unbiased generation for the same number of generated tokens.
+% Further, we discussed how to diagnose performance issues and evaluate the results of these methods by estimating the scaling of biases and the size of confidence intervals.
+% We found intervals for rare events that are significantly tighter than those from unbiased generation, and have widths comparable to the estimated value, suggesting accuracies sufficient for practical use.
+% Meanwhile, although not insignificant, we found the changes in the bias that suggest it is converging quickly and changing at a rate lower than the estimated values.
+
+% Despite these promising results, numerous avenues for improvement remain.
+% For the setup we have here, we used fixed run-times for the MCMC chains, but adaptive run-times based on equilibration diagnostics could reduce the chance of discarding data due to a lack of equilibration.
+% Likewise, the number of samples taken from each biased distribution could be optimized adaptively to minimize the confidence interval estimates \cite{li2023understanding}.
+% The grid of bias strengths was also chosen somewhat heuristically, and an adaptive scheme could developed to instead select bias strengths that optimise the accuracy of the MBAR estimate, for example, filling in gaps where the overlap diagnostic between distributions is weak \cite{klimovich2015guidelines}.
+% Exploration of the space of generations could be improved by replacing simulated annealing with more advanced MCMC methods such as parallel tempering \cite{earl2005parallel}, while acceptance of proposed edits could be improved by using more sophisticated proposal distributions.
+% For example, while always replacing the whole generation beyond a certain token is not such an issue for the short generations considered here, this would severely limit the exploration for longer generations: replacing the proposal distribution with an infilling model and only replacing short subsets of the generation would be an effective solution to this problem \cite{bavarian2022efficient}.
+% The proposal models could also be optimised using variational approaches such as reinforcement learning \cite{rose2021a-reinforcement}, to create biased models efficiently targetting the rare events of interest, with TPS and MBAR, or even simpler importance sampling, then used to correct any biases in the resulting samples.
+% Finally, the estimation of biases and confidence intervals deserves much further study.
+
+% Looking towards the practical setting of large models in deployment, there are two primary related concerns for the project of rare event analysis in LLMs.
+% Firstly, a high number of generations is needed to get accurate estimates for very rare events.
+% While it should be possible to reduce the number of generations needed through algorithmic improvements as discussed above, in the context of evaluating deployed models, the costs may already be acceptable.
+% The number of tokens generated in this work is approximately ... .
+% In comparison, the number of tokens generated daily by Gemini is approximately ... .
+% Thus, for serious targets such as safety analysis, it seems reasonable that companies deploying LLMs could afford to run rare-event estimation at this scale to evaluate the risks of their models.
+% For less serious targets, models fine-tuned to different biases for the associated observable could be deployed simultaneously to generate rare-event estimates as part of normal operation, with importance sampling used to correct any biases in the resulting samples.
+
+% Secondly, while we have focused on a single prompt here for simplicity, deployed models encounter a diversity of possible user prompts.
+% Performing rare-event estimation across multiple prompts is a more challenging problem, starting with just deciding what the appropriate distribution of prompts to evaluate is.
+% Given a prompt distribution, one approach to this problem would again be to lean on models fine-tuned to generate rare events, which can easily be trained simultaneously across a diverse set of prompts.
+% Once created, when used to feed data in to MBAR, these models would likely lead to substantial improvements to the efficiency of rare-event estimation for each prompt, thus reducing the total number of generations needed to evaluate the model across a distribution of prompts.
+% Further, we also note recent work has suggested that estimating rare event probabilities across multiple prompts may be possible even with relatively small samples per prompt \cite{jones2025forecasting}.
+
+% Rather than picking a prompt distribution, these methods could instead be used to explore the space of prompts itself, finding prompts that are associated to rare outcomes, similar to recent work on estimating probabilities of rare single-token events using importance sampling \cite{wu2025estimating}.
+% This would be particularly useful in the context of safety analysis, where one may wish to find prompts or prompt structures that lead to harmful or toxic outputs.
+% For productive use, rare event sampling methods could also be used as a form of automated prompt engineering, finding prompts that lead to desired outcomes such as high-quality or creative generations.
+
+% Generally speaking, all of these methods perform best when the biasing observables of interest are ``smoothly'' varying functions of the generated text, as this variation influences e.g. the acceptance rates in MCMC or the optimization in variational approaches.
+% For applications such as code properties (speed, memory usage) or linguistic properties such as the ARI score studied here or generation lengths, this is not an issue.
+% However, for more sparsely varying properties, such as the binary occurrences of safety failures, bias detection, or correctness of answers, these methods will struggle if these properties are used directly as biasing observables.
+% Instead, for these applications, it will be important to construct smoothly varying proxy observables that correlate well with the discrete properties of interest.
+% For example, words or phrases associated with harmful content could be counted to create a denser surrogate for safety failures, or generation probabilities of returned answers could be used as a proxy for correctness.
+% Along with manually constructed proxies, models could be used.
+% For example, model-based verification has already proven an effective way to guide more straightforward inference-time searches \cite{zhao2025samplesample}.
+
+% Finally, we note that rare-event sampling opens up a new tool for probing outliers and out-of-distribution behaviour in LLMs \cite{yang2024generalized,lu2025out-of-distribution}.
+% As we have done in our cursory analysis of high ARI generations here, rare-event sampling can be used to generate samples with extreme values of other properties of interest.
+% In the context of out-of-distribution detection, this would enable the analysis of how the LLM is extrapolating to out-of-distributions scenarios, both revealing underlying learnt rules governing the generation process, and highlighting potential failure modes.
+\newpage
+\section*{Acknowledgements}
+We are grateful to Jack Paine and Chaitanya Manem for assistance with infrastructure and research developments in the early exploratory stages of this project. 
+We acknowledge support by His Majesty’s Government. 
+We acknowledge partial support from EPSRC Grant No. EP/V031201/1 (J.P.G.). 
+We are grateful for access to the University of Nottingham’s Ada HPC service.
+\section*{Impact Statement}
+This paper presents work whose goal is to advance the field of machine learning. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here.
+
+% \newpage
+\bibliographystyle{icml2026}
+\bibliography{bibliography-20012026}
+
+\newpage
+\appendix
+\onecolumn
+
+\section{List of Acronyms}
+
+% \textbf{List of acronyms:} 
+\begin{multicols}{2}
+    \begin{itemize}
+        \item ARI~=~automated readability index.
+        \item CI~=~confidence interval.
+        \item DPO~=~direct preference optimization.
+        \item EDA~=~exploratory data analysis.
+        \item GR~=~Gelman-Rubin.
+        \item KL~=~Kullback-Leibler.
+        \item LLM~=~large language model.
+        \item Log-Prob~=~logarithm of the joint probability of a completion.
+        \item MBAR~=~multistate Bennett acceptance ratio.
+        \item MC~=~Monte Carlo.
+        \item MCMC~=~Markov chain Monte Carlo.
+        \item MH~=~Metropolis-Hastings.
+        \item PMF~=~probability mass function.
+        \item REA~=~rare event analysis.
+        \item RLHF~=~reinforcement learning from human feedback.
+        \item SMC~=~sequential Monte Carlo.
+        \item TPS~=~transition path sampling.
+    \end{itemize}
+\end{multicols}
+
+\section{Algorithms for Markov Chain Monte Carlo and Transition Path Sampling}
+\label{appendix:algorithms}
+
+\subsection{Preliminaries: Markov Chains}
+
+Consider a discrete-time, time-homogeneous Markov chain $\bm{X} = \lbrace X(t) : t = 0, 1, 2, \ldots \rbrace$ with a fixed, finite state space $\mathcal{X}$ and transition matrix,
+\begin{align}
+    [\mathbf{P}]_{i j} = \mathbb{P}(X(t+1) = x_i | X(t) = x_j) = p(x_i | x_j) \,,
+    \label{eq:transition_matrix}
+\end{align}
+where $x_i, x_j \in \mathcal{X}$ are states in the state space and $p(x_i | x_j)$ is the conditional probability mass function for the transition from state $x_j$ to state $x_i$. We call this the
+one-step transition function. Normalisation requires that $\sum_{i} p(x_i | x_j) = 1$ for all $x_j \in \mathcal{X}$.
+
+Note that in Eq.~\eqref{eq:transition_matrix}, we use capital letters to denote random variables and lower-case letters to denote specific values of these random variables. Probabilities
+are then denoted using the notation $\mathbb{P}(\cdot)$, while probability mass functions are denoted using $p(\cdot)$. We use this notation
+throughout the appendices.
+
+Defining, $N = |\mathcal{X}|$ as the size of the state space, the transition matrix $\mathbf{P}$ is an $N \times N$ matrix with non-negative entries and
+column sums equal to one. The indices $i, j$ thus range from $1$ to $N$ inclusive.
+
+The marginal probability distribution at time $t$ is the probability vector, $\mathbf{p}^{(t)}$, with components,
+\begin{align}
+    [\mathbf{p}^{(t)}]_i = \mathbb{P}(X(t) = x_i) = p^{(t)}(x_i) \,,
+\end{align}
+where $p^{(t)}(x_i)$ is the marginal probability mass function for state $x_i$ at time $t$.
+This gives the matrix equation for the evolution of the marginal distribution,
+\begin{align}
+    [\mathbf{p}^{(t+1)}]_i = \sum_{j} [\mathbf{P}]_{i j} [\mathbf{p}^{(t)}]_j =  \sum_{j} p(x_i | x_j) \, p^{(t)}(x_j) = p^{(t+1)}(x_i) \,.
+\end{align}
+
+Such a Markov chain is thus a stochastic process parameterised by its transition matrix $\mathbf{P}$ and initial distribution $\mathbf{p}^{(0)}$. We denote this as,
+\begin{align}
+    \bm{X} \sim \text{MC}(\mathbf{P}, \mathbf{p}^{(0)}) \,.
+\end{align}
+
+Subject to technical conditions (of which Harris recurrence is sufficient \cite{brooks2011handbook}), the Markov chain has a unique stationary distribution, $\bm{\pi}$, satisfying,
+\begin{align}
+    [\bm{\pi}]_i = \sum_{j} [\mathbf{P}]_{i j} [\bm{\pi}]_j =  \sum_{j} p(x_i | x_j) \, \pi(x_j) = \pi(x_i) \,.
+\end{align}
+Under these conditions, for any initial probability vector, $\mathbf{p}^{(0)}$, and measurable function $f(x)$ defined on the state space $\mathcal{X}$, the time-averaged function,
+\begin{align}
+    \overline{f}_T = \frac{1}{T} \sum_{t=0}^{T-1} f(X(t)) \,,
+\end{align}
+converges almost surely to the expectation of $f$ with respect to the stationary distribution, i.e.,
+\begin{align}
+    \overline{f}_T \xrightarrow[T \to \infty]{\text{A.S.}} \mathbb{E}_{\pi}[f(X)] = \sum_{i=1}^{N} f(x_i) \, \pi(x_i) \,.
+\end{align}
+Furthermore, $\bar{f}_T$ converges in distribution as,
+\begin{align}
+    \sqrt{T} \left( \overline{f}_T - \mathbb{E}_{\pi}[f(X)] \right) \xrightarrow[T \to \infty]{D} \text{Normal}(0, \sigma_f^2) \,,
+\end{align}
+where $\sigma_f^2$ is the asymptotic variance. This is defined as the limit of the scaled variance of the time-averaged function for
+the stationary process, $\bm{X}^{*} \sim \text{MC}(\mathbf{P}, \bm{\pi})$,
+\begin{align}
+    \sigma_f^2 & \coloneqq \lim_{T \to \infty} T \, \mathbb{V}[\overline{f}_T] \,.
+\end{align}
+
+Therefore, $\overline{f}_T$ provides a consistent and asymptotically normal estimator for the expectation of $f$ with respect to the stationary distribution, for
+any initial distribution.
+
+\subsection{Markov Chain Monte Carlo}
+
+Markov Chain Monte Carlo (MCMC) and specifically the Metropolis-Hastings (MH) algorithm is a method to construct a transition matrix $\mathbf{P}$ such that the resulting Markov chain has some target stationary distribution, $\bm{\pi}$.
+
+The Metropolis-Hastings one-step transition function can be defined as,
+\begin{align}
+    p_{\text{MH}}(x_i | x_j) =
+    \begin{cases}
+        q(x_i | x_j) \, \alpha(x_i | x_j) \,                                                                  & x_i \neq x_j \,, \\
+        q(x_j | x_j) \, \alpha(x_j | x_j) + \sum_{z \neq x_j} q(z | x_j)\left[ 1 - \alpha(z | x_j) \right] \, & x_i = x_j \,.
+    \end{cases}
+    \label{eq:mh_one_step_transition_function_cases}
+\end{align}
+Here, $q(x_i | x_j)$ is a proposal distribution and $\alpha(x_i | x_j)$ is the acceptance probability defined as,
+\begin{align}
+    \label{eq:mh_acceptance_probability}
+    \alpha(x_i | x_j) & = \min\left(1, \frac{\pi(x_i) \, q(x_j | x_i)}{\pi(x_j) \, q(x_i | x_j)}\right)\,, \\
+                      & = \min\left(1, r(x_i, x_j)\right) \nonumber\,,
+\end{align}
+where we have defined the Metropolis-Hastings ratio, $r(x_i, x_j)$.
+
+A sufficient condition for a state to be the unique stationary distribution from some Markov chain is that it satisfies the detailed balance condition,
+\begin{align}
+    \pi(x_i) \, p(x_j | x_i) = \pi(x_j) \, p(x_i | x_j) \,.
+    \label{eq:detailed_balance}
+\end{align}
+This can be used to confirm that the MH one-step transition function satisfies the detailed balance condition with respect to the target distribution.
+
+Denote the transition matrix for the MH one-step transition function as $\mathbf{P}_{\text{MH}}^{(\mathbf{Q}, \bm{\pi})}$, where the superscript indicates that this transition matrix is constructed using the proposal distribution with transition matrix $\mathbf{Q}$ and target distribution with probability vector $\bm{\pi}$. It can be
+shown that the MH one-step transition function satisfies the detailed-balance condition with respect to the target distribution and, therefore, has $\bm{\pi}$ as its stationary distribution. The only
+remaining freedom is the choice of proposal distribution, $q(x_i | x_j)$.
+
+\begin{algorithm}[h]
+    \caption{Metropolis Hastings Algorithm}\label{alg:mh}
+    \begin{algorithmic}
+        \REQUIRE Proposal Function $q$, Target Distribution $\pi$, Initial State $\realtraj$, Number of TPS Steps $N$
+        \STATE $n \gets 0$
+        \STATE Create empty $N \times |\realtraj|$ dimensional array $\bar{\realtraj}$
+        \WHILE{$n < N$}
+        \STATE Propose $\realtraj' \sim q(\unrealtraj | \realtraj)$
+        \STATE Calculate acceptance probability, $\alpha = \min \left( 1, \frac{\pi(\realtraj') q(\realtraj | \realtraj')}{\pi(\realtraj) q(\realtraj' | \realtraj)} \right)$
+        \STATE Draw $u \sim \text{Uniform}(0, 1)$
+        \IF{$u \leq \alpha$}
+        \STATE $\realtraj \gets \realtraj'$
+        \ENDIF
+        \STATE $n \gets n + 1$
+        \STATE $\bar{\realtraj}_n \gets \realtraj$
+        \ENDWHILE
+        \STATE \textbf{Return: } $\bar{\realtraj}$
+    \end{algorithmic}
+\end{algorithm}
+
+Transition path sampling (TPS) is an MH method that makes a particular choice of proposal distribution suitable for cases where $x$ is an ordered sequence (i.e. a trajectory or sentence).
+
+In TPS, the proposal distribution randomly selects a position in the sequence and then changes only the elements of the sequence after this position according to some given function.
+Let $x_{i} = (x_i^{(1)}, x_i^{(2)}, \ldots, x_i^{(L_i)})$ denote a sequence of length $L_i$, and similarly for
+$x_{j} = (x_j^{(1)}, x_j^{(2)}, \ldots, x_j^{(L_j)})$ of length $L_j$. Denote a chosen cut position in the sequence as $c$ and use the notations, $x_{i/j}^{(\le c)} = (x_{i/j}^{(1)}, x_{i/j}^{(2)}, \ldots, x_{i/j}^{(c)})$ and
+$x_{i/j}^{(> c)} = (x_{i/j}^{(c+1)}, x_{i/j}^{(c+2)}, \ldots, x_{i/j}^{(L_{i/j})})$ to denote the subsequences up to and including position $c$, and after position $c$ respectively. Therefore, $x_{i/j} = (x_{i/j}^{(\le c)}, x_{i/j}^{(> c)})$ for any cut position $c$.
+The generic form of the TPS proposal distribution can then be written as,
+\begin{align}
+    q(x_{i} | x_{j}) = p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)}) p_{\text{cut}}(c | x_{j}) \delta(x_{i}^{(\le c)} - x_{j}^{(\le c)}) \,,
+\end{align}
+where $p_{\text{cut}}(c | x_{j})$ is the distribution for selecting the cut position. The function $p_{\text{regen}}(x_{i}^{(> c)} | x_{i}^{(\le c)})$ (re)generates the new subsequence after the cut position,
+and we have also chosen that this be conditional only on the subsequence up to and including the cut position, i.e., it is (conditionally)
+independent of the original subsequence after the cut position and with no explicit dependence on the cut position itself (it depends implicitly through the length of the prior subsequence),
+\begin{align}
+    p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)}) = p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)}, x_{j}^{(> c)}, c) \,.
+    \label{eq:tps_regen_independence}
+\end{align}
+The delta function ensures that the subsequence up to and including the cut position remains unchanged.
+
+The form of the MH ratio for this proposal distribution can then be written as,
+\begin{align}
+    r(x_{i}, x_{j}) & = \frac{\pi(x_{i})}{\pi(x_{j})} \frac{p_{\text{regen}}(x_{j}^{(> c)} | x_{i}^{(\le c)})}{p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)})} \frac{p_{\text{cut}}(c | x_{i})}{p_{\text{cut}}(c | x_{j})} \frac{\delta(x_{i}^{(\le c)} - x_{j}^{(\le c)})}{\delta(x_{j}^{(\le c)} - x_{i}^{(\le c)})} \,\,, \\
+                    & = \frac{\pi(x_{i})}{\pi(x_{j})} \frac{p_{\text{regen}}(x_{j}^{(> c)} | x_{j}^{(\le c)})}{p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)})} \frac{p_{\text{cut}}(c | x_{i})}{p_{\text{cut}}(c | x_{j})} \delta(x_{i}^{(\le c)} - x_{j}^{(\le c)}) \,,
+\end{align}
+where we have used the properties of the delta function in the second line to replace the conditioning subsequence in the numerator of the second fraction $x_{i}^{(\le c)} \to x_{j}^{(\le c)}$.
+
+TPS takes the cut position to be uniformly distributed over the length of the sequence, i.e.,
+\begin{align}
+    p_{\text{cut}}(c | x_{i}) = \frac{1}{L_i} \,\quad c = 1, 2, \ldots, L_i \,\,, \\
+    p_{\text{cut}}(c | x_{j}) = \frac{1}{L_j} \,\quad c = 1, 2, \ldots, L_j \,.
+\end{align}
+Note that this choice means that the first element in the sequence cannot be changed, since the minimum $c=1$ means that $x_{i/j}^{(\le c)} = (x_{i/j}^{(1)})$ remains unchanged. The MH ratio is then,
+\begin{align}
+    r(x_{i}, x_{j}) & = \frac{\pi(x_{i})}{\pi(x_{j})} \frac{p_{\text{regen}}(x_{j}^{(> c)} | x_{j}^{(\le c)})}{p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)})} \frac{L_j}{L_i} \delta(x_{i}^{(\le c)} - x_{j}^{(\le c)}) \,.
+\end{align}
+
+Consider further the specific case that the target distribution is an exponentially reweighted distribution, i.e.,
+\begin{align}
+    \pi(x) & = \frac{1}{Z} \, \tilde{\pi}(x) \, e^{-\lambda \phi(x)} \,,                                                \\
+           & = \frac{1}{Z} \tilde{\pi}(x^{(\le c)}) \, \tilde{\pi}(x^{(> c)} | x^{(\le c)}) \, e^{-\lambda \phi(x)} \,,
+\end{align}
+for any cut position $c$ and where $\tilde{\pi}(x)$ is some base distribution. The ratio of probabilities in the target distribution is then,
+\begin{align}
+    \frac{\pi(x_{i})}{\pi(x_{j})} & = \frac{\tilde{\pi}(x_{i})}{\tilde{\pi}(x_{j})} \, e^{-\lambda \left(\phi(x_{i}) - \phi(x_{j})\right)} \,,                                                                                                                     \\
+                                  & = \frac{\tilde{\pi}(x_{i}^{(\le c)}) \, \tilde{\pi}(x_{i}^{(> c)} | x_{i}^{(\le c)})}{\tilde{\pi}(x_{j}^{(\le c)}) \, \tilde{\pi}(x_{j}^{(> c)} | x_{j}^{(\le c)})} \, e^{-\lambda \left(\phi(x_{i}) - \phi(x_{j})\right)} \,.
+\end{align}
+
+This gives the MH ratio,
+\begin{align}
+    r(x_{i}, x_{j}) & = \frac{\tilde{\pi}(x_{i}^{(\le c)}) \, \tilde{\pi}(x_{i}^{(> c)} | x_{i}^{(\le c)})}{\tilde{\pi}(x_{j}^{(\le c)}) \, \tilde{\pi}(x_{j}^{(> c)} | x_{j}^{(\le c)})} \, e^{-\lambda \left(\phi(x_{i}) - \phi(x_{j})\right)}\frac{L_j}{L_i} \delta(x_{i}^{(\le c)} - x_{j}^{(\le c)}) \frac{p_{\text{regen}}(x_{j}^{(> c)} | x_{j}^{(\le c)})}{p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)})} \,, \\
+                    & = \frac{\tilde{\pi}(x_{i}^{(> c)} | x_{j}^{(\le c)})}{\tilde{\pi}(x_{j}^{(> c)} | x_{j}^{(\le c)})} \, e^{-\lambda \left(\phi(x_{i}) - \phi(x_{j})\right)}\frac{L_j}{L_i} \delta(x_{i}^{(\le c)} - x_{j}^{(\le c)}) \frac{p_{\text{regen}}(x_{j}^{(> c)} | x_{j}^{(\le c)})}{p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)})} \,,
+    \label{eq:mh_ratio_tps_generic}
+\end{align}
+where we have again used the properties of the delta function in the second line. This expression holds for any choice of regeneration function, $p_{\text{regen}}$ (under the conditional independence assumptions outlined above).
+
+A natural choice is to define $p_{\text{regen}}$ using the base distribution, $\tilde{\pi}(x)$, i.e.,
+\begin{align}
+    p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)}) = \tilde{\pi}(x_{i}^{(> c)} | x_{j}^{(\le c)}) \,.
+\end{align}
+This gives the MH ratio,
+\begin{align}
+    r(x_{i}, x_{j}) & = \frac{\tilde{\pi}(x_{i}^{(> c)} | x_{j}^{(\le c)})}{\tilde{\pi}(x_{j}^{(> c)} | x_{j}^{(\le c)})} \, e^{-\lambda \left(\phi(x_{i}) - \phi(x_{j})\right)}\frac{L_j}{L_i} \delta(x_{i}^{(\le c)} - x_{j}^{(\le c)}) \frac{\tilde{\pi}(x_{j}^{(> c)} | x_{j}^{(\le c)})}{\tilde{\pi}(x_{i}^{(> c)} | x_{j}^{(\le c)})} \,, \\
+                    & =  e^{-\lambda \left(\phi(x_{i}) - \phi(x_{j})\right)}\frac{L_j}{L_i} \delta(x_{i}^{(\le c)} - x_{j}^{(\le c)}) \,,
+    \label{eq:mh_ratio_tps_final}
+\end{align}
+where we have again used the properties of the delta function in the third line, allowing all terms involving $\tilde{\pi}$ to cancel.
+
+With regards to implementation of MCMC, we provide two algorithms: Algorithm~\ref{alg:mh} details the general Metropolis-Hastings algorithm, whilst Algorithm~\ref{alg:tps} gives a pseudocode implementation of the exact algorithm (based on TPS) used for sampling the results in Figure~\ref{fig:cum_trajs} of the
+main text. Note that in Algorithm~\ref{alg:tps}, we use the definition $\unrealtraj_{n:T} = \emptyset$ when $n > T$. Many more details concerning MCMC and MH can be found in \cite{brooks2011handbook} and references therein.
+
+\begin{algorithm}[h]
+    \caption{Annealed Transition Path Sampling for Language Modelling}\label{alg:tps}
+    \begin{algorithmic}
+        \REQUIRE Language Model $\probmodel$, Prompt $\realtraj_{1:t}$, Observable $\obs$, Biases $(\lambda_1, \dots, \lambda_K)$, Steps per Bias $N$, Trajectory Length $T$
+        \STATE Sample initial completion, $\realtraj_{t+1:T} \sim \probmodel( \unrealtraj_{t+1:T} | \realtraj_{1:t})$
+        \STATE Calculate initial observable value, $o \gets \obs(\realtraj_{1:t}, \realtraj_{t+1:T})$
+        \STATE Create $K \times N$ matrix $\Phi$ filled with $0$
+        \FOR{$k \in (1, \dots, K)$}
+        \STATE $n \gets 0$
+        \WHILE{$n < N$}
+        \STATE Choose a random integer $\tau$ uniformly from $1, \dots ,T$
+        \STATE Sample the new proposal, $\realtraj'_{t+\tau+1:T} \sim \probmodel( \unrealtraj_{t+\tau+1:T} | \realtraj_{1:t}, \realtraj_{t+1:t + \tau})$
+        \STATE Calculate proposal observable value, $o' = \phi(\realtraj_{1:t}, \realtraj'_{t+1:T})$, where $\realtraj'_{t+1:T} = (\realtraj_{t+1:t+\tau}, \realtraj'_{t+\tau+1:T})$
+        \STATE Calculate acceptance probability, $\alpha = \min \left[1, \exp(-\lambda_k (o' - o)) \right]$
+        \STATE Draw $u \sim \text{Uniform}(0, 1)$
+        \IF{$u \leq \alpha$}
+        \STATE $\realtraj \gets \realtraj'$, $o \gets o'$
+        \ENDIF
+        \STATE $\Phi_{k, n} \gets o$
+        \STATE $n \gets n + 1$
+        \ENDWHILE
+        \ENDFOR
+        \STATE $\textbf{Return: } \Phi$
+    \end{algorithmic}
+\end{algorithm}
+
+\section{Implementation Details, Tips and Tricks for Rare Event Sampling in Language Models}
+
+\subsection{Annealed TPS}
+
+While any initial state can be used for MCMC, the chain must (at least) be run for a sufficient number of steps to reach the steady-state distribution, and thus begin
+obtaining samples from the target distribution. As such, for some fixed number of steps/computational budget, choosing an initial state more likely in the target steady-state distribution will
+result in samples with a distribution more representative of the target distribution.
+
+Annealed TPS aims to start with an initial state more representative of the steady-state for any given bias, by progressively increasing the bias over time. Since the steady-state distributions for nearby
+values of the bias are similar to each other, the final state from sampling with some bias $\lambda_{k}$ should be more representative of the steady-state distribution for bias $\lambda_{k+1}$ than a random initial state when $\lambda_k - \lambda_{k+1}$ is small.
+
+The trade offs for this are two-fold: firstly, due to the sequential approach, sampling for each bias can not be done in parallel with this basic annealing approach; secondly, the samples from each bias will not be independent (due to the annealing) due to weak correlations along the shared MCMC chain.
+
+If we wish to sample from a single biased distribution, annealing can still be beneficial when the target distribution is very different from the base distribution, as the smooth change in distribution can lead to better mixing. In that case,
+the annealed samples for non-target distributions (i.e. those with intermediate biases) can then be discarded as burn-in.
+
+For applications involving MBAR, or related methods, we instead wish to sample from multiple biased distributions, and require sufficient overlap between distributions (see Section~\ref{sec:overlap}).
+
+\subsection{Burn-in}\label{appendix:burnin}
+Burn-in is the process of discarding some initial set of samples from MCMC \cite{roy2020convergence}. This is motivated by the fact that the initial distribution might be far from the target stationary distribution, so that the samples obtained in the initial steps of MCMC might not be representative of the target distribution.
+In this sense, burn-in can be seen as a way of establishing a good starting point for MCMC \cite{brooks2011handbook}.
+
+\subsection{Gelman-Rubin Statistic}\label{appendix:convergence}
+The Gelman-Rubin Statistic is a measure of the convergence of MCMC \cite{roy2020convergence}, i.e. the degree to which multiple chains have mixed and converged to the same distribution.
+For each bias $\lambda$, we run $J$ parallel chains for $L$ steps (excluding burn-in), to obtain samples $(x_1^{(j)}, \dots, x_L^{(j)})$ for chain $j$, and
+thus the values of our observable $(y_1^{(j)}, \dots, y_L^{(j)})$, where $y_i^{(j)} = f(x_i^{(j)})$.
+We can then calculate the GR statistic as,
+\begin{align}
+    \text{GR} = \frac{\frac{L-1}{L} W + \frac{1}{L}B}{W},
+\end{align}
+where $B$ and $W$ are defined as,
+\begin{align}
+    B = \frac{L}{j-1} \sum_{j=1}^J (\bar{y}_j - \bar{y}_*)^2,
+    \qquad W = \frac{1}{J} \sum_{j=1}^J \left(y_i^{(j)} - \bar{y}_j \right)^2,
+\end{align}
+where $\bar{y}_j$ is the mean of chain $j$ and $\bar{y}_*$ is the mean of the means of the chains,
+\begin{align}
+    \bar{y}_j = \frac{1}{L} \sum_{i=1}^L y_i^{(j)},
+    \qquad \bar{y}_* = \frac{1}{J} \sum_{j=1}^J \bar{y}_j.
+\end{align}
+This statistic tends towards 1 as $L$ goes to infinity and the mean of the variances of the chains, $B$, goes to 0. We accept samples from biases that have a Gelman-Rubin statistic of less than $1.1$.
+
+An adaptive scheme to determine when to end sampling for a given distribution could be implemented by calculating the GR statistic at intervals during sampling and stopping once the statistic is below some threshold.
+
+\subsection{Choosing an Observable}
+Choosing a suitable observable, $\phi(x)$, to bias towards is essential for the rare event sampling methodologies presented in the main text to be effective.
+
+Consider then the case that we wish to evaluate the expectation of some observable $A(x)$. While a natural choice for the biasing observable is to use $\phi(x) = A(x)$, this is not strictly necessary and
+may not be optimal. Instead, one can choose another observable $\phi(x) \neq A(x)$ that is expected to correlate with $A(x)$, but has more favourable properties. This could include the fact that
+$\phi(x)$ is smoother, or cheaper to calculate than $A(x)$.
+
+This is particularly important when $A(x)$ takes on only a small number of possible values, e.g. a binary observable, because biasing directly on $A(x)$ will not be effective.
+MCMC works by gradually shifting the distribution in the direction specified by the bias and, as such, these techniques will not be effective when applied to observables with only a small number of possible values (such as binary observables)
+because the distribution cannot be shifted gradually. One should thus bias with continuous observables, or at least observables with a large number of possible values.
+
+Taking AI safety as an example, often we wish to mark completions as `safe' and `unsafe'. If a model has been sufficiently finetuned, it is likely that unsafe generations are rare enough that direct sampling is infeasible.
+Since biasing towards this binary observable is not effective, we could instead bias towards some proxy, such as the count of some set of words that suggest the text may be unsafe.
+
+\subsection{Choosing Biases}
+Choosing the right set of biases $\{\lambda_k\}_{k=1}^K$ is also essential to ensure the usefulness of this methodology.
+If biases are too large, it may take too long for TPS to converge.
+Furthermore, as we often found, larger biases can become stuck at a single sample with some extreme value of the observable.
+In this case, it is very unlikely for TPS to leave this state, since any proposed change will likely be less extreme and therefore have a low probability of acceptance.
+On the other hand, if biases are too small, the slight increase in coverage of the tails from the biased distribution will not be enough to outweigh the effect of the correlated samples.
+
+We found that if we expect the highest/lowest values of the observable to be on the order of $10^m,$ biasing up to around $\pm 10^{-m}$ seemed to provide good coverage of rare events without excessive correlation caused by low acceptance rates.
+However, in general this will depend on all factors of the problem, including the model, prompt, observable and algorithmic details.
+As such, experimentation is likely necessary on a case-by-case basis to find the best set of biases.
+
+The density of biases used is also important to ensure distributional overlap between adjacent biases, as discussed in Section~\ref{sec:overlap}.
+In systems exhibiting phase transitions, it may be necessary to use a denser set of biases in the region of the phase transition to ensure sufficient overlap, as such regions correspond to drastic changes in distributional properties.
+
+An adaptive bias selection scheme could be used to satisfy a combination of the desired range of observable values to cover, and the desired overlap between distributions.
+
+\subsection{Choosing a Proposal Function}
+In this work, we consider a proposal function that is proportional to the unbiased dynamics of the original model, i.e.,
+\begin{align}
+    q(\unrealtraj_{t:T} | \realtraj_{1:t}) \propto \probmodel( \unrealtraj_{t:T} | \realtraj_{1:t}) .
+    \label{eq:proposal_base_model}
+\end{align}
+In the context of TPS, this is used as the regeneration function, $p_{\text{regen}}(x_{i}^{(> c)} | x_{j}^{(\le c)}) = \probmodel( x_{i}^{(> c)} | x_{j}^{(\le c)})$, which has the
+advantage that the acceptance probability becomes independent of the base distribution, see \eqref{eq:mh_ratio_tps_final}.
+
+However, making a different choice is also possible and could dramatically decrease the convergence time by increasing the probability of accepting the proposed changes, allowing a reduction in samples discarding to burn-in time. Further, it could also reduce correlation between samples, resulting in a greater effective sample size for estimates.
+
+Here we list examples that could be explored in future works. In each case we use the notation of \eqref{eq:proposal_base_model}, with the understanding that this can be used as the
+regeneration function in TPS. In all examples, one can always
+calculate the acceptance probability from the definition in \eqref{eq:mh_acceptance_probability}.
+Note that these examples are not necessarily mutually exclusive, and combinations can be considered.
+
+\subsubsection{Prompt Engineering and Jailbreaking}
+One simple way to change the proposal function is to continue to use the same model, but changing the prompt.
+For example, if we are trying to sample the distribution $\probmodel( \unrealtraj_{t+1:T} | \realtraj_{1:t})$ biased towards some observable $\phi(x)$, we could use,
+\begin{align}
+    q(\unrealtraj_{t:T} | \realtraj_{1:t}) \propto \probmodel(\unrealtraj_{t:T} | J(\realtraj_{1:t})) \,,
+\end{align}
+where $J$ is some modification to the prompt that makes extreme values of $\phi(x)$ more likely.
+In the case of AI safety, these modifications $J$ would take the form of jailbreaking or red teaming prompts.
+
+\subsubsection{Smaller Models}
+If we are trying to target rare events in a large model, the number of samples required could be too expensive, even with the benefits offered through TPS and MBAR.
+However, the computational cost could be greatly reduced by choosing a smaller model as a proposal function. That is,
+\begin{align}
+    q(\unrealtraj_{t:T} | \realtraj_{1:t}) \propto \mathbb{P}_{\mathcal{M}_{\text{small}}}( \unrealtraj_{t:T} | \realtraj_{1:t}) \,.
+\end{align}
+
+
+Then, to generate $N$ tokens, instead of needing $N$ calls to the larger model, we would need $N$ calls to the smaller model, plus just a single call to the larger model (which is needed to compute the probability of the completion under the target dynamics in the acceptance probability).
+This may increase the number of steps needed to reach convergence, since the distributions of the model will be slightly different, however it could significantly decrease the computation required due to the decreased number of calls to the expensive model.
+For this to be effective, the large and small model will have to have sufficiently `similar' distributions.
+
+
+\subsubsection{Finetuning}
+Reinforcement Learning could be used to finetune a model to produce extreme values of the observable of interest.
+This finetuned model could then be used as a proposal to evaluate rare events of other models, with respect to this observable. That is,
+\begin{align}
+    q(\unrealtraj_{t:T} | \realtraj_{1:t}) \propto \mathbb{P}_{\mathcal{M}(\theta^{*})}( \unrealtraj_{t:T} | \realtraj_{1:t}) \,,
+\end{align}
+where $\mathcal{M}(\theta^{*})$ is the model with fitted parameters $\theta^{*}$ after finetuning.
+
+Whilst the initial finetuning process could be computationally expensive, it could significantly decrease the number of samples required to produce a good estimate of the tails in the model of interest.
+Furthermore, since the model can be finetuned over multiple prompts, it could be an effective way to calculate tail distributions over an entire dataset.
+By finetuning towards the exponential distribution directly, the proposal function would be more likely to propose samples representative of the target distribution, increasing acceptance rates and decreasing correlation between samples.
+
+We note that, in principle, a model perfectly fitted to the exponentially reweighted distribution would then mean that uncorrelated samples could be generated directly from the finetuned model, without a need for MCMC at all.
+However, most RL techniques used for finetuning LLMs do not guarantee convergence to the global minimum distribution, while MCMC
+guarantees sampling from this in the limit of infinite steps. Nonetheless, this would be a key area for future research.
+
+\subsubsection{Infilling}
+The version of TPS applied in this work and detailed in Algorithm~\ref{alg:tps} is sometimes called forward shooting due to the replacement of the future after the cut.
+One drawback of this approach is that changes to the beginning of trajectories are relatively unlikely.
+There are two contributing factors to this. Firstly, if we are proposing an edit to a completion with $N$ tokens, there is an $n/N$ chance that we choose to cut at a point that modifies the $n$th token, meaning the probability is very low if $n$ is small relative to $N$.
+Secondly, even if a proposal is made that changes an early token, nearly all of the trajectory that is contributing to the extreme value of the observable is discarded, meaning the proposal will likely be from the bulk of the original distribution.
+Since the observable value for this proposal is likely to be much less extreme, the probability of acceptance will be very low.
+As such, the generated samples are likely to be very correlated, particularly towards the beginning of the completions.
+
+In contrast to the models considered in many other applications of TPS such as statistical mechanics, there are in fact LLMs capable of filling in the middle of trajectories, where context is provided both before and after the completion.
+These are known as infilling models. Such an infilling model could potentially be used as a proposal function, eliminating this shortcoming of forward shooting TPS.
+
+\subsection{Parallel Tempering}
+Parallel tempering is an extension to MCMC, used to decrease the autocorrelation time within each chain~\cite{earl2005parallel}.
+In parallel tempering, several MCMC chains at varying temperatures are run in parallel. Then, at each MCMC step, there is a probability of exchanging the current states between the different chains. This means, for example, there is some probability that a chain with a strong negative bias might be in a state typical of a distribution with a strong positive bias.
+
+To satisfy detailed balance, the probability of proposing a swap between any two states $i$ and $j$ is equal for any $i, j$ and given any history of the chains. Then, a proposed swap between the states in chains $i$ and $j$ is accepted with probability,
+\begin{align}
+    A(x_{j}, x_{i} | x_{i}, x_{j}) = \min \left( 1, e^{(\bias_i - \bias_j)(\obs(x_i) - \obs(x_j))} \right).
+\end{align}
+Parallel tempering works to prevent chains at high biases from getting stuck by giving them some possibility of moving to a much less biased state, thus breaking out of a local minima.
+In our experimentation, we found that chains biased strongly towards the ARI score would often get stuck in highly repetitive states, and be unable to escape. Hence, parallel tempering could offer a good solution to prevent this.
+
+\subsection{Distribution Overlap}\label{sec:overlap}
+For MBAR to be accurate, overlaps between distributions must be sufficient such that a matrix of overlaps can not be reordered to have disconnected blocks~\cite{klimovich2015guidelines}.
+This can be represented using the overlap matrix,
+\begin{align}
+    O_{ij} = \EV_{X \sim \Prob_j} \left[ \frac{N_i p_i(\unrealtoken)}{\sum_{k=1}^K N_k p_k(\unrealtraj)} \right],
+\end{align}
+where $N_1, \dots, N_K$ are the number of samples taken from distribution $p_1, \dots, p_K$. Each matrix element $O_{ij}$ is the probability of observing a sample from distribution $i$ in distribution $j$.
+We calculate this using a Monte-Carlo estimate with the samples from the mixture distribution as,
+\begin{align}
+    \tilde{O}_{ij} = \sum^N_{n=1} \left[  \frac{N_i p_i(x_n)}{\sum_{k=1}^K N_k p_k(x_n)} \cdot \frac{p_j(x_n)}{\sum_{k'=1}^K N_{k'} p_{k'}(x_n)} \right].
+\end{align}
+If the overlap between neighbouring states is larger, the MBAR estimate should be more accurate.
+Klimovich et al. suggest that values as low as $0.03$ can be used to yield reliable estimates, and as such we use this as a cutoff value.
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=\textwidth]{overlap.pdf}
+    \caption{\textbf{Overlap of Biased Distributions for ARI and Logprobs.}.
+        Estimates for the distributional overlap of the distributions biased towards ARI and the Log Probability, calculated using the data from Figure~\ref{fig:cum_trajs}.
+        The heatmap displays an estimate for the probability of observing a sample from distribution $i$ in distribution $j$.
+        Distributions with overlap of less than $0.03$ are shown in white.
+    }\label{fig:overlap}
+\end{figure*}
+
+It can be seen from the off-diagonal elements of Figure~\ref{fig:overlap} that there is sufficient overlap between the neighbouring distributions for MBAR analysis to be valid.
+Furthermore, the overlap between the biased distributions could be used to guide additional sampling.
+If somewhere in the annealing schedule has low overlap, additional TPS chains could be run to gather samples to fill in the grid of biases between these regions, preventing the need to rerun all of the trajectories.
+
+Note that when $N_i = N_j$, $O_{ij}$ is symmetric.
+Since the unbiased distribution, $\lambda = 0,$ has a different number of samples to the biased distributions, this symmetry is broken, which can be seen by the $\lambda_i=0$ column in Figure~\ref{fig:overlap}.
+
+
+\section{Comparison of Histogram Estimations for Different Starting Prompts}
+\label{app:comparison}
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=\textwidth]{other_prompts.pdf}
+    \caption{\textbf{Reweighted Histograms for Various Starting Prompts.}
+        Histograms made through TPS and MBAR (blue) and Direct Sampling (orange, dashed), for various starting prompts.
+        The ARI for the prompt and reference completion are shown by the green and red dotted lines.
+        The prompts are taken from the subset of datapoints with more than 272 tokens in the the validation split of the TinyStories dataset.
+        Figures (a), (b), (c) and (d) correspond to the datapoints at the $0\%$, $33\%$, $67\%$ and $100\%$ percentiles of this subset, when ordered by ARI scores.
+        The  ARI scores of the corresponding prompts (green) and completions (red) taken from these datapoints shown by the horizontal dashed lines.
+        The biased histograms are made using the same biases as Figure~\ref{fig:cum_trajs}, with a reduced steps per bias of $20,000$.
+    }\label{fig:other_prompts}
+\end{figure*}
+To show that the methodology described in Sect.~\ref{sec:theory} is applicable across a range of prompts, Figure~\ref{fig:other_prompts} displays reweighted and unbiased histograms for prompts with a range of ARI values.
+In nearly all cases, the biased histogram provides estimates further into the tails than the unbiased, with the exception of the left tail in Figure~\ref{fig:other_prompts}(c).
+This suggests that a different annealing schedule for this prompt could be beneficial.
+
+When applying these techniques to a large number of prompts, it will be infeasible to manually decide on an annealing schedule for each prompt.
+As such, adaptive ways of switching the bias, such as switching biases only when the Gelman-Rubin statistic is below a certain threshold, could be a potential avenue of future research.
+
+\end{document}

@@ -1,0 +1,444 @@
+\begin{thebibliography}{60}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Andrieu et~al.(2003)Andrieu, de~Freitas, Doucet, and
+  Jordan]{andrieu2003an-introduction}
+Andrieu, C., de~Freitas, N., Doucet, A., and Jordan, M.~I.
+\newblock {An Introduction to MCMC for Mach. Learn.}
+\newblock \emph{Mach. Learn.}, 50\penalty0 (1):\penalty0 5--43, 2003.
+\newblock URL \url{http://dx.doi.org/10.1023/A:1020281327116}.
+
+\bibitem[Bai et~al.(2022)Bai, Jones, Ndousse, Askell, Chen, DasSarma, Drain,
+  Fort, Ganguli, Henighan, et~al.]{bai2022training}
+Bai, Y., Jones, A., Ndousse, K., Askell, A., Chen, A., DasSarma, N., Drain, D.,
+  Fort, S., Ganguli, D., Henighan, T., et~al.
+\newblock {Training a helpful and harmless assistant with reinforcement
+  learning from human feedback}.
+\newblock \emph{arXiv:2204.05862}, 2022.
+\newblock URL \url{https://arXiv.org/abs/2204.05862}.
+
+\bibitem[Bavarian et~al.(2022)Bavarian, Jun, Tezak, Schulman, McLeavey, Tworek,
+  and Chen]{bavarian2022efficient}
+Bavarian, M., Jun, H., Tezak, N., Schulman, J., McLeavey, C., Tworek, J., and
+  Chen, M.
+\newblock {Efficient Training of Language Models to Fill in the Middle}.
+\newblock \emph{arXiv:2207.14255}, 2022.
+\newblock URL \url{https://arXiv.org/abs/2207.14255}.
+
+\bibitem[Beauchamp et~al.()Beauchamp, Chodera, Naden, Shirts, and
+  {contributors}]{beauchamppymbar:}
+Beauchamp, K.~A., Chodera, J.~D., Naden, L.~N., Shirts, M.~R., and
+  {contributors}.
+\newblock {pymbar: Python implementation of the multistate Bennett acceptance
+  ratio (MBAR)}.
+\newblock URL \url{https://github.com/choderalab/pymbar}.
+
+\bibitem[Bertsimas \& Tsitsiklis(1993)Bertsimas and
+  Tsitsiklis]{bertsimas1993simulated}
+Bertsimas, D. and Tsitsiklis, J.
+\newblock {Simulated annealing}.
+\newblock \emph{Stat. Sci.}, 8\penalty0 (1):\penalty0 10--15, 1993.
+
+\bibitem[Bolhuis et~al.(2002)Bolhuis, Chandler, Dellago, and
+  Geissler]{bolhuis2002transition}
+Bolhuis, P.~G., Chandler, D., Dellago, C., and Geissler, P.~L.
+\newblock {TRANSITION PATH SAMPLING: Throwing Ropes Over Rough Mountain Passes,
+  in the Dark}.
+\newblock \emph{Annu. Rev. Phys. Chem.}, 53\penalty0 (Volume 53,
+  2002):\penalty0 291--318, 2002.
+\newblock URL
+  \url{https://www.annualreviews.org/content/journals/10.1146/annurev.physchem.53.082301.113146}.
+
+\bibitem[Brooks et~al.(2011)Brooks, Gelman, Jones, and
+  Meng]{brooks2011handbook}
+Brooks, S., Gelman, A., Jones, G., and Meng, X.-L.
+\newblock \emph{{Handbook of markov chain monte carlo}}.
+\newblock 2011.
+
+\bibitem[C\'erou et~al.(2012)C\'erou, Del~Moral, Furon, and
+  Guyader]{cerou2012sequential}
+C\'erou, F., Del~Moral, P., Furon, T., and Guyader, A.
+\newblock {Sequential Monte Carlo for rare event estimation}.
+\newblock \emph{Stat. Comput.}, 22\penalty0 (3):\penalty0 795--808, 2012.
+\newblock URL \url{http://dx.doi.org/10.1007/s11222-011-9231-6}.
+
+\bibitem[Chetrite \& Touchette(2015)Chetrite and
+  Touchette]{chetrite2015variational}
+Chetrite, R. and Touchette, H.
+\newblock {Variational and optimal control representations of conditioned and
+  driven processes}.
+\newblock \emph{J. Stat. Mech: Theory Exp.}, 2015\penalty0 (12):\penalty0
+  P12001, 2015.
+\newblock URL \url{http://dx.doi.org/10.1088/1742-5468/2015/12/p12001}.
+
+\bibitem[Das et~al.(2021)Das, Rose, Garrahan, and Limmer]{das2021reinforcement}
+Das, A., Rose, D.~C., Garrahan, J.~P., and Limmer, D.~T.
+\newblock {Reinforcement learning of rare diffusive dynamics}.
+\newblock \emph{J. Chem. Phys.}, 155\penalty0 (13):\penalty0 134105, 2021.
+\newblock URL \url{http://dx.doi.org/10.1063/5.0057323}.
+
+\bibitem[Davison \& Hinkley(1997)Davison and Hinkley]{davison1997bootstrap}
+Davison, A.~C. and Hinkley, D.~V.
+\newblock \emph{{Bootstrap methods and their application}}.
+\newblock Number~1. 1997.
+
+\bibitem[Dembinski \& Schmelling(2022)Dembinski and
+  Schmelling]{dembinski2022bias}
+Dembinski, H. and Schmelling, M.
+\newblock {Bias, variance, and confidence intervals for efficiency estimators
+  in particle physics experiments}.
+\newblock \emph{arXiv:2110.00294}, 2022.
+\newblock URL \url{https://arXiv.org/abs/2110.00294}.
+
+\bibitem[Ding(2024)]{ding2024bayesian}
+Ding, X.
+\newblock {Bayesian Multistate Bennett Acceptance Ratio Methods}.
+\newblock \emph{J. Chem. Theory Comput.}, 20\penalty0 (5):\penalty0 1878--1888,
+  2024.
+\newblock URL \url{http://dx.doi.org/10.1021/acs.jctc.3c01212}.
+
+\bibitem[Dinner et~al.(2020)Dinner, Thiede, Van~Koten, and
+  Weare]{dinner2020stratification}
+Dinner, A.~R., Thiede, E.~H., Van~Koten, B., and Weare, J.
+\newblock {Stratification as a general variance reduction method for Markov
+  chain Monte Carlo}.
+\newblock \emph{SIAM\/ASA J. Uncertainty Quantif.}, 8\penalty0 (3), 2020.
+
+\bibitem[Doucet et~al.(2001)Doucet, De~Freitas, Gordon,
+  et~al.]{doucet2001sequential}
+Doucet, A., De~Freitas, N., Gordon, N.~J., et~al.
+\newblock \emph{{Sequential Monte Carlo methods in practice}}, volume~1.
+\newblock 2001.
+
+\bibitem[Earl \& Deem(2005)Earl and Deem]{earl2005parallel}
+Earl, D.~J. and Deem, M.~W.
+\newblock {Parallel tempering: Theory, applications, and new perspectives}.
+\newblock \emph{Phys. Chem. Chem. Phys.}, 7\penalty0 (23):\penalty0 3910--3916,
+  2005.
+
+\bibitem[Eldan \& Li(2023)Eldan and Li]{eldan2023tinystories:}
+Eldan, R. and Li, Y.
+\newblock {TinyStories: How Small Can Language Models Be and Still Speak
+  Coherent English?}
+\newblock \emph{arXiv:2305.07759}, 2023.
+\newblock URL \url{https://arXiv.org/abs/2305.07759}.
+
+\bibitem[Faria \& Smith(2025)Faria and Smith]{faria2025sample}
+Faria, G. and Smith, N.~A.
+\newblock {Sample, Don't Search: Rethinking Test-Time Alignment for Language
+  Models}.
+\newblock \emph{arXiv:2504.03790}, 2025.
+\newblock URL \url{https://arXiv.org/abs/2504.03790}.
+
+\bibitem[Faria et~al.(2024)Faria, Agrawal, Farinhas, Rei, de~Souza, and
+  Martins]{faria2024quest:}
+Faria, G., Agrawal, S., Farinhas, A., Rei, R., de~Souza, J., and Martins, A.
+\newblock {QUEST: Quality-aware metropolis-hastings sampling for machine
+  translation}.
+\newblock \emph{NeurIPS}, 37:\penalty0 89042--89068, 2024.
+
+\bibitem[{FCA}(2022)]{fca2022fg22/5:}
+{FCA}.
+\newblock {FG22/5: Final non-Handbook Guidance for firms on the Consumer Duty}.
+\newblock Technical report, Financial Conduct Authority, 2022.
+\newblock URL
+  \url{https://www.fca.org.uk/publication/finalised-guidance/fg22-5.pdf}.
+
+\bibitem[Flegal \& Jones(2010)Flegal and Jones]{flegal2010batch}
+Flegal, J.~M. and Jones, G.~L.
+\newblock {Batch means and spectral variance estimators in Markov chain Monte
+  Carlo}.
+\newblock \emph{Ann. Stat.}, 38\penalty0 (2), 2010.
+
+\bibitem[Frenkel \& Smit(2023)Frenkel and Smit]{frenkel2023understanding}
+Frenkel, D. and Smit, B.
+\newblock \emph{{Understanding molecular simulation: from algorithms to
+  applications}}.
+\newblock 2023.
+
+\bibitem[Gelman \& Meng(1998)Gelman and Meng]{gelman1998simulating}
+Gelman, A. and Meng, X.-L.
+\newblock {Simulating normalizing constants: from importance sampling to bridge
+  sampling to path sampling}.
+\newblock \emph{Stat. Sci.}, 13\penalty0 (2):\penalty0 163 -- 185, 1998.
+\newblock URL \url{http://dx.doi.org/10.1214/ss/1028905934}.
+
+\bibitem[Giardina et~al.(2011)Giardina, Kurchan, Lecomte, and
+  Tailleur]{giardina2011simulating}
+Giardina, C., Kurchan, J., Lecomte, V., and Tailleur, J.
+\newblock {Simulating rare events in dynamical processes}.
+\newblock \emph{J. Stat. Phys.}, 145:\penalty0 787, 2011.
+\newblock URL \url{http://dx.doi.org/10.1007/s10955-011-0350-4}.
+
+\bibitem[Gillman et~al.(2024)Gillman, Rose, and Garrahan]{gillman2024combining}
+Gillman, E., Rose, D.~C., and Garrahan, J.~P.
+\newblock {Combining Reinforcement Learning and Tensor Networks, with an
+  Application to Dynamical Large Deviations}.
+\newblock \emph{Phys. Rev. Lett.}, 132:\penalty0 197301, 2024.
+\newblock URL \url{http://dx.doi.org/10.1103/PhysRevLett.132.197301}.
+
+\bibitem[Hassabis(2025)]{hassabis2025we-processed}
+Hassabis, D.
+\newblock We processed over 1.3 quadrillion tokens last month.
+\newblock Twitter post, 2025.
+\newblock URL \url{https://x.com/demishassabis/status/1976712484657475691}.
+
+\bibitem[Hastings(1970)]{hastings1970monte}
+Hastings, W.~K.
+\newblock {Monte Carlo sampling methods using Markov chains and their
+  applications}.
+\newblock \emph{Biometrika}, 57\penalty0 (1):\penalty0 97--109, 1970.
+\newblock URL \url{http://dx.doi.org/10.1093/biomet/57.1.97}.
+
+\bibitem[Hedges et~al.(2009)Hedges, Jack, Garrahan, and
+  Chandler]{hedges2009dynamic}
+Hedges, L.~O., Jack, R.~L., Garrahan, J.~P., and Chandler, D.
+\newblock {Dynamic Order-Disorder in Atomistic Models of Structural Glass
+  Formers}.
+\newblock \emph{Science}, 323\penalty0 (5919):\penalty0 1309, 2009.
+\newblock URL \url{http://dx.doi.org/10.1126/science.1166665}.
+
+\bibitem[Holtzman et~al.(2020)Holtzman, Buys, Du, Forbes, and
+  Choi]{holtzman2020the-curious}
+Holtzman, A., Buys, J., Du, L., Forbes, M., and Choi, Y.
+\newblock {The Curious Case of Neural Text Degeneration}.
+\newblock \emph{arXiv:1904.09751}, 2020.
+\newblock URL \url{https://arXiv.org/abs/1904.09751}.
+
+\bibitem[Jack \& Sollich(2015)Jack and Sollich]{jack2015effective}
+Jack, R.~L. and Sollich, P.
+\newblock {Effective interactions and large deviations in stochastic
+  processes}.
+\newblock \emph{Euro. Phys. J. Spec. Topics}, 224\penalty0 (12):\penalty0
+  2351--2367, 2015.
+
+\bibitem[Jian et~al.(2022)Jian, Lui, Lou, Rosenthal, Shangguan, and
+  Wu]{jian2022markov}
+Jian, Y., Lui, T., Lou, Z., Rosenthal, J., Shangguan, S., and Wu, Z.
+\newblock {Markov Chain Confidence Intervals and Biases}.
+\newblock \emph{Int. J. Stat. Probab}, 11:\penalty0 1--29, 2022.
+
+\bibitem[Jiao et~al.(2025)Jiao, Gao, Yang, Zhou, Huang, Chen, and
+  Li]{jiao2025analyzing}
+Jiao, L., Gao, C., Yang, Y., Zhou, C., Huang, Y., Chen, X., and Li, Y.
+\newblock {Analyzing and Modeling {LLM} Response Lengths with Extreme Value
+  Theory: Anchoring Effects and Hybrid Distributions}.
+\newblock In Christodoulopoulos, C., Chakraborty, T., Rose, C., and Peng, V.
+  (eds.), \emph{Proceedings of the 2025 Conference on Empirical Methods in
+  Natural Language Processing}, pp.\  32980--32990, Suzhou, China, 2025.
+\newblock ISBN 979-8-89176-332-6.
+\newblock URL \url{http://dx.doi.org/10.18653/v1/2025.emnlp-main.1676}.
+
+\bibitem[Jones et~al.(2025)Jones, Tong, Mu, Mahfoud, Leike, Grosse, Kaplan,
+  Fithian, Perez, and Sharma]{jones2025forecasting}
+Jones, E., Tong, M., Mu, J., Mahfoud, M., Leike, J., Grosse, R., Kaplan, J.,
+  Fithian, W., Perez, E., and Sharma, M.
+\newblock {Forecasting Rare Language Model Behaviors}.
+\newblock \emph{arXiv:2502.16797}, 2025.
+\newblock URL \url{https://arXiv.org/abs/2502.16797}.
+
+\bibitem[Kincaid et~al.(1975)Kincaid, Fishburne~Jr, Rogers, and
+  Chissom]{kincaid1975derivation}
+Kincaid, J.~P., Fishburne~Jr, R.~P., Rogers, R.~L., and Chissom, B.~S.
+\newblock {Derivation of new readability formulas (automated readability index,
+  fog count and flesch reading ease formula) for navy enlisted personnel}.
+\newblock Technical report, Naval Technical Training Command, Millington TN
+  Research Branch, 1975.
+
+\bibitem[Kirkwood(1935)]{kirkwood1935statistical}
+Kirkwood, J.~G.
+\newblock {Statistical Mechanics of Fluid Mixtures}.
+\newblock \emph{J. Chem. Phys.}, 3\penalty0 (5):\penalty0 300--313, 1935.
+\newblock URL \url{http://dx.doi.org/10.1063/1.1749657}.
+
+\bibitem[Klimovich et~al.(2015)Klimovich, Shirts, and
+  Mobley]{klimovich2015guidelines}
+Klimovich, P.~V., Shirts, M.~R., and Mobley, D.~L.
+\newblock {Guidelines for the analysis of free energy calculations}.
+\newblock \emph{J. Comput.-Aided Mol. Des.}, 29\penalty0 (5):\penalty0
+  397--411, 2015.
+
+\bibitem[Lambert et~al.(2025)Lambert, Morrison, Pyatkin, Huang, Ivison,
+  Brahman, Miranda, Liu, Dziri, Lyu, Gu, Malik, Graf, Hwang, Yang, Bras,
+  Tafjord, Wilhelm, Soldaini, Smith, Wang, Dasigi, and
+  Hajishirzi]{lambert2025tulu}
+Lambert, N., Morrison, J., Pyatkin, V., Huang, S., Ivison, H., Brahman, F.,
+  Miranda, L. J.~V., Liu, A., Dziri, N., Lyu, X., Gu, Y., Malik, S., Graf, V.,
+  Hwang, J.~D., Yang, J., Bras, R.~L., Tafjord, O., Wilhelm, C., Soldaini, L.,
+  Smith, N.~A., Wang, Y., Dasigi, P., and Hajishirzi, H.
+\newblock Tulu 3: Pushing frontiers in open language model post-training.
+\newblock In \emph{Second Conference on Language Modeling}, 2025.
+\newblock URL \url{https://openreview.net/forum?id=i1uGbfHHpH}.
+
+\bibitem[Lew et~al.(2023)Lew, Zhi-Xuan, Grand, and
+  Mansinghka]{lew2023sequential}
+Lew, A.~K., Zhi-Xuan, T., Grand, G., and Mansinghka, V.~K.
+\newblock {Sequential Monte Carlo Steering of Large Language Models using
+  Probabilistic Programs}.
+\newblock \emph{arXiv:2306.03081}, 2023.
+\newblock URL \url{https://arXiv.org/abs/2306.03081}.
+
+\bibitem[Li et~al.(2023)Li, Van~Koten, Dinner, and Thiede]{li2023understanding}
+Li, X.~S., Van~Koten, B., Dinner, A.~R., and Thiede, E.~H.
+\newblock {Understanding the sources of error in MBAR through asymptotic
+  analysis}.
+\newblock \emph{J. Chem. Phys.}, 158\penalty0 (21), 2023.
+\newblock URL \url{http://dx.doi.org/10.1063/5.0147243}.
+
+\bibitem[Loula et~al.(2025)Loula, LeBrun, Du, Lipkin, Pasti, Grand, Liu, Emara,
+  Freedman, Eisner, Cotterell, Mansinghka, Lew, Vieira, and
+  O'Donnell]{loula2025syntactic}
+Loula, J., LeBrun, B., Du, L., Lipkin, B., Pasti, C., Grand, G., Liu, T.,
+  Emara, Y., Freedman, M., Eisner, J., Cotterell, R., Mansinghka, V., Lew,
+  A.~K., Vieira, T., and O'Donnell, T.~J.
+\newblock {Syntactic and Semantic Control of Large Language Models via
+  Sequential Monte Carlo}.
+\newblock \emph{arXiv:2504.13139}, 2025.
+\newblock URL \url{https://arXiv.org/abs/2504.13139}.
+
+\bibitem[Lu et~al.(2025)Lu, Wang, Sheng, He, Zheng, and
+  Liang]{lu2025out-of-distribution}
+Lu, S., Wang, Y., Sheng, L., He, L., Zheng, A., and Liang, J.
+\newblock {Out-of-Distribution Detection: A Task-Oriented Survey of Recent
+  Advances}.
+\newblock \emph{arXiv:2409.11884}, 2025.
+\newblock URL \url{https://arXiv.org/abs/2409.11884}.
+
+\bibitem[Mair et~al.(2023)Mair, Rose, and Garrahan]{mair2023training}
+Mair, J.~F., Rose, D.~C., and Garrahan, J.~P.
+\newblock {Training neural network ensembles via trajectory sampling}.
+\newblock \emph{arXiv:2209.11116}, 2023.
+\newblock URL \url{https://arXiv.org/abs/2209.11116}.
+
+\bibitem[Mazeika et~al.(2024)Mazeika, Phan, Yin, Zou, Wang, Mu, Sakhaee, Li,
+  Basart, Li, Forsyth, and Hendrycks]{mazeika2024harmbench}
+Mazeika, M., Phan, L., Yin, X., Zou, A., Wang, Z., Mu, N., Sakhaee, E., Li, N.,
+  Basart, S., Li, B., Forsyth, D., and Hendrycks, D.
+\newblock Harmbench: A standardized evaluation framework for automated red
+  teaming and robust refusal.
+\newblock 2024.
+
+\bibitem[McGrath \& Burke(2024)McGrath and Burke]{mcgrath2024binomial}
+McGrath, O. and Burke, K.
+\newblock {Binomial Confidence Intervals for Rare Events: Importance of
+  Defining Margin of Error Relative to Magnitude of Proportion}.
+\newblock \emph{The American Statistician}, 78\penalty0 (4):\penalty0 437--449,
+  2024.
+\newblock URL \url{http://dx.doi.org/10.1080/00031305.2024.2350445}.
+
+\bibitem[Metropolis et~al.(1953)Metropolis, Rosenbluth, Rosenbluth, Teller, and
+  Teller]{metropolis1953equation}
+Metropolis, N., Rosenbluth, A.~W., Rosenbluth, M.~N., Teller, A.~H., and
+  Teller, E.
+\newblock {Equation of State Calculations by Fast Computing Machines}.
+\newblock \emph{J. Chem. Phys.}, 21\penalty0 (6):\penalty0 1087--1092, 1953.
+\newblock URL \url{http://dx.doi.org/10.1063/1.1699114}.
+
+\bibitem[Murphy(2022)]{murphy2022probabilistic}
+Murphy, K.~P.
+\newblock \emph{Probabilistic Machine Learning: An introduction}.
+\newblock MIT Press, 2022.
+\newblock URL \url{http://probml.github.io/book1}.
+
+\bibitem[Pamulaparthy \& Harris(2025)Pamulaparthy and
+  Harris]{pamulaparthy2025towards}
+Pamulaparthy, V.~D. and Harris, R.~J.
+\newblock {Towards neural reinforcement learning for large deviations in
+  non-equilibrium systems with memory}.
+\newblock \emph{Journal of Statistical Mechanics: Theory and Experiment},
+  2025\penalty0 (7):\penalty0 073404, 2025.
+\newblock URL \url{http://dx.doi.org/10.1088/1742-5468/adea65}.
+
+\bibitem[Rafailov et~al.(2023)Rafailov, Sharma, Mitchell, Manning, Ermon, and
+  Finn]{rafailov2023direct}
+Rafailov, R., Sharma, A., Mitchell, E., Manning, C.~D., Ermon, S., and Finn, C.
+\newblock {Direct preference optimization: Your language model is secretly a
+  reward model}.
+\newblock \emph{NeurIPS}, 36:\penalty0 53728--53741, 2023.
+
+\bibitem[Rose et~al.(2021)Rose, Mair, and Garrahan]{rose2021a-reinforcement}
+Rose, D.~C., Mair, J.~F., and Garrahan, J.~P.
+\newblock {A reinforcement learning approach to rare trajectory sampling}.
+\newblock \emph{New J. Phys.}, 23\penalty0 (1):\penalty0 013013, 2021.
+\newblock URL \url{http://dx.doi.org/10.1088/1367-2630/abd7bd}.
+
+\bibitem[Rosenthal(2018)]{rosenthal2018simple}
+Rosenthal, J.~S.
+\newblock {Simple Confidence Intervals for MCMC Without CLTs}.
+\newblock \emph{arXiv:1812.00126}, 2018.
+\newblock URL \url{https://arXiv.org/abs/1812.00126}.
+
+\bibitem[Roy(2020)]{roy2020convergence}
+Roy, V.
+\newblock {Convergence diagnostics for markov chain monte carlo}.
+\newblock \emph{Annu. Rev. Stat. Appl.}, 7\penalty0 (1):\penalty0 387--412,
+  2020.
+
+\bibitem[Shi et~al.(2024)Shi, Yang, Cai, Zhang, Wang, Yang, and
+  Lam]{shi2024a-thorough}
+Shi, C., Yang, H., Cai, D., Zhang, Z., Wang, Y., Yang, Y., and Lam, W.
+\newblock {A Thorough Examination of Decoding Methods in the Era of LLMs}.
+\newblock \emph{arXiv:2402.06925}, 2024.
+\newblock URL \url{https://arXiv.org/abs/2402.06925}.
+
+\bibitem[Shirts(2017)]{shirts2017reweighting}
+Shirts, M.~R.
+\newblock {Reweighting from the mixture distribution as a better way to
+  describe the Multistate Bennett Acceptance Ratio}.
+\newblock \emph{arXiv:1704.00891}, 2017.
+\newblock URL \url{https://arXiv.org/abs/1704.00891}.
+
+\bibitem[Shirts \& Chodera(2008)Shirts and Chodera]{shirts2008statistically}
+Shirts, M.~R. and Chodera, J.~D.
+\newblock {Statistically optimal analysis of samples from multiple equilibrium
+  states}.
+\newblock \emph{J. Chem. Phys.}, 129\penalty0 (12), 2008.
+\newblock URL \url{http://dx.doi.org/10.1063/1.2978177}.
+
+\bibitem[Thiede et~al.(2016)Thiede, Van~Koten, Weare, and
+  Dinner]{thiede2016eigenvector}
+Thiede, E.~H., Van~Koten, B., Weare, J., and Dinner, A.~R.
+\newblock {Eigenvector method for umbrella sampling enables error analysis}.
+\newblock \emph{J. Chem. Phys.}, 145\penalty0 (8):\penalty0 084115, 2016.
+\newblock URL \url{http://dx.doi.org/10.1063/1.4960649}.
+
+\bibitem[Torrie \& Valleau(1977)Torrie and Valleau]{torrie1977nonphysical}
+Torrie, G. and Valleau, J.
+\newblock {Nonphysical sampling distributions in Monte Carlo free-energy
+  estimation: Umbrella sampling}.
+\newblock \emph{J. Comput. Phys.}, 23\penalty0 (2):\penalty0 187--199, 1977.
+\newblock URL
+  \url{http://dx.doi.org/https://doi.org/10.1016/0021-9991(77)90121-8}.
+
+\bibitem[Vardi(1985)]{vardi1985empirical}
+Vardi, Y.
+\newblock {Empirical distributions in selection bias models}.
+\newblock \emph{The Ann. Stat.}, 13\penalty0 (1):\penalty0 178--203, 1985.
+\newblock URL \url{http://dx.doi.org/https://doi.org/10.1214/aos/1176346585}.
+
+\bibitem[Wilson(1927)]{wilson1927probable}
+Wilson, E.~B.
+\newblock {Probable Inference, the Law of Succession, and Statistical
+  Inference}.
+\newblock \emph{J. Am. Stat. Assoc.}, 22\penalty0 (158):\penalty0 209--212,
+  1927.
+\newblock URL \url{http://dx.doi.org/10.1080/01621459.1927.10502953}.
+
+\bibitem[Wu \& Hilton(2025)Wu and Hilton]{wu2025estimating}
+Wu, G. and Hilton, J.
+\newblock {Estimating the Probabilities of Rare Outputs in Language Models}.
+\newblock In \emph{The Thirteenth International Conference on Learning
+  Representations}, 2025.
+\newblock URL \url{https://openreview.net/forum?id=DC8bsa9bzY}.
+
+\bibitem[Yang et~al.(2024)Yang, Zhou, Li, and Liu]{yang2024generalized}
+Yang, J., Zhou, K., Li, Y., and Liu, Z.
+\newblock {Generalized Out-of-Distribution Detection: A Survey}.
+\newblock \emph{arXiv:2110.11334}, 2024.
+\newblock URL \url{https://arXiv.org/abs/2110.11334}.
+
+\end{thebibliography}

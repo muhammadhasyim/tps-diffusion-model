@@ -1,0 +1,85 @@
+Another practically relevant setting is when the base and the target are the same density $\rho_1$. In this setting we can define a stochastic interpolant as: 
+
+\begin{definition}[Mirror stochastic interpolant]
+\label{def:interp:mirr}
+ Given a probability density function $\rho_1: {\RR^d} \rightarrow \RR_{\geq 0}$, a \textit{mirror stochastic interpolant} between $\rho_0$ and itself is a stochastic process $x^\MIR_t$
+\begin{equation}
+    \label{eq:stochinterp:mirror}
+    x^\MIR_t = K(t,x_1) + \gamma(t) z,  \qquad t\in [0, 1]
+\end{equation}
+that fulfills the requirements:
+\begin{enumerate}[leftmargin=0.15in]
+\item $K\in C^2([0,1],C^2(\RR^d)^d)$ satisfies the boundary conditions $K(0,x_1) = x_1$ and $K(1,x_1) = x_1$.
+\item $x_1$ and $z$ are  random variables drawn independently from $\rho_1$ and ${\sf N}(0,\Id)$, respectively.
+\item $\gamma: [0,1] \to \RR $ satisfies $\gamma(0)=\gamma(1)=0$, $\gamma(t)>0$ for all $t \in (0, 1)$, and $\gamma^2 \in C^1([0,1])$.
+\end{enumerate}
+\end{definition}
+By construction, $x^\MIR_{t=0} = x^\MIR_{t=1}= x_1 \sim \rho_1$, so that the distribution of the stochastic process~$x^\MIR_t$ bridges $\rho_1$ to itself. 
+Note that a valid choice is $K(t,x_1) = \alpha(t) x_1$ with $\alpha(0)=\alpha(1) =1$ (e.g. $\alpha(t) =1$): in this case, mirror interpolants are related to denoisers, as will be discussed in Section~\ref{sec:denoiser}.
+
+It is easy to see that our earlier theoretical results apply where the velocity field $b$ defined in~\eqref{eq:b:ode:def} becomes
+\begin{equation}
+    \label{eq:b:ode:def:mirro}
+    b_\ODE(t,x) = \EE ( \partial_t K(t,x_1) + \dot \gamma(t) z| x^\MIR_t = x),
+\end{equation}
+and the quadratic objective in~\eqref{eq:obj:v} becomes
+\begin{equation}
+    \label{eq:obj:v:mirror}
+    \mathcal{L}_b[\hat{b}] =\int_0^1   \EE \left( \tfrac12|\hat b(t,x^\MIR_t)|^2 - \left(\partial_t K(t,x_1) + \dot \gamma(t) z\right) \cdot \hat b(t,x^\MIR_t) \right) dt.
+\end{equation}
+In the expression above, $x^\MIR_t$ is given by~\eqref{eq:stochinterp:mirror} and the expectation $\EE$ is taken independently over $x_1\sim \rho_1$ and $z\sim {\sf N}(0,\Id)$. Similarly, the score is given by
+\begin{equation}
+    \label{eq:obj:s:mirro}
+    s(t,x) = - \gamma^{-1}(t) \eta_z(t,x), \qquad \eta_z(t,x)=\EE(z|x^\MIR_t=x),
+\end{equation}
+which are the unique minimizers of the objective functions
+\begin{equation}
+    \label{eq:mirror:obj}
+    \mathcal{L}_s[\hat{s}] =\int_0^1   \EE \left( \tfrac12|\hat s(t,x^\MIR_t)|^2  +\gamma^{-1}(t) z \cdot \hat s(t,x^\MIR_t) \right) dt.
+\end{equation}
+\begin{equation}
+    \label{eq:mirror:obj:denoise}
+    \mathcal{L}_{\eta_z}[\hat{\eta}_z] =\int_0^1   \EE \left( \tfrac12|\hat \eta_z(t,x^\MIR_t)|^2  - z \cdot \hat \eta_z(t,x^\MIR_t) \right) dt.
+\end{equation}
+Moreover, we can weaken Assumption~\ref{as:rho:I} to the following requirement:
+
+\begin{assumption}
+\label{as:rho:K}
+The density $\rho_1 \in C^2(\RR^d)$ satisfies $\rho_1(x) > 0$ for all $x \in \RR^d$ and
+\begin{equation}
+    \label{eq:rho0:sc:2}
+     \int_{\RR^d} |\nabla \log \rho_1(x)|^2 \rho_1(x) dx < \infty.
+\end{equation}
+The function $K$ satisfies
+\begin{equation}
+    \label{eq:bound:dK}
+    \begin{aligned}
+        &\exists C_1<\infty  \   : \ 
+        &&|\partial_t K(t,x_1)|\le C_1|x_1|
+        \quad  &&\text{for all}\quad (t,x_1) \in [0,1]\times \RR^d,
+        \end{aligned}
+\end{equation}
+and
+\begin{equation}
+    \label{eq:Kt:L2}
+    \exists M_1,M_2 < \infty  \ \ : \ \  \EE\big[ |\partial_t K(t,x_1)|^4\big] \le M_1; \quad \EE\big[ |\partial^2_t K(t,x_1)|^2\big] \le M_2, \quad  \text{for all}\quad t\in [0,1],
+\end{equation}
+where the expectation is taken over $x_1\sim \rho_1$.
+\end{assumption}
+
+\begin{remark}
+Interestingly, if we take $K(t,x_1)=x_1$, then $\partial_t K(t,x_1) = 0$, and the velocity field defined in \eqref{eq:b:ode:def:mirro}  is completely defined by the denoiser $\eta_z$
+\begin{equation}
+    \label{eq:mirror:b:2}
+    b_\ODE(t,x) = \dot \gamma(t) \eta_z(t,x)
+\end{equation}
+Since the score  $s$ also depends on $\eta_z$, this denoiser is the only quantity that needs to be learned. 
+\end{remark}
+
+\begin{remark}
+If $\rho_1$ is only accessible via empirical samples, mirror interpolants do not enable calculation of the functional form of $\rho_1$.
+%
+A notable exception is if we set $K(t,x_1) =0$ for $t\in [t_1,t_2]$ with $0< t_1\le t_2 <1$: in that case, $x^\MIR_t = \gamma(t) z \sim \gamma(t) {\sf N}(0,\Id)$ for $t\in [t_1,t_2]$, which gives us a reference density for comparison. 
+%
+In this setup, mirror interpolants essentially reduce to two one-sided interpolants glued together (with the second one time-reversed), or in fact a regular stochastic interpolant when $\rho_0=\rho_1$ and we set $I(t,x_0,x_1) = 0 $ for $t\in [t_1,t_2]$.
+\end{remark}

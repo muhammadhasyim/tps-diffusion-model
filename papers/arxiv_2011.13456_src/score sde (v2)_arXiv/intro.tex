@@ -1,0 +1,38 @@
+\section{Introduction}
+
+
+
+Two successful classes of probabilistic generative models involve sequentially corrupting training data with slowly increasing noise, and then learning to reverse this corruption in order to form a generative model of the data. 
+\emph{Score matching with Langevin dynamics} (SMLD)~\citep{song2019generative} %
+estimates the \emph{score} (\ie, the gradient of the log probability density with respect to data) at each noise scale, and then uses Langevin dynamics to sample from a sequence of decreasing noise scales during generation. 
+\emph{Denoising diffusion probabilistic modeling} (DDPM)~\citep{sohl2015deep,ho2020denoising} trains a sequence of probabilistic models to reverse each step of the noise corruption, 
+using knowledge of the functional form of the reverse distributions to make training tractable. 
+For continuous state spaces, the DDPM training objective implicitly computes 
+scores at each noise scale. 
+We therefore refer to these two model classes together as \emph{score-based generative models}. %
+
+Score-based generative models, and related techniques \citep{bordes2017learning,goyal2017variational, du2019implicit}, have proven effective at generation of images~\citep{song2019generative,song2020improved,ho2020denoising}, audio~\citep{chen2020wavegrad,kong2020diffwave}, graphs~\citep{niu20a}, and shapes~\citep{ShapeGF}. To enable new sampling methods and further extend the capabilities of score-based generative models, we propose a unified framework that generalizes previous approaches through the lens of stochastic differential equations (SDEs).%
+
+
+
+\begin{SCfigure}
+    \centering
+    \caption{{\bf Solving a reverse-time SDE yields a score-based generative model.} Transforming data to a simple noise distribution can be accomplished with a continuous-time SDE. This SDE can be reversed if we know the score of the distribution at each intermediate time step, $\nabla_\bfx \log p_t(\bfx)$. }
+    \includegraphics[width=0.65\linewidth, trim=105 0 110 0, clip]{figures/diffusion_schematic.pdf}
+    \label{fig:teaser}
+\end{SCfigure}
+
+Specifically, instead of perturbing data with a finite number of noise distributions, we consider a continuum of distributions that evolve over time according to a diffusion process. This process progressively diffuses a data point into random noise, and is given by a prescribed SDE that does not depend on the data and has no trainable parameters. 
+By reversing this process, we can smoothly mold random noise into data for sample generation. Crucially, this reverse process satisfies a reverse-time SDE~\citep{Anderson1982-ny}, which can be derived from the forward SDE given the score of the marginal probability densities as a function of time. We can therefore approximate the reverse-time SDE by training a time-dependent neural network to estimate the scores, and then produce samples using numerical SDE solvers. Our key idea is summarized in \cref{fig:teaser}.
+
+Our proposed framework has several theoretical and practical contributions: %
+
+\textbf{Flexible sampling and likelihood computation:}~ We can employ any general-purpose SDE solver to integrate the reverse-time SDE for sampling. In addition, we propose two special methods not viable for general SDEs: (i) Predictor-Corrector (PC) samplers that combine numerical SDE solvers with score-based MCMC approaches, such as Langevin MCMC~\citep{parisi1981correlation} and HMC~\citep{neal2011mcmc}; and (ii) deterministic samplers based on the probability flow ordinary differential equation (ODE). The former \emph{unifies and improves} over existing sampling methods for score-based models. The latter allows for \emph{fast adaptive sampling} via black-box ODE solvers, \emph{flexible data manipulation} via latent codes, a \emph{uniquely identifiable encoding}, and notably, \emph{exact likelihood computation}.
+
+\textbf{Controllable generation:}~ We can modulate the generation process by conditioning on information not available during training, because the conditional reverse-time SDE can be efficiently estimated from \emph{unconditional} scores. This enables applications such as class-conditional generation, image inpainting, colorization and other inverse problems, all achievable using a single unconditional score-based model without re-training.
+
+
+\textbf{Unified framework:}~ Our framework provides a unified way to explore and tune various SDEs for improving score-based generative models.
+The methods of SMLD and DDPM can be amalgamated into our framework as discretizations of two separate SDEs. 
+Although DDPM~\citep{ho2020denoising} was recently reported to achieve higher sample quality than SMLD~\citep{song2019generative,song2020improved}, we show that with better architectures and new sampling algorithms allowed by our framework, the latter can catch up---it achieves new state-of-the-art Inception score (9.89) and FID score (2.20) on CIFAR-10, as well as high-fidelity generation of $1024\times 1024$ images for the first time from a score-based model. In addition, we propose a new SDE under our framework that achieves a likelihood value of 2.99 bits/dim on uniformly dequantized CIFAR-10 images, setting a new record on this task.
+

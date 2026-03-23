@@ -1,0 +1,518 @@
+\begin{thebibliography}{99}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[a~Beccara et~al.(2012)a~Beccara, {\v{S}}krbi{\'c}, Covino, and Faccioli]{a2012dominant}
+a~Beccara, S., {\v{S}}krbi{\'c}, T., Covino, R., and Faccioli, P.
+\newblock Dominant folding pathways of a ww domain.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 109\penalty0 (7):\penalty0 2330--2335, 2012.
+
+\bibitem[Abramson et~al.(2024)Abramson, Adler, Dunger, Evans, Green, Pritzel, Ronneberger, Willmore, Ballard, Bambrick, et~al.]{abramson2024accurate}
+Abramson, J., Adler, J., Dunger, J., Evans, R., Green, T., Pritzel, A., Ronneberger, O., Willmore, L., Ballard, A.~J., Bambrick, J., et~al.
+\newblock Accurate structure prediction of biomolecular interactions with alphafold 3.
+\newblock \emph{Nature}, 630\penalty0 (8016):\penalty0 493--500, 2024.
+
+\bibitem[Adib(2008)]{Adib2008}
+Adib, A.~B.
+\newblock Stochastic actions for diffusive dynamics: Reweighting, sampling, and minimization.
+\newblock \emph{The Journal of Physical Chemistry B}, 112\penalty0 (19):\penalty0 5910--5916, 05 2008.
+\newblock ISSN 1520-6106.
+\newblock \doi{10.1021/jp0751458}.
+
+\bibitem[Arjovsky et~al.(2017)Arjovsky, Chintala, and Bottou]{arjovsky2017wasserstein}
+Arjovsky, M., Chintala, S., and Bottou, L.
+\newblock Wasserstein gan.
+\newblock In \emph{Proceedings of the International Conference on Machine Learning}, pp.\  214--223, 2017.
+
+\bibitem[Arts et~al.(2023)Arts, Garcia~Satorras, Huang, Zugner, Federici, Clementi, No{\'e}, Pinsler, and van~den Berg]{arts2023two}
+Arts, M., Garcia~Satorras, V., Huang, C.-W., Zugner, D., Federici, M., Clementi, C., No{\'e}, F., Pinsler, R., and van~den Berg, R.
+\newblock Two for one: Diffusion models and force fields for coarse-grained molecular dynamics.
+\newblock \emph{Journal of Chemical Theory and Computation}, 19\penalty0 (18):\penalty0 6151--6159, 2023.
+
+\bibitem[Arvanitidis et~al.(2018)Arvanitidis, Hansen, and Hauberg]{arvanitidis2018latent}
+Arvanitidis, G., Hansen, L.~K., and Hauberg, S.
+\newblock Latent space oddity: On the curvature of deep generative models.
+\newblock In \emph{Proceedings of the International Conference on Learning Representations}, 2018.
+
+\bibitem[Autieri et~al.(2009)Autieri, Faccioli, Sega, Pederiva, and Orland]{autieri2009dominant}
+Autieri, E., Faccioli, P., Sega, M., Pederiva, F., and Orland, H.
+\newblock Dominant reaction pathways in high-dimensional systems.
+\newblock \emph{The Journal of chemical physics}, 130\penalty0 (6), 2009.
+
+\bibitem[Bank(1971)]{bank1971protein}
+Bank, P.~D.
+\newblock Protein data bank.
+\newblock \emph{Nature New Biol}, 233\penalty0 (223):\penalty0 10--1038, 1971.
+
+\bibitem[Baratta et~al.(2023)Baratta, Dean, Dokken, Habera, HALE, Richardson, Rognes, Scroggs, Sime, and Wells]{baratta2023dolfinx}
+Baratta, I.~A., Dean, J.~P., Dokken, J.~S., Habera, M., HALE, J., Richardson, C.~N., Rognes, M.~E., Scroggs, M.~W., Sime, N., and Wells, G.~N.
+\newblock Dolfinx: the next generation fenics problem solving environment.
+\newblock 2023.
+
+\bibitem[Bolhuis \& Swenson(2021)Bolhuis and Swenson]{bolhuis2021transition}
+Bolhuis, P.~G. and Swenson, D.~W.
+\newblock Transition path sampling as markov chain monte carlo of trajectories: Recent algorithms, software, applications, and future outlook.
+\newblock \emph{Advanced Theory and Simulations}, 4\penalty0 (4):\penalty0 2000237, 2021.
+
+\bibitem[Bolhuis et~al.(2002)Bolhuis, Chandler, Dellago, and Geissler]{bolhuis2002transition}
+Bolhuis, P.~G., Chandler, D., Dellago, C., and Geissler, P.~L.
+\newblock Transition path sampling: Throwing ropes over rough mountain passes, in the dark.
+\newblock \emph{Annual review of physical chemistry}, 53\penalty0 (1):\penalty0 291--318, 2002.
+
+\bibitem[Borrero \& Dellago(2016)Borrero and Dellago]{borrero2016avoiding}
+Borrero, E.~E. and Dellago, C.
+\newblock Avoiding traps in trajectory space: Metadynamics enhanced transition path sampling.
+\newblock \emph{The European Physical Journal Special Topics}, 225:\penalty0 1609--1620, 2016.
+
+\bibitem[Chen \& Ferguson(2018)Chen and Ferguson]{chen2018molecular}
+Chen, W. and Ferguson, A.~L.
+\newblock Molecular enhanced sampling with autoencoders: On-the-fly collective variable discovery and accelerated free energy landscape exploration.
+\newblock \emph{Journal of computational chemistry}, 39\penalty0 (25):\penalty0 2079--2102, 2018.
+
+\bibitem[Corso et~al.(2023)Corso, Xu, De~Bortoli, Barzilay, and Jaakkola]{corso2023particle}
+Corso, G., Xu, Y., De~Bortoli, V., Barzilay, R., and Jaakkola, T.
+\newblock Particle guidance: non-iid diverse sampling with diffusion models.
+\newblock \emph{arXiv preprint arXiv:2310.13102}, 2023.
+
+\bibitem[Cugliandolo \& Lecomte(2017)Cugliandolo and Lecomte]{cugliandolo2017rules}
+Cugliandolo, L.~F. and Lecomte, V.
+\newblock Rules of calculus in the path integral representation of white noise langevin equations: the onsager--machlup approach.
+\newblock \emph{Journal of Physics A: Mathematical and Theoretical}, 50\penalty0 (34):\penalty0 345001, 2017.
+
+\bibitem[Darve \& Pohorille(2001)Darve and Pohorille]{Darve2001a}
+Darve, E. and Pohorille, A.
+\newblock {Calculating free energies using average force}.
+\newblock 2001.
+\newblock \doi{10.1063/1.1410978}.
+
+\bibitem[Das et~al.(2021)Das, Rose, Garrahan, and Limmer]{das2021reinforcement}
+Das, A., Rose, D.~C., Garrahan, J.~P., and Limmer, D.~T.
+\newblock Reinforcement learning of rare diffusive dynamics.
+\newblock \emph{The Journal of Chemical Physics}, 155\penalty0 (13), 2021.
+
+\bibitem[Dellago et~al.(1998)Dellago, Bolhuis, Csajka, and Chandler]{dellago}
+Dellago, C., Bolhuis, P.~G., Csajka, F.~S., and Chandler, D.
+\newblock Transition path sampling and the calculation of rate constants.
+\newblock \emph{The Journal of Chemical Physics}, 108\penalty0 (5):\penalty0 1964--1977, 02 1998.
+\newblock ISSN 0021-9606.
+\newblock \doi{10.1063/1.475562}.
+
+\bibitem[Dellago et~al.(2002)Dellago, Bolhuis, and Geissler]{dellago2002transition}
+Dellago, C., Bolhuis, P.~G., and Geissler, P.~L.
+\newblock Transition path sampling.
+\newblock \emph{Advances in chemical physics}, 123:\penalty0 1--78, 2002.
+
+\bibitem[Doerr et~al.(2020)Doerr, Majewsk, Pérez, Krämer, Clementi, Noe, Giorgino, and Fabritiis]{doerr2020torchmd}
+Doerr, S., Majewsk, M., Pérez, A., Krämer, A., Clementi, C., Noe, F., Giorgino, T., and Fabritiis, G.~D.
+\newblock Torchmd: A deep learning framework for molecular simulations, 2020.
+
+\bibitem[Du et~al.(2024)Du, Plainer, Brekelmans, Duan, No{\'e}, Gomes, Aspuru-Guzik, and Neklyudov]{du2024doob}
+Du, Y., Plainer, M., Brekelmans, R., Duan, C., No{\'e}, F., Gomes, C.~P., Aspuru-Guzik, A., and Neklyudov, K.
+\newblock Doob's lagrangian: A sample-efficient variational approach to transition path sampling.
+\newblock \emph{arXiv preprint arXiv:2410.07974}, 2024.
+
+\bibitem[Faccioli et~al.(2006)Faccioli, Sega, Pederiva, and Orland]{faccioli2006dominant}
+Faccioli, P., Sega, M., Pederiva, F., and Orland, H.
+\newblock Dominant pathways in protein folding.
+\newblock \emph{Physical review letters}, 97\penalty0 (10):\penalty0 108101, 2006.
+
+\bibitem[Falkner et~al.(2023)Falkner, Coretti, Romano, Geissler, and Dellago]{falkner2023conditioning}
+Falkner, S., Coretti, A., Romano, S., Geissler, P.~L., and Dellago, C.
+\newblock Conditioning boltzmann generators for rare event sampling.
+\newblock \emph{Machine Learning: Science and Technology}, 4\penalty0 (3):\penalty0 035050, 2023.
+
+\bibitem[Frenkel \& Smit(2023)Frenkel and Smit]{frenkel2023understanding}
+Frenkel, D. and Smit, B.
+\newblock \emph{Understanding molecular simulation: from algorithms to applications}.
+\newblock Elsevier, 2023.
+
+\bibitem[Fujisaki et~al.(2010)Fujisaki, Shiga, and Kidera]{10.1063/1.3372802}
+Fujisaki, H., Shiga, M., and Kidera, A.
+\newblock {Onsager–Machlup action-based path sampling and its combination with replica exchange for diffusive and multiple pathways}.
+\newblock \emph{The Journal of Chemical Physics}, 132\penalty0 (13):\penalty0 134101, 04 2010.
+\newblock ISSN 0021-9606.
+\newblock \doi{10.1063/1.3372802}.
+
+\bibitem[Gel'fand \& Yaglom(1960)Gel'fand and Yaglom]{gelfand-yaglom}
+Gel'fand, I.~M. and Yaglom, A.~M.
+\newblock Integration in functional spaces and its applications in quantum physics.
+\newblock \emph{Journal of Mathematical Physics}, 1\penalty0 (1):\penalty0 48--69, 01 1960.
+\newblock ISSN 0022-2488.
+\newblock \doi{10.1063/1.1703636}.
+
+\bibitem[Goodfellow et~al.(2014)Goodfellow, Pouget-Abadie, Mirza, Xu, Warde-Farley, Ozair, Courville, and Bengio]{goodfellow2014generative}
+Goodfellow, I., Pouget-Abadie, J., Mirza, M., Xu, B., Warde-Farley, D., Ozair, S., Courville, A., and Bengio, Y.
+\newblock Generative adversarial nets.
+\newblock In \emph{Advances in Neural Information Processing Systems}, pp.\  2672--2680, 2014.
+
+\bibitem[Hasyim et~al.(2022)Hasyim, Batton, and Mandadapu]{hasyim2022supervised}
+Hasyim, M.~R., Batton, C.~H., and Mandadapu, K.~K.
+\newblock Supervised learning and the finite-temperature string method for computing committor functions and reaction rates.
+\newblock \emph{The Journal of chemical physics}, 157\penalty0 (18), 2022.
+
+\bibitem[Hendrycks \& Gimpel(2023)Hendrycks and Gimpel]{hendrycks2023gaussianerrorlinearunits}
+Hendrycks, D. and Gimpel, K.
+\newblock Gaussian error linear units (gelus), 2023.
+\newblock URL \url{https://arxiv.org/abs/1606.08415}.
+
+\bibitem[Henkelman et~al.(2000)Henkelman, Uberuaga, and Jónsson]{nebmethod}
+Henkelman, G., Uberuaga, B.~P., and Jónsson, H.
+\newblock A climbing image nudged elastic band method for finding saddle points and minimum energy paths.
+\newblock \emph{The Journal of Chemical Physics}, 113\penalty0 (22):\penalty0 9901--9904, 12 2000.
+\newblock ISSN 0021-9606.
+\newblock \doi{10.1063/1.1329672}.
+
+\bibitem[Ho et~al.(2020)Ho, Jain, and Abbeel]{ho2020denoising}
+Ho, J., Jain, A., and Abbeel, P.
+\newblock Denoising diffusion probabilistic models.
+\newblock \emph{Advances in neural information processing systems}, 33:\penalty0 6840--6851, 2020.
+
+\bibitem[Holdijk et~al.(2024)Holdijk, Du, Hooft, Jaini, Ensing, and Welling]{holdijk2024stochastic}
+Holdijk, L., Du, Y., Hooft, F., Jaini, P., Ensing, B., and Welling, M.
+\newblock Stochastic optimal control for collective variable free sampling of molecular transition paths.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36, 2024.
+
+\bibitem[Huang et~al.(2024)Huang, Xu, Yu, Zhao, Chen, Han, Xie, Li, Zhong, Wong, et~al.]{huang2024dual}
+Huang, L., Xu, T., Yu, Y., Zhao, P., Chen, X., Han, J., Xie, Z., Li, H., Zhong, W., Wong, K.-C., et~al.
+\newblock A dual diffusion model enables 3d molecule generation and lead optimization based on target pockets.
+\newblock \emph{Nature Communications}, 15\penalty0 (1):\penalty0 2657, 2024.
+
+\bibitem[Hutchinson(1989)]{hutchinson1989stochastic}
+Hutchinson, M.~F.
+\newblock A stochastic estimator of the trace of the influence matrix for laplacian smoothing splines.
+\newblock \emph{Communications in Statistics-Simulation and Computation}, 18\penalty0 (3):\penalty0 1059--1076, 1989.
+
+\bibitem[Igashov et~al.(2024)Igashov, St{\"a}rk, Vignac, Schneuing, Satorras, Frossard, Welling, Bronstein, and Correia]{igashov2024equivariant}
+Igashov, I., St{\"a}rk, H., Vignac, C., Schneuing, A., Satorras, V.~G., Frossard, P., Welling, M., Bronstein, M., and Correia, B.
+\newblock Equivariant 3d-conditional diffusion model for molecular linker design.
+\newblock \emph{Nature Machine Intelligence}, pp.\  1--11, 2024.
+
+\bibitem[Jing et~al.(2024{\natexlab{a}})Jing, Berger, and Jaakkola]{jing2024alphafoldmeetsflowmatching}
+Jing, B., Berger, B., and Jaakkola, T.
+\newblock Alphafold meets flow matching for generating protein ensembles, 2024{\natexlab{a}}.
+
+\bibitem[Jing et~al.(2024{\natexlab{b}})Jing, St{\"a}rk, Jaakkola, and Berger]{jing2024generative}
+Jing, B., St{\"a}rk, H., Jaakkola, T., and Berger, B.
+\newblock Generative modeling of molecular dynamics trajectories.
+\newblock \emph{arXiv preprint arXiv:2409.17808}, 2024{\natexlab{b}}.
+
+\bibitem[Jumper et~al.(2021)Jumper, Evans, Pritzel, Green, Figurnov, Ronneberger, Tunyasuvunakool, Bates, {\v{Z}}{\'\i}dek, Potapenko, et~al.]{jumper2021highly}
+Jumper, J., Evans, R., Pritzel, A., Green, T., Figurnov, M., Ronneberger, O., Tunyasuvunakool, K., Bates, R., {\v{Z}}{\'\i}dek, A., Potapenko, A., et~al.
+\newblock Highly accurate protein structure prediction with alphafold.
+\newblock \emph{nature}, 596\penalty0 (7873):\penalty0 583--589, 2021.
+
+\bibitem[Jung et~al.(2017)Jung, Okazaki, and Hummer]{jung2017transition}
+Jung, H., Okazaki, K.-i., and Hummer, G.
+\newblock Transition path sampling of rare events by shooting from the top.
+\newblock \emph{The Journal of chemical physics}, 147\penalty0 (15), 2017.
+
+\bibitem[Kabsch(1993)]{kabsch1993automatic}
+Kabsch, W.
+\newblock Automatic processing of rotation diffraction data from crystals of initially unknown symmetry and cell constants.
+\newblock \emph{Applied Crystallography}, 26\penalty0 (6):\penalty0 795--800, 1993.
+
+\bibitem[Kappler \& Adhikari(2020)Kappler and Adhikari]{PhysRevResearch.2.023407}
+Kappler, J. and Adhikari, R.
+\newblock Stochastic action for tubes: Connecting path probabilities to measurement.
+\newblock \emph{Phys. Rev. Res.}, 2:\penalty0 023407, Jun 2020.
+\newblock \doi{10.1103/PhysRevResearch.2.023407}.
+
+\bibitem[Kingma \& Ba(2017)Kingma and Ba]{kingma2017adammethodstochasticoptimization}
+Kingma, D.~P. and Ba, J.
+\newblock Adam: A method for stochastic optimization, 2017.
+
+\bibitem[Kingma \& Welling(2013)Kingma and Welling]{kingma2013auto}
+Kingma, D.~P. and Welling, M.
+\newblock Auto-encoding variational bayes.
+\newblock In \emph{Proceedings of the International Conference on Learning Representations}, 2013.
+
+\bibitem[Klein \& No{\'e}(2024)Klein and No{\'e}]{klein2024transferable}
+Klein, L. and No{\'e}, F.
+\newblock Transferable boltzmann generators.
+\newblock \emph{arXiv preprint arXiv:2406.14426}, 2024.
+
+\bibitem[Kumar et~al.(1992)Kumar, Rosenberg, Bouzida, Swendsen, and Kollman]{kumar1992weighted}
+Kumar, S., Rosenberg, J.~M., Bouzida, D., Swendsen, R.~H., and Kollman, P.~A.
+\newblock The weighted histogram analysis method for free-energy calculations on biomolecules. i. the method.
+\newblock \emph{Journal of computational chemistry}, 13\penalty0 (8):\penalty0 1011--1021, 1992.
+
+\bibitem[Laio \& Gervasio(2008)Laio and Gervasio]{laio2008metadynamics}
+Laio, A. and Gervasio, F.~L.
+\newblock Metadynamics: a method to simulate rare events and reconstruct the free energy in biophysics, chemistry and material science.
+\newblock \emph{Reports on Progress in Physics}, 71\penalty0 (12):\penalty0 126601, 2008.
+
+\bibitem[Laio \& Parrinello(2002{\natexlab{a}})Laio and Parrinello]{Laio2002a}
+Laio, A. and Parrinello, M.
+\newblock {Escaping free-energy minima}.
+\newblock \emph{Proceedings of the National Academy of Sciences of the United States of America}, 99\penalty0 (20):\penalty0 12562--12566, 10 2002{\natexlab{a}}.
+
+\bibitem[Laio \& Parrinello(2002{\natexlab{b}})Laio and Parrinello]{laio2002escaping}
+Laio, A. and Parrinello, M.
+\newblock Escaping free-energy minima.
+\newblock \emph{Proceedings of the national academy of sciences}, 99\penalty0 (20):\penalty0 12562--12566, 2002{\natexlab{b}}.
+
+\bibitem[Lee et~al.(2017)Lee, Lee, Joung, Lee, and Brooks]{Lee2017}
+Lee, J., Lee, I.-H., Joung, I., Lee, J., and Brooks, B.~R.
+\newblock Finding multiple reaction pathways via global optimization of action.
+\newblock \emph{Nature Communications}, 8\penalty0 (1):\penalty0 15443, 2017.
+\newblock ISSN 2041-1723.
+\newblock \doi{10.1038/ncomms15443}.
+
+\bibitem[Le{\'s}niak et~al.(2018)Le{\'s}niak, Sieradzki, and Podolak]{lesniak2018distribution}
+Le{\'s}niak, D., Sieradzki, I., and Podolak, I.
+\newblock Distribution-interpolation trade off in generative models.
+\newblock In \emph{International Conference on Learning Representations}, 2018.
+
+\bibitem[Lewis et~al.(2024)Lewis, Hempel, Jim{\'e}nez~Luna, Gastegger, Xie, Foong, Garc{\'\i}a~Satorras, Abdin, Veeling, Zaporozhets, et~al.]{lewis2024scalable}
+Lewis, S., Hempel, T., Jim{\'e}nez~Luna, J., Gastegger, M., Xie, Y., Foong, A.~Y., Garc{\'\i}a~Satorras, V., Abdin, O., Veeling, B.~S., Zaporozhets, I., et~al.
+\newblock Scalable emulation of protein equilibrium ensembles with generative deep learning.
+\newblock \emph{bioRxiv}, pp.\  2024--12, 2024.
+
+\bibitem[Liang et~al.(2023)Liang, Singh, Zhu, Limmer, and Yang]{liang2023probing}
+Liang, S., Singh, A.~N., Zhu, Y., Limmer, D.~T., and Yang, C.
+\newblock Probing reaction channels via reinforcement learning.
+\newblock \emph{Machine Learning: Science and Technology}, 4\penalty0 (4):\penalty0 045003, 2023.
+
+\bibitem[Lindorff-Larsen et~al.(2011)Lindorff-Larsen, Piana, Dror, and Shaw]{lindorff2011fast}
+Lindorff-Larsen, K., Piana, S., Dror, R.~O., and Shaw, D.~E.
+\newblock How fast-folding proteins fold.
+\newblock \emph{Science}, 334\penalty0 (6055):\penalty0 517--520, 2011.
+
+\bibitem[Lipman et~al.(2022)Lipman, Chen, Ben-Hamu, Nickel, and Le]{lipman2022flow}
+Lipman, Y., Chen, R.~T., Ben-Hamu, H., Nickel, M., and Le, M.
+\newblock Flow matching for generative modeling.
+\newblock \emph{arXiv preprint arXiv:2210.02747}, 2022.
+
+\bibitem[Lipman et~al.(2024)Lipman, Havasi, Holderrieth, Shaul, Le, Karrer, Chen, Lopez-Paz, Ben-Hamu, and Gat]{lipman2024flow}
+Lipman, Y., Havasi, M., Holderrieth, P., Shaul, N., Le, M., Karrer, B., Chen, R.~T., Lopez-Paz, D., Ben-Hamu, H., and Gat, I.
+\newblock Flow matching guide and code.
+\newblock \emph{arXiv preprint arXiv:2412.06264}, 2024.
+
+\bibitem[Machlup \& Onsager(1953)Machlup and Onsager]{OMIIKinetic}
+Machlup, S. and Onsager, L.
+\newblock Fluctuations and irreversible process. ii. systems with kinetic energy.
+\newblock \emph{Phys. Rev.}, 91:\penalty0 1512--1515, Sep 1953.
+\newblock \doi{10.1103/PhysRev.91.1512}.
+
+\bibitem[Maier et~al.(2015)Maier, Martinez, Kasavajhala, Wickstrom, Hauser, and Simmerling]{14amber}
+Maier, J.~A., Martinez, C., Kasavajhala, K., Wickstrom, L., Hauser, K.~E., and Simmerling, C.
+\newblock ff14sb: Improving the accuracy of protein side chain and backbone parameters from ff99sb.
+\newblock \emph{Journal of Chemical Theory and Computation}, 11\penalty0 (8):\penalty0 3696--3713, 2015.
+\newblock \doi{10.1021/acs.jctc.5b00255}.
+
+\bibitem[Mauri(2012)]{mauri}
+Mauri, R.
+\newblock \emph{Non-Equilibrium Thermodynamics in Multiphase Flows}.
+\newblock Soft and Biological Matter. Springer Netherlands, 2012.
+\newblock ISBN 9789400754614.
+\newblock URL \url{https://books.google.cz/books?id=sD4G1azPEqcC}.
+
+\bibitem[Michelis \& Becker(2021)Michelis and Becker]{michelis2021linear}
+Michelis, M.~Y. and Becker, Q.
+\newblock On linear interpolation in the latent space of deep generative models.
+\newblock \emph{arXiv preprint arXiv:2105.03663}, 2021.
+
+\bibitem[Mullen et~al.(2015)Mullen, Shea, and Peters]{mullen2015easy}
+Mullen, R.~G., Shea, J.-E., and Peters, B.
+\newblock Easy transition path sampling methods: Flexible-length aimless shooting and permutation shooting.
+\newblock \emph{Journal of chemical theory and computation}, 11\penalty0 (6):\penalty0 2421--2428, 2015.
+
+\bibitem[M{\"u}ller \& Brown(1979)M{\"u}ller and Brown]{muller1979location}
+M{\"u}ller, K. and Brown, L.~D.
+\newblock Location of saddle points and minimum energy paths by a constrained simplex optimization procedure.
+\newblock \emph{Theoretica chimica acta}, 53:\penalty0 75--93, 1979.
+
+\bibitem[No{\'e} et~al.(2013)No{\'e}, Wu, Prinz, and Plattner]{noe2013projected}
+No{\'e}, F., Wu, H., Prinz, J.-H., and Plattner, N.
+\newblock Projected and hidden markov models for calculating kinetics and metastable states of complex molecules.
+\newblock \emph{The Journal of chemical physics}, 139\penalty0 (18), 2013.
+
+\bibitem[No{\'e} et~al.(2019)No{\'e}, Olsson, K{\"o}hler, and Wu]{noe2019boltzmann}
+No{\'e}, F., Olsson, S., K{\"o}hler, J., and Wu, H.
+\newblock Boltzmann generators: Sampling equilibrium states of many-body systems with deep learning.
+\newblock \emph{Science}, 365\penalty0 (6457):\penalty0 eaaw1147, 2019.
+
+\bibitem[Onsager \& Machlup(1953)Onsager and Machlup]{OMIbasic}
+Onsager, L. and Machlup, S.
+\newblock Fluctuations and irreversible processes.
+\newblock \emph{Phys. Rev.}, 91:\penalty0 1505--1512, Sep 1953.
+\newblock \doi{10.1103/PhysRev.91.1505}.
+
+\bibitem[Petersen \& Covino(2025)Petersen and Covino]{petersen2025pinn}
+Petersen, M. and Covino, R.
+\newblock Pinn-mep: Continuous neural representations for minimum-energy path discovery in molecular systems, 2025.
+
+\bibitem[Polyak et~al.(2024)Polyak, Zohar, Brown, Tjandra, Sinha, Lee, Vyas, Shi, Ma, Chuang, et~al.]{polyak2024movie}
+Polyak, A., Zohar, A., Brown, A., Tjandra, A., Sinha, A., Lee, A., Vyas, A., Shi, B., Ma, C.-Y., Chuang, C.-Y., et~al.
+\newblock Movie gen: A cast of media foundation models.
+\newblock \emph{arXiv preprint arXiv:2410.13720}, 2024.
+
+\bibitem[Prinz et~al.(2011)Prinz, Wu, Sarich, Keller, Senne, Held, Chodera, Sch{\"u}tte, and No{\'e}]{prinz2011markov}
+Prinz, J.-H., Wu, H., Sarich, M., Keller, B., Senne, M., Held, M., Chodera, J.~D., Sch{\"u}tte, C., and No{\'e}, F.
+\newblock Markov models of molecular kinetics: Generation and validation.
+\newblock \emph{The Journal of chemical physics}, 134\penalty0 (17), 2011.
+
+\bibitem[Psenka et~al.(2024)Psenka, Pai, Raman, Sastry, and Ma]{psenka2024representation}
+Psenka, M., Pai, D., Raman, V., Sastry, S., and Ma, Y.
+\newblock Representation learning via manifold flattening and reconstruction.
+\newblock \emph{Journal of Machine Learning Research}, 25\penalty0 (132):\penalty0 1--47, 2024.
+
+\bibitem[Ramakrishnan et~al.(2025)Ramakrishnan, Schaaf, Lin, Wang, and Torr]{ramakrishnan2025implicit}
+Ramakrishnan, K., Schaaf, L.~L., Lin, C., Wang, G., and Torr, P.
+\newblock Implicit neural representations for chemical reaction paths, 2025.
+
+\bibitem[Reidenbach \& Krishnapriyan(2024)Reidenbach and Krishnapriyan]{reidenbach2024coarsenconf}
+Reidenbach, D. and Krishnapriyan, A.~S.
+\newblock Coarsenconf: Equivariant coarsening with aggregated attention for molecular conformer generation.
+\newblock \emph{Journal of Chemical Information and Modeling}, 65\penalty0 (1):\penalty0 22--30, 2024.
+
+\bibitem[Rogal et~al.(2019)Rogal, Schneider, and Tuckerman]{rogal2019neural}
+Rogal, J., Schneider, E., and Tuckerman, M.~E.
+\newblock Neural-network-based path collective variables for enhanced sampling of phase transformations.
+\newblock \emph{Physical Review Letters}, 123\penalty0 (24):\penalty0 245701, 2019.
+
+\bibitem[Rojo et~al.(2018)Rojo, Rojo, and Bloch]{rojo2018principle}
+Rojo, A.~G., Rojo, A., and Bloch, A.
+\newblock \emph{The principle of least action: History and physics}.
+\newblock Cambridge University Press, 2018.
+
+\bibitem[Rose et~al.(2021)Rose, Mair, and Garrahan]{rose2021reinforcement}
+Rose, D.~C., Mair, J.~F., and Garrahan, J.~P.
+\newblock A reinforcement learning approach to rare trajectory sampling.
+\newblock \emph{New Journal of Physics}, 23\penalty0 (1):\penalty0 013013, 2021.
+
+\bibitem[Rotskoff et~al.(2022)Rotskoff, Mitchell, and Vanden-Eijnden]{rotskoff2022active}
+Rotskoff, G.~M., Mitchell, A.~R., and Vanden-Eijnden, E.
+\newblock Active importance sampling for variational objectives dominated by rare events: Consequences for optimization and generalization.
+\newblock In \emph{Mathematical and Scientific Machine Learning}, pp.\  757--780. PMLR, 2022.
+
+\bibitem[Schneuing et~al.(2024)Schneuing, Harris, Du, Didi, Jamasb, Igashov, Du, Gomes, Blundell, Lio, et~al.]{schneuing2024structure}
+Schneuing, A., Harris, C., Du, Y., Didi, K., Jamasb, A., Igashov, I., Du, W., Gomes, C., Blundell, T.~L., Lio, P., et~al.
+\newblock Structure-based drug design with equivariant diffusion models.
+\newblock \emph{Nature Computational Science}, 4\penalty0 (12):\penalty0 899--909, 2024.
+
+\bibitem[Schreiner et~al.(2023)Schreiner, Winther, and Olsson]{schreiner2023implicit}
+Schreiner, M., Winther, O., and Olsson, S.
+\newblock Implicit transfer operator learning: Multiple time-resolution models for molecular dynamics.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36:\penalty0 36449--36462, 2023.
+
+\bibitem[Seong et~al.(2024)Seong, Park, Kim, Kim, and Ahn]{seong2024transitionpathsamplingimproved}
+Seong, K., Park, S., Kim, S., Kim, W.~Y., and Ahn, S.
+\newblock Transition path sampling with improved off-policy training of diffusion path samplers, 2024.
+
+\bibitem[Singh \& Limmer(2023)Singh and Limmer]{singh2023variational}
+Singh, A.~N. and Limmer, D.~T.
+\newblock Variational deep learning of equilibrium transition path ensembles, 2023.
+
+\bibitem[Sipka et~al.(2023)Sipka, Dietschreit, Grajciar, and G{\'o}mez-Bombarelli]{sipka2023differentiable}
+Sipka, M., Dietschreit, J.~C., Grajciar, L., and G{\'o}mez-Bombarelli, R.
+\newblock Differentiable simulations for enhanced sampling of rare events.
+\newblock In \emph{International Conference on Machine Learning}, pp.\  31990--32007. PMLR, 2023.
+
+\bibitem[Sobieraj \& Setny(2022)Sobieraj and Setny]{chignolinanalysis}
+Sobieraj, M. and Setny, P.
+\newblock Granger causality analysis of chignolin folding.
+\newblock \emph{Journal of Chemical Theory and Computation}, 18\penalty0 (3):\penalty0 1936--1944, 2022.
+\newblock \doi{10.1021/acs.jctc.1c00945}.
+
+\bibitem[Song \& Ermon(2019)Song and Ermon]{song2019generative}
+Song, Y. and Ermon, S.
+\newblock Generative modeling by estimating gradients of the data distribution.
+\newblock \emph{Advances in neural information processing systems}, 32, 2019.
+
+\bibitem[Struski et~al.(2023)Struski, Sadowski, Danel, Tabor, and Podolak]{struski2023feature}
+Struski, {\L}., Sadowski, M., Danel, T., Tabor, J., and Podolak, I.~T.
+\newblock Feature-based interpolation and geodesics in the latent spaces of generative models.
+\newblock \emph{IEEE Transactions on Neural Networks and Learning Systems}, 2023.
+
+\bibitem[Sultan \& Pande(2018)Sultan and Pande]{Sultan2018AutomatedLearning}
+Sultan, M.~M. and Pande, V.~S.
+\newblock {Automated design of collective variables using supervised machine learning}.
+\newblock \emph{The Journal of Chemical Physics}, 149\penalty0 (9):\penalty0 94106, 2018.
+\newblock \doi{10.1063/1.5029972}.
+
+\bibitem[Sun et~al.(2022)Sun, Vandermause, Batzner, Xie, Clark, Chen, and Kozinsky]{sun2022multitask}
+Sun, L., Vandermause, J., Batzner, S., Xie, Y., Clark, D., Chen, W., and Kozinsky, B.
+\newblock Multitask machine learning of collective variables for enhanced sampling of rare events, 2022.
+
+\bibitem[Swendsen \& Wang(1986)Swendsen and Wang]{swendsen1986replica}
+Swendsen, R.~H. and Wang, J.-S.
+\newblock Replica monte carlo simulation of spin-glasses.
+\newblock \emph{Physical review letters}, 57\penalty0 (21):\penalty0 2607, 1986.
+
+\bibitem[Tiwary \& Parrinello(2013)Tiwary and Parrinello]{tiwary2013metadynamics}
+Tiwary, P. and Parrinello, M.
+\newblock From metadynamics to dynamics.
+\newblock \emph{Physical review letters}, 111\penalty0 (23):\penalty0 230602, 2013.
+
+\bibitem[Torrie \& Valleau(1977)Torrie and Valleau]{torrie1977nonphysical}
+Torrie, G.~M. and Valleau, J.~P.
+\newblock Nonphysical sampling distributions in monte carlo free-energy estimation: Umbrella sampling.
+\newblock \emph{Journal of computational physics}, 23\penalty0 (2):\penalty0 187--199, 1977.
+
+\bibitem[Tuckerman(2023)]{tuckerman2023statistical}
+Tuckerman, M.~E.
+\newblock \emph{Statistical mechanics: theory and molecular simulation}.
+\newblock Oxford university press, 2023.
+
+\bibitem[Valsson \& Parrinello(2014)Valsson and Parrinello]{valsson2014variational}
+Valsson, O. and Parrinello, M.
+\newblock Variational approach to enhanced sampling and free energy calculations.
+\newblock \emph{Physical review letters}, 113\penalty0 (9):\penalty0 090601, 2014.
+
+\bibitem[Vanden-Eijnden \& Heymann(2008)Vanden-Eijnden and Heymann]{vanden2008geometric}
+Vanden-Eijnden, E. and Heymann, M.
+\newblock The geometric minimum action method for computing minimum energy paths.
+\newblock \emph{The Journal of chemical physics}, 128\penalty0 (6), 2008.
+
+\bibitem[Vanden-Eijnden et~al.(2006)]{vanden2006towards}
+Vanden-Eijnden, E. et~al.
+\newblock Towards a theory of transition paths.
+\newblock \emph{Journal of statistical physics}, 123\penalty0 (3):\penalty0 503--523, 2006.
+
+\bibitem[Vanden-Eijnden et~al.(2010)]{vanden2010transition}
+Vanden-Eijnden, E. et~al.
+\newblock Transition-path theory and path-finding algorithms for the study of rare events.
+\newblock \emph{Annual review of physical chemistry}, 61:\penalty0 391--420, 2010.
+
+\bibitem[Vander~Meersche et~al.(2024)Vander~Meersche, Cretin, Gheeraert, Gelly, and Galochkina]{vander2024atlas}
+Vander~Meersche, Y., Cretin, G., Gheeraert, A., Gelly, J.-C., and Galochkina, T.
+\newblock Atlas: protein flexibility description from atomistic molecular dynamics simulations.
+\newblock \emph{Nucleic acids research}, 52\penalty0 (D1):\penalty0 D384--D392, 2024.
+
+\bibitem[Vincent(2011)]{vincent2011connection}
+Vincent, P.
+\newblock A connection between score matching and denoising autoencoders.
+\newblock \emph{Neural computation}, 23\penalty0 (7):\penalty0 1661--1674, 2011.
+
+\bibitem[Xie et~al.(2022)Xie, Fu, Ganea, Barzilay, and Jaakkola]{xie2022crystal}
+Xie, T., Fu, X., Ganea, O.-E., Barzilay, R., and Jaakkola, T.~S.
+\newblock Crystal diffusion variational autoencoder for periodic material generation, 2022.
+\newblock URL \url{https://openreview.net/forum?id=03RLpj-tc_}.
+
+\bibitem[Yan et~al.(2022)Yan, Touchette, and Rotskoff]{yan2022learning}
+Yan, J., Touchette, H., and Rotskoff, G.~M.
+\newblock Learning nonequilibrium control forces to characterize dynamical phase transitions.
+\newblock \emph{Physical Review E}, 105\penalty0 (2):\penalty0 024115, 2022.
+
+\bibitem[Zeni et~al.(2023)Zeni, Pinsler, Z{\"u}gner, Fowler, Horton, Fu, Shysheya, Crabb{\'e}, Sun, Smith, et~al.]{zeni2023mattergen}
+Zeni, C., Pinsler, R., Z{\"u}gner, D., Fowler, A., Horton, M., Fu, X., Shysheya, S., Crabb{\'e}, J., Sun, L., Smith, J., et~al.
+\newblock Mattergen: a generative model for inorganic materials design.
+\newblock \emph{arXiv preprint arXiv:2312.03687}, 2023.
+
+\bibitem[Zheng et~al.(2024)Zheng, He, Liu, Shi, Lu, Feng, Ju, Wang, Zhu, Min, et~al.]{zheng2024predicting}
+Zheng, S., He, J., Liu, C., Shi, Y., Lu, Z., Feng, W., Ju, F., Wang, J., Zhu, J., Min, Y., et~al.
+\newblock Predicting equilibrium distributions for molecular systems with deep learning.
+\newblock \emph{Nature Machine Intelligence}, pp.\  1--10, 2024.
+
+\bibitem[Šípka et~al.(2023)Šípka, Erlebach, and Grajciar]{Sipka2023}
+Šípka, M., Erlebach, A., and Grajciar, L.
+\newblock Constructing collective variables using invariant learned representations.
+\newblock \emph{Journal of Chemical Theory and Computation}, 19\penalty0 (3):\penalty0 887--901, 2023.
+\newblock ISSN 1549-9618.
+\newblock \doi{10.1021/acs.jctc.2c00729}.
+
+\end{thebibliography}

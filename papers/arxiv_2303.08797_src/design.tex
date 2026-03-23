@@ -1,0 +1,82 @@
+In this section, we study the stochastic interpolants that are obtained when we specialize the function $I$ used in~\eqref{eq:stochinterp} to be linear in both $x_0$ and $x_1$, i.e. we consider
+\begin{equation}
+    \label{eq:lin:interp}
+    x^\LIN_t = \alpha(t) x_0+ \beta(t) x_1 + \gamma(t) z,
+\end{equation} 
+where $(x_0,x_1)\sim \nu$ and $z \sim {\sf N}(0,\Id)$ with $(x_0,x_1)\perp z$, and $\alpha, \beta, \gamma^2\in C^2([0,1])$ satisfy the conditions
+\begin{equation}
+    \label{eq:lin:interp:a:b}
+    \begin{aligned}
+         & \alpha(0)=\beta(1)=1; \quad \alpha(1)=\beta(0)=\gamma(0) = \gamma(1) = 0;  \quad \forall t\in(0,1) \ : \ \gamma(t) > 0.
+    \end{aligned}
+\end{equation}
+Despite its simplicity, this setup offers significant design flexibility. The discussion highlights how the presence of the latent variable $\gamma(t)z$ can simplify the structure of the intermediate density $\rho(t)$. 
+%
+Since our ultimate aim is to investigate the properties of practical generative models built upon ODEs or SDEs, we will also study the effect of time-dependent diffusion coefficient $\eps(t)$, which controls the amplitude of the noise in a generative SDE. 
+%
+Throughout, to build intuition, we choose $\rho_0$ and $\rho_1$ to be Gaussian mixture densities, for which the drift coefficients can be computed analytically (see Appendix~\ref{app:Gauss:mixt}). This enables us to visualize the effect of each choice on the resulting generative models.
+
+
+\subsection{Factorization of the velocity field}
+\label{sec:factor} 
+
+When the stochastic interpolant is of the form~\eqref{eq:lin:interp}, the velocity~$b$ and the score~$s$ defined in~\eqref{eq:b:ode:def} and \eqref{eq:s:def} can both be expressed in terms of the following three conditional expectations (the third is the denoiser already defined in~\eqref{eq:denoiser}):
+\begin{equation}
+    \label{eq:g:c}
+    \eta_0(t,x) = \EE(x_0|x^\LIN_t = x), \quad \eta_1(t,x) = \EE(x_1|x^\LIN_t = x), \quad \eta_z(t,x) = \EE(z|x^\LIN_t = x).
+\end{equation}
+Specifically, we have
+\begin{equation}
+    \label{eq:b:s:g}
+    b(t,x) = \dot\alpha(t) \eta_0(t,x) +  \dot\beta(t) \eta_1(t,x)+  \dot\gamma(t) \eta_z(t,x), \qquad s(t,x) = - \gamma^{-1}(t) \eta_z(t,x).
+\end{equation}
+The second relation above holds for $t\in(0,1)$ (i.e. when $\gamma(t) \not=0$).
+Moreover, because $\EE (x_t|x_t=x) = x$ by definition, the functions $\eta_0$, $\eta_1$, and $\eta_z$ satisfy
+\begin{equation}
+    \label{eq:constraint}
+    \forall (t,x) \in [0,1]\times \RR^d \quad : \quad \alpha(t) \eta_0(t,x) + \beta(t) \eta_1(t,x) + \gamma(t) \eta_z(t,x) = x.
+\end{equation}
+This enables us to reduce computational expense: given two of the $\eta$'s, the third can always be calculated via~\eqref{eq:constraint}.
+ Finally, it is easy to see that  the functions $\eta_0$, $\eta_1$, and $\eta_z$ are the unique minimizers of the objectives
+\begin{equation}
+    \label{eq:obj}
+    \begin{aligned}
+        \mathcal L_{\eta_0}(\hat \eta_0) &= \int_0^1 \EE \left[\tfrac12|\hat \eta_0(t,x^\LIN_t)|^2 - x_0\cdot \hat \eta_0(t,x^\LIN_t)\right] dt,\\
+        \mathcal L_{\eta_1}(\hat \eta_1) &= \int_0^1 \EE \left[\tfrac12|\hat \eta_1(t,x^\LIN_t)|^2 - x_1\cdot \hat \eta_1(t,x^\LIN_t)\right] dt,\\
+        \mathcal L_{\eta_z}(\hat \eta_z) &= \int_0^1 \EE \left[\tfrac12|\hat \eta_z(t,x^\LIN_t)|^2 - z\cdot \hat \eta_z(t,x^\LIN_t)\right] dt,
+    \end{aligned}
+\end{equation}
+where $x^\LIN_t$ is defined in~\eqref{eq:lin:interp} and the expectation is taken independently over $(x_0,x_1)\sim\nu$ and $z\sim {\sf N}(0,\text{\it Id}).$
+
+\begin{table}[t!]
+\centering
+\renewcommand{\arraystretch}{1.5}  % Adjusts the height of the rows
+\begin{tabular}{@{}ccccc@{}}
+\toprule
+\multicolumn{1}{c}{Stochastic Interpolant}                    &                & $\alpha(t)$              & $\beta(t)$               & $\gamma(t)$      \\ \midrule
+
+\multicolumn{1}{l}{\multirow{3}{*}{Arbitrary $\rho_0$ (two-sided)}} & linear  & $1-t$                    & $t$                    & $\sqrt{at(1-t)}$ \\ \cmidrule(l){2-5}
+                                                                     & trig    & $\cos{\tfrac{\pi}{2} t}$ & $\sin{\tfrac{\pi}{2} t}$ & $\sqrt{at(1-t)}$ \\ \cmidrule(l){2-5}
+                                                                     & enc-dec &     $\cos^2(\pi t) 1_{[0,\frac12)}(t) $                    &    $\cos^2(\pi t) 1_{(\frac12,1]}(t)   $                   &   $\sin^2(\pi t)$               \\ 
+\midrule
+\multicolumn{1}{l}{\multirow{3}{*}{Gaussian $\rho_0$ (one-sided)}}  & linear  & $1-t$                    & $t$                      & 0                \\ \cmidrule(l){2-5}
+                                                                     & trig    & $\cos{\tfrac{\pi}{2} t}$ & $\sin{\tfrac{\pi}{2} t}$ & 0\\ \cmidrule(l){2-5}
+                                                                     & {\small SBDM (VP)}    & $\sqrt{1-t^2}$ & $t$ & 0                \\ 
+\midrule
+\multicolumn{1}{c}{Mirror}                    &                      & 0                        & 1                        & $\sqrt{at(1-t)}$ \\ \bottomrule
+\end{tabular}
+\caption{\textbf{\new{Spatially linear interpolants.}} A table suggesting various linear interpolants. 
+%
+In general, this paper describes methods for arbitrary $\rho_0$ and $\rho_1$.
+%
+In Section \ref{sec:spatil:lin:os}, we detail linear interpolants for one-sided generation, where $\rho_0$ is a Gaussian and the latent variable $z$ can be absorbed into $x_0$. 
+%
+Later, in Section~\ref{sec:SBDM}, we discuss how to recast score-based diffusion models (SBDM) as linear one-sided interpolants, which leads to the expressions given in the table when using a variance-preserving parameterization.
+%
+Linear mirror interpolants, where $\rho_0 = \rho_1$ are equal, are defined by~\eqref{eq:stochinterp:mirror} with the choice $K(t,x_1) = \alpha(t)x_1$.}
+\end{table}
+
+\subsection{Some specific design choices}
+\label{sec:specific:a:b:c}
+\input{specifics}
+

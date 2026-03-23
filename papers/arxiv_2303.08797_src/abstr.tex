@@ -1,0 +1,15 @@
+A class of generative models that unifies flow-based and diffusion-based methods is introduced. These models extend the framework proposed in~\cite{albergo2023building},  enabling the use of a broad class of continuous-time stochastic processes called `stochastic interpolants' to bridge any two  probability density functions exactly in finite time.
+%
+These interpolants are built by combining data from the two prescribed densities with an additional latent variable that shapes the bridge in a flexible way. The time-dependent probability density function of the stochastic interpolant is shown to satisfy a first-order transport equation as well as a family of forward and backward Fokker-Planck equations with tunable diffusion coefficient. 
+%
+Upon consideration of the time evolution of an individual sample, this viewpoint immediately leads to both deterministic and stochastic generative models based on probability flow equations or stochastic differential equations with an adjustable level of noise. 
+%
+The drift coefficients entering these models are time-dependent velocity fields characterized as the unique minimizers of simple quadratic objective functions, one of which is a new objective for the score of the interpolant density. 
+%
+We show that minimization of these quadratic objectives leads to control of the likelihood for generative models built upon stochastic dynamics, while likelihood control for deterministic dynamics is more stringent.
+%
+We also construct estimators for the likelihood and the cross-entropy of interpolant-based generative models, and we discuss connections with other methods such as score-based diffusion models, stochastic localization processes, probabilistic denoising techniques, and rectifying flows. 
+%
+In addition, we demonstrate that stochastic interpolants recover the Schr\"odinger bridge between the two target densities when explicitly optimizing over the interpolant. 
+%
+Finally, algorithmic aspects are discussed and the approach is illustrated on numerical examples.

@@ -1,0 +1,655 @@
+\subsection{Definitions and assumptions}
+\label{sec:si:gm}
+
+We begin by defining the stochastic processes that are central to our approach:
+\begin{definition}[Stochastic interpolant] 
+\label{def:interp}
+ Given two probability density functions $\rho_0, \rho_1 : {\RR^d} \rightarrow \RR_{\geq 0}$, a \textit{stochastic interpolant} between $\rho_0$ and $\rho_1$ is a stochastic process $x_t$ defined as
+\begin{equation}
+    \label{eq:stochinterp}
+    x_t = I(t,x_0,x_1) + \gamma(t) z,  \qquad t\in [0, 1],
+\end{equation}
+where: 
+\begin{enumerate}[leftmargin=0.15in]
+\item $I \in C^2([0,1],C^2(\RR^d\times\RR^d)^d)$ satisfies the boundary conditions $I(0,x_0,x_1) = x_0$ and $I(1,x_0,x_1) = x_1$, as well as
+\begin{equation}
+    \label{eq:bound:dI}
+    \begin{aligned}
+        &\exists C_1<\infty  \   : \ 
+        &&|\partial_t I(t,x_0,x_1)|\le C_1|x_0-x_1|
+        \quad  &&\forall (t,x_0,x_1) \in [0,1]\times \RR^d \times \RR^d.
+        \end{aligned}
+\end{equation}
+\item $\gamma: [0,1] \to \RR $  satisfies $\gamma(0)=\gamma(1) = 0$, $\gamma(t) > 0$ for all $t \in (0, 1)$,  and $\gamma^2\in C^2([0,1])$.
+\item The pair $(x_0,x_1)$ is drawn from a probability measure $\nu$ that marginalizes on $\rho_0$ and $\rho_1$, i.e. 
+\begin{equation}
+    \label{eq:margin:mu}
+    \nu(dx_0,\RR^d) = \rho_0(x_0) dx_0, \qquad \nu(\RR^d,dx_1) = \rho_1(x_1) dx_1.
+\end{equation}
+\item $z$ is a Gaussian random variable independent of $(x_0,x_1)$, i.e. $z\sim {\sf N}(0,\text{\it Id})$ and $z\perp(x_0,x_1)$.
+\end{enumerate}
+\end{definition}
+Eq.~\eqref{eq:bound:dI} states that $I(t, x_0, x_1)$ does not move too fast along the way from $x_0$ at $t=0$ to $x_1$ at $t=1$, and as a result does not wander too far from either endpoint -- this assumption is made for convenience but is not necessary for most arguments below.
+Later, we will find it useful to consider choices for $I$ that are spatially nonlinear, which we show can recover the solution to the Schr\"odinger bridge problem. Nevertheless, a simple example that serves as a valid $I$ in the sense of Definition~\ref{def:interp} is given in~\eqref{eq:stoch:interp:lin}. 
+The measure $\nu$ allows for a coupling between the two densities $\rho_0$ and $\rho_1$, which affects the properties of the stochastic interpolant, but a simple choice is to take the product measure $\nu(dx_0,dx_1) = \rho_0(x_0) \rho_1(x_1) dx_0dx_1$, in which case $x_0$ and $x_1$ are independent. 
+In Section~\ref{sec:practical} we discuss how to design the  stochastic interpolant in~\eqref{eq:stochinterp} and state some properties of the corresponding process~$x_t$. Examples of stochastic interpolants are also shown in Figure~\ref{fig:example:xt} for various choices of $I$ and $\gamma$.
+
+\begin{remark}[Comparison with~\cite{albergo2023building}]
+    The main difference between the stochastic interpolant defined in~\eqref{eq:stochinterp} and the one originally introduced in~\cite{albergo2023building} is the inclusion of the latent variable $\gamma(t) z$. Many of the results below also hold when we set $\gamma(t)z=0$, but the objective of the present paper is to elucidate the advantages that this additional term provides when neither of the endpoints are Gaussian. We note that we could generalize the construction by making $\gamma(t)$ a tensor; here we focus on the scalar case for simplicity. Another difference is the possibility to couple $\rho_0$ and $\rho_1$ via $\nu$.
+    %
+    \new{While the latent variable can be drawn from any noise distribution, as we will see, it will be convenient to choose it to be a Gaussian.}
+\end{remark}
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=.8\linewidth]{figs/various_interpolants_final.pdf}
+    \caption{\textbf{Design flexibility.} An illustration of how stochastic interpolants can be tailored to specific aims. All examples show one realization of $x_t$ with one $x_0\sim\rho_0$, one $x_1\sim \rho_1$ (the flowers at the left and right of the figures), and one $z\sim {\sf N}(0,\Id )$. \textit{Top, Upper middle, and lower middle}: various interpolants, ranging from direct interpolation with no latent variable  (as in~\cite{albergo2023building}) to Gaussian encoding-decoding in which the data transitions to pure noise at the mid-point. \textit{Bottom}: one-sided interpolant, which connects with score-based diffusion methods. }
+    \label{fig:example:xt}
+\end{figure}
+
+The stochastic interpolant $x_t$ in~\eqref{eq:stochinterp} is a continuous-time stochastic process whose realizations are samples from $\rho_0$ at time $t=0$ and from $\rho_1$ at time $t=1$ by construction. As a result, it offers a way to bridge $\rho_0$ and $\rho_1$ -- we are interested in characterizing the law of $x_t$ over the full interval $[0,1]$, as it will allow us to design generative models. Mathematically, we want to characterize the properties of the time-dependent probability distribution $\mu(t,dx)$  such that
+\begin{equation}
+    \label{eq:pdf:def:test:0}
+    \forall t \in [0,1] \quad : \quad  \int_{\RR^d} \phi(x) \mu(t,dx)  = \EE [\phi(x_t)] \quad \text{for any test function} \quad \phi \in C^\infty_0(\RR^d),
+\end{equation}
+where $x_t$ is defined in~\eqref{eq:stochinterp} and the expectation  is taken independently over $(x_0,x_1)\sim\nu$, and $z\sim {\sf N}(0,\text{\it Id})$.
+To this end, we will need to use conditional expectations over $x_t$\footnote{Formally, in terms of the Dirac delta distribution, we can write
+$$
+\EE\left[f(t,x_0,x_1,z)| x_t=x\right] = \frac{\EE\left[f(t,x_0,x_1,z)\delta(x-x_t)\right]}{\EE[\delta(x-x_t)]}
+$$
+and in this notation we also have $\mu(t,x) = \EE[\delta(x-x_t)$].}, as described in the following definition.
+\new{
+\begin{definition}
+    \label{def:cond:expect}
+    Given any $f:[0,1]\times \RR^d\times \RR^d\times\RR^d\to \RR$, its conditional expectation $\EE\left[f(t,x_0,x_1,z)| x_t=x\right]$ is the function of~$x$ such that,  for any test function $\phi \in C^\infty_0(\RR^d)$, we have
+\begin{equation}
+    \label{eq:cond:e}
+    \forall t \in [0,1] \quad : \quad \int_{\RR^d} \phi(x) \EE\left[f(t,x_0,x_1,z)| x_t=x\right] \mu(t,dx) = \EE[ \phi(x_t) f(t,x_0,x_1,z)],
+\end{equation}
+where $\mu(t,dx)$ is the time-dependent distribution of $x_t$ defined by~\eqref{def:cond:expect}, and the expectation on the right-hand side is taken independently over $(x_0,x_1)\sim\nu$ and $z\sim {\sf N}(0,\text{\it Id})$ with $x_t$ given by~\eqref{eq:stochinterp}.
+\end{definition}
+}
+
+Vector-valued functions have conditional expectations that are defined analogously. Note that, with our definition,  $\EE\left[f(t,x_0,x_1,z)| x_t=x\right]$ is a deterministic function of $(t,x)\in[0,1]\times \RR^d$, not to be confused with the random variable $\EE\left[f(t,x_0,x_1,z)| x_t\right]$ that can be defined analogously.
+
+\begin{remark}
+    Another seemingly more general way to define the stochastic interpolant is via
+\begin{equation}
+    \label{eq:stoch:interp:gen}
+    x^\diff_t = I(t,x_0,x_1)+ N_t
+\end{equation}
+where $N: [0,1]\to \RR^d$ is a zero-mean Gaussian stochastic process constrained to satisfy $N_{t=0}=N_{t=1}=0$. As we will show below, our construction only depends on the single-time properties of~$N_t$, which are completely specified by $\EE [N_t N^\T_t]$. That is, if we take $\gamma(t)$ in~\eqref{eq:stochinterp} such that $\EE [N_t N^\T_t] = \gamma^2(t)\Id$, then the probability distribution of $x_t$ will coincide with that of $x'_t$ defined in~\eqref{eq:stoch:interp:gen}, $x_t \stackrel{\text{d}}{=} x^\diff_t$. For example, taking $\gamma(t) = \sqrt{t(1-t)}$ in~\eqref{eq:stochinterp} -- a choice we will consider below in Sec.~\ref{sec:sb} -- is equivalent to choosing $N_t$ to be a Brownian bridge in~\eqref{eq:stoch:interp:gen}, i.e. the stochastic process realizable in terms of the Wiener process $W_t$ as $N_t = W_t - t W_1$. This observation will also help us draw an analogy between our approach and the construction used in score-based diffusion models as well as methods based on stochastic bridges. As we will show in Sec.~\ref{sec:sb}, it is simpler for both analysis and practical implementation to work with the definition~\eqref{eq:stochinterp} for $x_t$.
+\end{remark}
+
+To proceed, we will make the following assumption on the densities $\rho_0$, $\rho_1$, and the interplay between the measure $\nu$ to the function~$I$:
+\begin{assumption}
+\label{as:rho:I}
+The densities $\rho_0$ and $\rho_1$ are strictly positive elements of $C^2(\RR^d)$ and are such that
+\begin{equation}
+    \label{eq:rho0:1:sc}
+     \int_{\RR^d} |\nabla \log \rho_0(x)|^2 \rho_0(x) dx < \infty \quad\text{and} \quad \int_{\RR^d} |\nabla \log \rho_1(x)|^2 \rho_1(x) dx < \infty.
+\end{equation}
+The measure $\nu$ and the function $I$ are such that
+\begin{equation}
+    \label{eq:It:L2}
+    \exists M_1,M_2 < \infty  \ \ : \ \  \EE\big[ |\partial_t I(t,x_0,x_1)|^4\big] \le M_1; \quad \EE\big[ |\partial^2_t I(t,x_0,x_1)|^2\big] \le M_2, \quad  \forall t\in [0,1],
+\end{equation}
+where the expectation is taken  over $(x_0,x_1)\sim\nu$.
+\end{assumption}
+Note that for the interpolant~\eqref{eq:stoch:interp:lin}, Assumption~\ref{as:rho:I} holds if $\rho_0$ and $\rho_1$ both have finite fourth moments.
+
+\begin{figure}[t!]
+\centering
+\includegraphics[width=\linewidth]{figs/overview_figs/flow_chart_combined_reduced.pdf}
+\caption{\textbf{Algorithmic implementation.} 
+A simple overview of suggested implementation strategies. 
+%
+For deterministic sampling, a single velocity field $b$ can be learned by minimizing the empirical loss in the top row.
+%
+For stochastic sampling, the velocity field $b$, along with the denoiser $\eta_z$, can be learned by minimizing the two empirical losses specified in the bottom row.
+%
+To sample deterministically, off-the-shelf ODE integrators can be used to integrate the probability flow equation.
+%
+To sample stochastically, the listed SDE can be integrated using standard techniques such as the Euler-Maruyama method or the Heun sampler introduced in~\cite{Karras2022edm}.
+%
+The time-dependent diffusion coefficient $\epsilon(t)$ can be specified \textit{after learning} to maximize sample quality.}
+\label{fig:flow_chart}
+\end{figure}
+
+\subsection{Transport equations, score, and quadratic objectives}
+\label{sec:cont:eq}
+We now state a result that specifies some important properties of the probability distribution of the stochastic interpolant~$x_t$:
+
+\begin{restatable}[Stochastic interpolant properties]{theorem}{interpolation}
+\label{prop:interpolate}
+The probability distribution of the stochastic interpolant $x_t$ defined in~\eqref{eq:stochinterp} is absolutely continuous with respect to the Lebesgue measure at all times $t\in[0,1]$ and its time-dependent density $\rho(t)$ satisfies $\rho(0) = \rho_0$, $\rho(1) = \rho_1$, $\rho \in C^1([0,1];C^p(\RR^d))$ for any $p\in\NN$, and $\rho(t, x) > 0$ for all $(t, x) \in [0, 1]\times \RR^d$. In addition, $\rho$ solves the transport equation
+\begin{equation}
+    \label{eq:transport}
+    \partial_t \rho + \nabla \cdot \left(b_\ODE\rho\right) = 0, 
+\end{equation}
+where we defined the velocity
+\begin{equation}
+    \label{eq:b:ode:def}
+    b_\ODE(t,x) = \EE [ \dot x_t| x_t = x] = \EE [ \partial_t I(t,x_0,x_1) + \dot \gamma(t) z| x_t = x].
+\end{equation}
+This velocity is in $C^0([0,1];(C^p(\RR^d))^d)$ for any $p\in \NN$, and  such that
+\begin{equation}
+    \label{eq:bt:bounded}
+    \forall t\in [0,1] \quad : \quad \int_{\RR^d} |b_\ODE(t,x)|^2 \rho(t,x) dx < \infty.
+\end{equation}
+\end{restatable}
+
+Note that this theorem means that we can write \eqref{eq:pdf:def:test:0} as
+\begin{equation}
+    \label{eq:pdf:def:test}
+    \forall t \in [0,1] \quad : \quad  \int_{\RR^d} \phi(x) \rho(t,x)dx  = \EE \phi(x_t) \quad \text{for any test function} \quad \phi \in C^\infty_0(\RR^d).
+\end{equation}
+The transport equation~\eqref{eq:transport} can be solved either forward in time from the initial condition $\rho(0)=\rho_0$, in which case $\rho(1)=\rho_1$, or backward in time from the final condition $\rho(1)=\rho_1$, in which case $\rho(0)=\rho_0$. 
+
+The proof of Theorem~\ref{prop:interpolate} is given in Appendix~\ref{app:proof:interpolate}; it mostly relies on manipulations involving the characteristic function of  the stochastic interpolant $x_t$. The transport equation~\eqref{eq:transport} for $\rho$ lead to methods for generative modeling and density estimation, as explained in Secs.~\ref{sec:generative} and \ref{sec:density}, provided that we can estimate the velocity~$b_\ODE$.  This velocity is explicitly available only in special cases, for example when $\rho_0$ and $\rho_1$ are both Gaussian mixture densities: this case is treated in Appendix~\ref{app:Gauss:mixt}.  In general  $b_\ODE$ must be calculated numerically, which can be performed via empirical risk minimization of a quadratic objective function, as characterized by our next result:
+
+\begin{restatable}[Objective]{theorem}{interpolatelosses}
+\label{prop:interpolate_losses}
+
+The velocity $b_\ODE$ defined in~\eqref{eq:b:ode:def} is the unique minimizer in $C^0([0,1];(C^1(\RR^d))^d)$ of the quadratic objective
+\begin{equation}
+    \label{eq:obj:v}
+    \mathcal{L}_b[\hat{b}] =\int_0^1   \EE \left( \tfrac12|\hat b(t,x_t)|^2 - \left(\partial_t I(t,x_0,x_1) + \dot \gamma(t) z \right) \cdot \hat b(t,x_t) \right) dt
+\end{equation}
+where $x_t$ is defined in~\eqref{eq:stochinterp} and the expectation is taken independently over $(x_0,x_1)\sim\nu$ and $z\sim {\sf N}(0,\text{\it Id}).$
+
+\end{restatable}
+The proof of Theorem~\ref{prop:interpolate_losses}  is given in Appendix~\ref{app:proof:interpolate}: it relies on the definitions of $b_\ODE$  in~\eqref{eq:b:ode:def}, as well as the definition of $\rho$ in~\eqref{eq:pdf:def:test} and some elementary properties of the conditional expectation. We discuss how to estimate the objective function~\eqref{eq:obj:v} in practice in Section~\ref{sec:practical}. Interestingly, we also have access to the score of the probability density, as shown by our next result:
+
+\begin{restatable}[Score]{theorem}{score}
+\label{thm:score}
+    The score of the probability density $\rho$ specified in Theorem~\ref{prop:interpolate} is  in $C^1([0,1];(C^p(\RR^d))^d)$ for any $p\in\NN$ and given by
+    \begin{equation}
+        \label{eq:s:def} 
+        s(t,x) = \nabla \log\rho(t,x) = - \gamma^{-1}(t) \EE( z |x_t=x) \quad \forall (t,x)\in(0,1)\times \RR^d
+    \end{equation}
+    In addition it satisfies 
+    \begin{equation}
+    \label{eq:st:bounded}
+    \forall t\in [0,1] \quad : \quad \int_{\RR^d} |s(t,x)|^2 \rho(t,x) dx < \infty,
+\end{equation}
+and is the unique minimizer  in $C^1([0,1];(C^1(\RR^d))^d)$ of the quadratic objective 
+\begin{equation}
+    \label{eq:obj:s}
+    \mathcal{L}_s[\hat{s}] = \int_0^1 \EE\left( \tfrac12|\hat s(t,x_t)|^2 +\gamma^{-1}(t) z\cdot \hat s(t,x_t) \right) dt
+\end{equation}
+where $x_t$ is defined in~\eqref{eq:stochinterp} and the expectation is taken independently over $(x_0,x_1)\sim\nu$ and  $z\sim {\sf N}(0,\text{\it Id})$
+\end{restatable}
+
+The proof of Theorem~\ref{thm:score} is given in Appendix~\ref{app:proof:interpolate}. We stress that the objective function is well defined despite the fact that $\gamma(0)=\gamma(1) =0$: see Section~\ref{sec:practical} for more details about how to evaluate this objective in practice.
+
+\begin{remark}[Denoiser]
+    The quantity 
+    \begin{equation}
+    \label{eq:denoiser}
+        \eta_z(t,x) = \EE(z | x_t = x),
+    \end{equation}
+    will be referred as the \textit{denoiser}, for reasons that will be made clear in Section \ref{sec:denoiser}. By \eqref{eq:s:def}, this quantity gives access to the score on $t\in(0,1)$ (where $\gamma(t)>0$) since, from~\eqref{eq:s:def},
+    \begin{equation}
+        s(t,x) = - \gamma^{-1}(t) \eta_z(t,x).
+    \end{equation}  
+    This denoiser is the minimizer of an equivalent expression to \eqref{eq:obj:s},
+\begin{equation}
+    \label{eq:obj:eta:0}
+    \mathcal{L}_{\eta_z}[\hat{\eta}_z] = \int_0^1 \EE\left( \tfrac12|\hat \eta_z(t,x_t)|^2 - z\cdot \hat \eta_z(t,x_t) \right) dt.
+\end{equation}
+The denoiser~$\eta_z$ is useful for numerical realizations.
+%
+In particular, the objective in~\eqref{eq:obj:eta:0} is easier to use than the one in~\eqref{eq:obj:s} because it does not contain the factor $\gamma^{-1}(t)$, which needs careful handling as $t$ approaches 0 and 1.
+\end{remark}
+
+Having access to the score immediately allows us to rewrite the TE~\eqref{eq:transport} as forward and backward Fokker-Planck equations, which we state as:
+
+\begin{restatable}[Fokker-Planck equations]{corollary}{interpolationfpe}
+\label{prop:interpolate_fpe}
+For any $\eps\in C^0([0,1])$ with $\eps(t)\ge 0$ for all $t\in[0,1]$, the probability density $\rho$ specified in Theorem~\ref{prop:interpolate} satisfies:
+\begin{enumerate}[leftmargin=0.15in]
+\item The forward Fokker-Planck equation
+\begin{equation}
+    \label{eq:fpe}
+    \partial_t \rho + \nabla \cdot \left(b_{\fwd}\rho\right) = \eps(t)  \Delta \rho, \qquad \rho(0) = \rho_0,
+\end{equation}
+where we defined the forward drift
+\begin{equation}
+    \label{eq:b:def}
+    b_\fwd(t,x) = b_\ODE(t,x) + \eps(t) s(t,x).
+\end{equation}
+Equation~\eqref{eq:fpe} is well-posed when solved forward in time from $t=0$ to $t=1$, and its solution for the initial condition $\rho(t=0) = \rho_0$ satisfies $\rho(t=1) = \rho_1$. 
+\item  The backward Fokker-Planck equation
+\begin{equation}
+    \label{eq:fpe:tr}
+    \partial_t \rho + \nabla \cdot \left(b_\rev\rho\right) = -\eps(t)  \Delta \rho, \qquad \rho(1) = \rho_1,
+\end{equation}
+where we defined the backward drift
+\begin{equation}
+    \label{eq:b:r:def}
+    b_\rev(t,x) = b_\ODE(t,x) - \eps(t) s(t,x).
+\end{equation}
+Equation~\eqref{eq:fpe:tr} is well-posed when solved backward in time from $t=1$ to $t=0$, and its solution for the final condition $\rho(1) = \rho_1$ satisfies $\rho(0) = \rho_0$. 
+\end{enumerate}
+\end{restatable}
+
+In Section~\ref{sec:generative} we will use the results of this theorem to design generative models based on forward and backward stochastic differential equations. 
+%
+Note that we can replace the diffusion coefficient $\eps(t)$ by  a positive semi-definite tensor; also note that if we define $\rho_\rev(t_\rev,x) = \rho(1-t_\rev,x)$, the reversed FPE~\eqref{eq:fpe:tr} can be written as
+\begin{equation}
+    \label{eq:fpe:tr:r}
+    \partial_{t_\rev} \rho_\rev({t_\rev},x) - \nabla \cdot \left(b_\rev(1-{t_\rev},x)\rho_\rev({t_\rev},x)\right) = \eps(1-t_\rev)  \Delta \rho_\rev({t_\rev},x), \qquad \rho_\rev({t_\rev}=0) = \rho_1,
+\end{equation}
+which is now well-posed forward in (reversed) time~$t_\rev$. 
+%
+So as to have only one definition of time~$t$, it is more convenient to work with~\eqref{eq:fpe:tr}.  
+
+\medskip
+
+Let us make a few remarks about the statements made so far:
+
+\begin{remark}
+    If we set $\gamma(t)=0$ in $x_t$ (i.e, if we remove the latent variable), the stochastic interpolant~\eqref{eq:stochinterp} reduces to the one originally considered in~\cite{albergo2023building}. In this setup, the results above formally stand except that we cannot guarantee the spatial regularity of $b_\ODE(t,x)$ and $s(t,x)$, since it relies on the presence of the latent variable (as shown in the proof of Theorem~\ref{prop:interpolate}). Hence, we expect the introduction of the latent variable $\gamma(t) z$ to help for generative modeling, where the solution to the corresponding ODEs/SDEs will be better behaved, and for statistical approximation, since the targets $b$ and $s$ will be more regular. We will see in Section~\ref{sec:practical} that it also gives us much greater flexibility in the way we can bridge $\rho_0$ and $\rho_1$, which will enable us to design generative models with appealing properties.
+\end{remark}
+\begin{remark} 
+    We will see in Section~\ref{sec:likelihood_bounds} that the forward and backward FPE in~\eqref{eq:fpe} and \eqref{eq:fpe:tr} are more robust  than the TE in~\eqref{eq:transport} against approximation errors in the velocity $b_\ODE$ and the score $s$, which has practical implications for generative models based on these equations. 
+\end{remark}
+
+\begin{remark}
+    We could also obtain $b_\ODE(t,\cdot)$ at any $t\in[0,1]$  by minimizing
+\begin{equation}
+    \label{eq:obj:vt}
+    \EE \left( \tfrac12|\hat b(t,x_t)|^2 - \left(\partial_t I(t,x_0,x_1)+ \dot \gamma(t) z\right) \cdot \hat b(t,x_t) \right) \qquad t\in [0,1]
+\end{equation}
+and $s(t,\cdot)$ at any $t\in(0,1)$ by minimizing 
+\begin{equation}
+    \label{eq:obj:wt}
+    \EE \left( \tfrac12|\hat s(t,x_t)|^2 +\gamma^{-1}(t) z\cdot \hat s(t,x_t) \right) \qquad t\in (0,1)
+\end{equation}
+Using the time-integrated versions of these objectives given in~\eqref{eq:obj:v} and~\eqref{eq:obj:s} is more convenient numerically as it allows one to parameterize  $\hat b_\ODE$ and $\hat s$ globally for $(t,x)\in [0,1]\times \RR^d$.
+\end{remark}
+
+\begin{remark}
+From~\eqref{eq:b:ode:def} we can write
+\begin{equation}
+    \label{eq:b:decomp}
+    b(t,x) = v(t,x) - \dot \gamma(t) \gamma(t) s(t,x),
+\end{equation}
+where $s$ is the score given in~\eqref{eq:s:def} and we defined the velocity field
+\begin{equation}
+    \label{eq:v:def}
+    v(t,x) = \EE ( \partial_t I(t,x_0,x_1) | x_t = x).
+\end{equation}
+The velocity field $v \in C^0([0,1];(C^p(\RR^d))^d)$ for any $p\in \NN$ and can be characterized as the unique minimizer of
+\begin{equation}
+    \label{eq:obj:vv}
+    \mathcal{L}_v[\hat{v}] = \int_0^1 \EE\left( \tfrac12|\hat v(t,x_t)|^2 -\partial_tI(t,x_0,x_1) \cdot \hat v(t,x_t) \right) dt
+\end{equation}
+Learning this  velocity and the score separately may be useful in practice. 
+\end{remark}
+
+\begin{remark}
+    The objectives in~\eqref{eq:obj:v} and \eqref{eq:obj:s} (as well as the ones in\eqref{eq:obj:eta:0} and~\eqref{eq:obj:vv}) are amenable to empirical estimation if we have samples $(x_0,x_1)\sim\nu$, since in that case we can generate samples of $x_t= I(t,x_0,x_1) + \gamma(t) z$ at any time $t\in[0,1]$. We will use this feature in the numerical experiments presented below.
+\end{remark}
+\begin{remark}
+    Since $s$ is the score of $\rho$, an alternative objective to estimate it is~\citep{hyvarinen05a} 
+\begin{equation}
+    \label{eq:ob:w:alt}
+     \int_0^1 \EE\left(|\hat s(t,x_t)|^2 +2\nabla \cdot \hat s(t,x_t) \right)dt.
+\end{equation}
+The derivation of~\eqref{eq:ob:w:alt} is standard:
+for the reader's convenience we recall it at the end of Appendix~\ref{app:proof:interpolate}. The advantage of using~\eqref{eq:obj:s} over~\eqref{eq:ob:w:alt} is that it does not require us to take the divergence of $\hat s$.
+\end{remark}
+
+
+\begin{remark}[Energy-based models] By definition, the score $s(t,x)=\nabla \log \rho(t,x)$ is a gradient field. As a result, if we model $\hat s(t,x) = -\nabla \hat E(t,x) $, we can turn \eqref{eq:obj:s} into an objective function for $\hat E(t,x)$
+\begin{equation}
+    \label{eq:obj:E}
+    \mathcal{L}_E[\hat{E}] = \int_0^1 \EE\left( \tfrac12|\nabla \hat E(t,x_t)|^2 +\gamma^{-1}(t) z\cdot \nabla\hat E(t,x_t) \right) dt
+\end{equation}
+This objective is invariant to constant shifts in $\hat E$ and should therefore be minimized under some constraint, such as $\min_x \hat E(t,x) =0$ for all $t\in [0,1]$.
+The minimizer of~\eqref{eq:obj:E} provides us with an energy-based model (EBM)~\citep{lecun2006tutorial,song2021train} that can in principle be used to sample the PDF of the stochastic interpolant, $\rho(t,x)$, at any fixed $t\in [0,1]$ using e.g. Langevin dynamics. 
+%
+We will not exploit this possibility here, and instead rely on generative models to sample $\rho(t,x)$, as discussed next in Sec.~\ref{sec:generative}.
+\end{remark}
+
+\subsection{Generative models}
+\label{sec:generative}
+
+Our next result is a direct consequence of Theorem~\ref{prop:interpolate}, and it shows how to design generative models using the stochastic processes associated with the TE~\eqref{eq:transport}, the forward FPE~\eqref{eq:fpe}, and the backward FPE~\eqref{eq:fpe:tr}:
+
+\begin{restatable}[Generative models]{corollary}{generative}
+\label{prop:generative}
+At any time $t\in[0,1]$, the law of the stochastic interpolant~$x_t$ coincides with the law of the three processes $X_t$, $X^\fwd_t$, and $X^\rev_t$, respectively defined as:
+\begin{enumerate}[leftmargin=0.15in]
+\item The solutions of the probability flow associated with the transport equation~\eqref{eq:transport}
+\begin{equation}
+    \label{eq:ode:1}
+    \frac{d}{dt}  X_t = b_\ODE(t, X_t),
+\end{equation}
+solved either forward in time from the initial data $X_{t=0} \sim\rho_0$ or backward in time from the final data $X_{t=1} = x_1\sim\rho_1$. 
+\item The solutions of the forward SDE associated with the FPE~\eqref{eq:fpe}
+\begin{equation}
+    \label{eq:sde:1}
+    dX^\fwd_t = b_\fwd(t,X^\fwd_t)dt  + \sqrt{2\eps(t)} \,  dW_t,
+\end{equation}
+solved forward in time from the initial data~$X^\fwd_{t=0}\sim\rho_0$ independent of $W$.
+
+\item  The solutions of the backward SDE associated with the backward FPE~\eqref{eq:fpe:tr}
+\begin{equation}
+    \label{eq:sde:R}
+    dX^\rev_t = b_\rev(t,X^\rev_t)dt  + \sqrt{2\eps(t)} \,    dW^\rev_t, \quad W_t^\rev = -W_{1-t},
+\end{equation}
+solved backward in time from the final data~$X^\rev_{t=1}\sim\rho_1$ independent of $W^\rev$; the solution of~\eqref{eq:sde:R} is by definition $X^\rev_{t}= Z^\fwd_{1-t}$ where $Z^\fwd_t$ satisfies
+\begin{equation}
+    \label{eq:sde:R:Y}
+        dZ^\fwd_t = -b_\rev(1-t,Z^\fwd_t)dt+ \sqrt{2\eps(t)} \,    dW_t,
+\end{equation}
+solved forward in time from the initial data~$Z^\fwd_{t=0}\sim \rho_1$ independent of $W$.
+\end{enumerate}
+\end{restatable}
+
+To avoid repeated applications of the transformation $t\mapsto1-t$, it is convenient to work with \eqref{eq:sde:R} directly using the reversed It\^o calculus rules stated in the following lemma, which follows from the results in~\cite{anderson1979reverse-time} and is proven in Appendix~\ref{app:proof:generative}:
+
+\begin{restatable}[Reverse It\^o Calculus]{lemma}{reversed}
+\label{lem:reversed} If $X^\rev_t $ solves the backward SDE \eqref{eq:sde:R}:
+\begin{enumerate}
+    \item For any $f\in C^1([0,1];C_0^2(\RR_d))$ and $t\in[0,1]$, the backward It\^o formula holds
+\begin{equation}
+    \label{eq:ito:formula}
+    df(t,X^\rev_t) = \partial_t f(t,X^\rev_t) dt+ \nabla f(X^\rev_t) \cdot dX^\rev_t - \eps(t) \Delta f(t,X^\rev_t) dt.
+\end{equation}
+    \item For any $g\in C^0([0,1];(C_0(\RR_d))^d)$ and $t\in[0,1]$, the  backward It\^o isometries hold:
+\begin{equation}
+    \label{eq:ito:iso}
+    \begin{aligned}
+    \EE^x_\rev\int_t^1 g(t,X^\rev_t) \cdot dW^\rev_t = 0; \qquad \EE^x_\rev\left|\int_t^1 g(t,X^\rev_t)\cdot  dW^\rev_t\right|^2 &= \int_t^1 \EE^x_\rev\left|g(t,X^\rev_t)\right|^2 dt,
+    \end{aligned}
+\end{equation}
+where $\EE^x_\rev$ denotes expectation conditioned on the event $X_{t=1}^\rev = x$.
+\end{enumerate}
+\end{restatable}
+ 
+The relevance of Corollary~\ref{prop:generative} for generative modeling is clear. Assuming, for example, that $\rho_0$ is a simple density that can be sampled easily (e.g. a Gaussian or a Gaussian mixture density), we can use the ODE~\eqref{eq:ode:1} or the SDE~\eqref{eq:sde:1}  to push these samples forward in time and generate samples from a complex target density~$\rho_1$. In Section~\ref{sec:density}, we will show how to use the ODE~\eqref{eq:ode:1} or the reverse SDE~\eqref{eq:sde:R} to estimate $\rho_1$ at any $x\in\RR^d$ assuming that we can evaluate $\rho_0$ at any $x\in\RR^d$. We will also show how similar ideas can be used to estimate the cross entropy between $\rho_0$ and $\rho_1$. 
+
+\begin{remark}
+    We stress that the stochastic interpolant $x_t$, the solution $X_t$ to the ODE~\eqref{eq:ode:1}, and the solutions $X^\fwd_t$ and $X^\rev_t$ of the forward and backward SDEs~\eqref{eq:sde:1} and \eqref{eq:sde:R} are \textit{different} stochastic processes, but their laws all coincide with $\rho(t)$ at any time $t\in[0,1]$. This is all that matters when applying these processes as generative models. 
+    %
+    However, the fact that these processes are different has implications for the accuracy of the numerical integration used to sample from them at any $t$ as well as for the propagation of statistical errors (see also the next remark).
+\end{remark}
+
+
+Generative models based on solutions $X_t$ to the ODE~\eqref{eq:ode:1}, solutions $X^\fwd_t$ to the forward SDE~\eqref{eq:sde:1}, and solutions $X^\rev_t$ to the backward SDE~\eqref{eq:sde:R} will typically involve drifts $b$, $b_\fwd$, and $b_\rev$ that are, in practice, imperfectly estimated via minimization of~\eqref{eq:obj:v} and~\eqref{eq:obj:s} over finite datasets. It is important to estimate how this statistical estimation error propagates to errors in sample quality, and how the propagation of error depends on the generative model used, which is the object of our next section.
+
+
+\subsection{Likelihood control}
+\label{sec:likelihood_bounds}
+In this section, we demonstrate that jointly minimizing the objective functions~\eqref{eq:obj:vv} and~\eqref{eq:obj:s} (or the losses~\eqref{eq:obj:v} and~\eqref{eq:obj:s}) controls the $\mathsf{KL}$-divergence from the target density $\rho_1$ to the model density $\hat{\rho}_1$. We focus on bounds involving the score, but we note that analogous results hold for learning the denoiser $\eta_z(t,x)$ defined in~\eqref{eq:denoiser} by the relation $\eta_z(t, x) = -s(t, x) / \gamma(t)$. The derivation is based on a simple and exact characterization of the $\mathsf{KL}$-divergence between two transport equations or two Fokker-Planck equations with different drifts. Remarkably, we find that the presence of a diffusive term determines whether or not it is sufficient to learn the drift to control $\mathsf{KL}$. This can be seen as a generalization of the result for score-based diffusion models described in~\cite{song2021mle} to arbitrary generative models described by ODEs or SDEs. The proofs of the statements in this section are provided in Appendix~\ref{app:proof:kl}. \new{These proofs rely on manipulation of the time derivative of the $\mathsf{KL}$ divergence, which is a practice that has proven useful elsewhere in the literature \citep{vempala_wibisono_2019}.}
+
+We first characterize the $\mathsf{KL}$ divergence between two densities transported by two different continuity equations but initialized from the same initial condition:
+
+\begin{restatable}{lemma}{kltransport}
+\label{lemma:kl_transport}
+Let $\rho_0: \RR^d\rightarrow\RR_{\geq 0}$ denote a fixed base probability density function. Given two velocity fields $b_\ODE, \hat{b}_\ODE \in C^0([0,1], (C^1(\RR^d))^d)$, let the time-dependent densities $\rho: [0,1]\times \RR^d \to \RR_{\ge0}$ and $\hat \rho: [0,1]\times \RR^d \to \RR_{\ge0}$ denote the solutions to the transport equations
+\begin{equation}
+    \label{eq:2:te}
+    \begin{aligned}
+       &\partial_t\rho + \nabla \cdot(b_\ODE \rho) = 0,\qquad &&\rho(0)=\rho_0,\\ 
+       %
+       %
+       &\partial_t\hat\rho + \nabla \cdot(\hat b_\ODE\hat \rho) = 0,\qquad &&\hat \rho(0)=\rho_0.
+    \end{aligned} 
+\end{equation}
+ Then, the Kullback-Leibler divergence of $\rho(1)$ from $\hat\rho(1)$ is given by
+\begin{equation}
+    \label{eq:kl_te}
+    \KL{\rho(1)}{\hat\rho(1)} = \int_0^1 \int_{\RR^d} \left(\nabla\log\hat\rho(t,x) - \nabla\log\rho(t,x)\right)\cdot\big(\hat b_\ODE(t,x) - b_\ODE(t,x)\big)\rho(t,x) dxdt.
+\end{equation}
+\end{restatable}
+
+Lemma~\ref{lemma:kl_transport} shows that it is insufficient in general to match $\hat b$ with $b$ to obtain control on the $\mathsf{KL}$ divergence. The essence of the problem is that a small error in $\hat b - b$ does not ensure control on the Fisher divergence $\fisher{\rho(t)}{\hat\rho(t)} = \int_{\RR^d}\norm{\nabla\log\rho(t,x) - \nabla\log\hat \rho(t,x)}^2\rho(t,x)dx$, which is necessary due to the presence of $\left(\nabla\log\hat\rho - \nabla\log\rho\right)$ in~\eqref{eq:kl_te}.
+
+In the next lemma, we study the case for two Fokker-Planck equations, and highlight that the situation becomes quite different.
+\begin{restatable}{lemma}{klfpe}
+\label{lemma:kl_fpe}
+Let $\rho_0: \RR^d\rightarrow\RR_{\geq 0}$ denote a fixed base probability density function. Given two velocity fields $b_\fwd, \hat{b}_\fwd \in C^0([0,1], (C^1(\RR^d))^d)$,  let the time-dependent densities $\rho: [0,1]\times \RR^d \to \RR_{\ge0}$ and  $\hat \rho: [0,1]\times \RR^d \to \RR_{\ge0}$ denote the solutions to the Fokker-Planck equations
+\begin{equation}
+\label{eq:2:fpe}
+    \begin{aligned}
+       &\partial_t\rho + \nabla \cdot(b_\fwd \rho) = \eps\Delta \rho,\qquad &&\rho(0)=\rho_0,\\ 
+       %
+       %
+       &\partial_t\hat\rho + \nabla \cdot(\hat b_\fwd\hat \rho) = \eps \Delta \hat \rho,\qquad &&\hat \rho(0)=\rho_0.
+    \end{aligned} 
+\end{equation}
+where $\eps>0$.
+Then, the Kullback-Leibler divergence from $\rho(1)$ to $\hat\rho(1)$ is given by
+\begin{equation}
+\begin{aligned}
+    \KL{\rho(1)}{\hat\rho(1)} &= \int_0^1\int_{\RR^d} \left(\nabla\log\hat\rho(t,x) - \nabla\log\rho(t,x)\right)\cdot \left(\hat b_\fwd(t,x) - b_\fwd(t,x)\right)\rho(t,x) dxdt\\
+    &\qquad -\eps\int_0^1 \int_{\RR^d} \norm{\nabla\log\rho(t,x) - \nabla\log\hat \rho(t,x)}^2\rho(t,x)dx dt,
+\end{aligned}
+\end{equation}
+and as a result
+\begin{equation}
+\begin{aligned}
+    \KL{\rho(1)}{\hat\rho(1)} &\leq \frac{1}{4\eps}\int_0^1 \int_{\RR^d} \norm{\hat b_\fwd(t,x) - b_\fwd(t,x)}^2\rho(t,x) dxdt.
+\end{aligned}
+\end{equation}
+\end{restatable}
+Lemma~\ref{lemma:kl_fpe} shows that, unlike for transport equations, the $\mathsf{KL}$-divergence between the solutions of two Fokker-Planck equations is controlled by the error in their drifts. The diffusive term in each Fokker-Planck equation provides an additional negative term in the $\mathsf{KL}$-divergence, which eliminates the need for explicit control on the Fisher divergence. 
+
+Putting the above results together, we can state the following result, which demonstrates that the losses~\eqref{eq:obj:v} and~\eqref{eq:obj:s} control the likelihood for learned approximations to the FPE~\eqref{eq:fpe}.
+
+\begin{restatable}{theorem}{likelihoodbound}
+\label{thm:kl:bound}
+Let $\rho$ denote the solution of the Fokker-Planck equation~\eqref{eq:fpe} with $\eps(t)=\eps>0$. Given two velocity fields $\hat{b}, \hat{s} \in C^0([0,1], (C^1(\RR^d))^d)$, define 
+\begin{equation}
+    \label{eq:bhat:vhat}
+    \hat b_\fwd(t,x) = \hat b(t,x) + \eps \hat s(t,x), \qquad \hat v(t,x) = \hat b(t,x) + \gamma(t) \dot \gamma(t) \hat s(t,x)
+\end{equation} 
+where the function $\gamma$ satisfies the properties listed in Definition~\ref{def:interp}. Let $\hat \rho$ denote the solution to the Fokker-Planck equation
+\begin{equation}
+     \partial_t \hat \rho + \nabla \cdot (\hat b_\fwd\hat \rho) = \eps  \Delta \hat \rho, \qquad \hat \rho(0) = \rho_0.
+\end{equation}
+Then,
+\begin{equation}
+\label{eq:bound:kl}
+    \KL{\rho_1}{\hat{\rho}(1)} \leq \frac{1}{2\eps}\left(\mathcal{L}_b[\hat{b}] - \min_{\hat{b}}\mathcal{L}_b[\hat{b}]\right)  + \frac{\eps}{2}\left(\mathcal{L}_s[\hat{s}] - \min_{\hat{s}}\mathcal{L}_s[\hat{s}]\right),
+\end{equation}
+where $\mathcal{L}_b[\hat{b}]$ and $\mathcal{L}_s[\hat{s}]$ are the objective functions defined in~\eqref{eq:obj:v} and~\eqref{eq:obj:s}, and 
+\begin{equation}
+    \KL{\rho_1}{\hat\rho(1)} \leq \frac{1}{2\eps}\left(\mathcal{L}_{v}[\hat{v}] - \min_{\hat{v}}\mathcal{L}_{v}[\hat{v}]\right) + \frac{\sup_{t\in [0 ,1]}(\gamma(t)\dot\gamma(t) - \epsilon)^2}{2\eps}\left(\mathcal{L}_{s}[\hat{s}] - \min_{\hat{v}}\mathcal{L}_{s}[\hat{s}]\right).
+\end{equation}
+where $\mathcal{L}_v[\hat{v}]$ is the objective function defined in~\eqref{eq:obj:vv}.
+\end{restatable}
+
+\begin{remark}[Generative modeling]
+The above results have practical ramifications for generative modeling. In particular, they show that minimizing either the losses~\eqref{eq:obj:v} and~\eqref{eq:obj:s} or~\eqref{eq:obj:vv} and~\eqref{eq:obj:s} maximize the likelihood of the stochastic generative model
+\begin{equation}
+   d\hat{X}_t^\fwd = \left(\hat{b}(t, \hat{X}_t^\fwd) + \epsilon\hat{s}(t, \hat{X}_t^\fwd)\right)dt + \sqrt{2\eps}dW_t,
+\end{equation}
+but that minimizing the objective~\eqref{eq:obj:v} is insufficient in general to maximize the likelihood of the deterministic generative model
+\begin{equation}
+   \dot{\hat{X}}_t = \hat{b}(t, \hat{X}_t).
+\end{equation}
+Moreover, they show that, when learning $\hat{b}$ and $\hat{s}$, the choice of $\eps$ that minimizes the upper bound is given by
+\begin{equation}
+\label{eq:optimal:eps}
+    \eps^* = \left(\frac{\mathcal{L}_b[\hat{b}] - \min_{\hat{b}}\mathcal{L}_b[\hat{b}]}{\mathcal{L}_s[\hat{s}] - \min_{\hat{s}}\mathcal{L}_s[\hat{s}]}\right)^{1/2},
+\end{equation}
+so that $\eps^* > 1$ if the score is learned to higher accuracy than $\hat{b}$ and  $\eps^*<1$ in the opposite situation. Note that \eqref{eq:optimal:eps} suggests to take $\eps= 0$ if $\hat{b}$ is learned perfectly but $\hat s$ is not, and send $\eps \to \infty$ in the opposite situation. While taking $\eps=0$ is achievable in practice and leads to the ODE~\eqref{eq:ode:1}, taking $\eps\to\infty$ is not, as increasing $\eps$ increases the expense of the numerical integration in~\eqref{eq:sde:1} and~\eqref{eq:sde:R}.
+\end{remark}
+
+\subsection{Density estimation and cross-entropy calculation}
+\label{sec:density}
+
+It is well-known that the solution of the TE~\eqref{eq:transport} can be expressed in terms of the solution to the probability flow ODE~\eqref{eq:ode:1}; for completeness, we now recall this fact:
+\begin{restatable}{lemma}{TEs}
+    \label{lem:tesol}
+    Given the velocity field $\hat b_\ODE  \in C^0([0,1], (C^1(\RR^d))^d)$, let $\hat\rho$ satisfy the transport equation
+\begin{equation}
+    \label{eq:TE:hat}
+    \partial_t \hat\rho + \nabla \cdot(\hat b \hat \rho) = 0,
+\end{equation}
+and let $X_{s,t}(x)$ solve the ODE
+\begin{equation}
+    \label{eq:ode:st}
+    \frac{d}{dt} X_{s,t}(x) = b(t,X_{s,t}(x)), \qquad X{_{s,s}(x) = x, \qquad t,s \in [0,1]}
+\end{equation}
+Then, given the PDFs $\rho_0$ and $\rho_1$:
+\begin{enumerate}[leftmargin=0.15in]
+\item The solution to~\eqref{eq:TE:hat} for the initial condition $\hat \rho(0) = \rho_0$ is given at any time $t\in[0,1]$ by 
+\begin{equation}
+    \label{eq:TE:hat:s:f}
+    \hat \rho(t,x) = \exp\left( - \int_0^t \nabla \cdot b_{\ODE}(\tau, X_{t,\tau}(x)) d\tau \right) \rho_0( X_{t,0}(x))
+\end{equation}
+\item The solution to~\eqref{eq:TE:hat} for the final condition $\hat \rho(1) = \rho_1$ is given at any time $t\in[0,1]$ by 
+\begin{equation}
+    \label{eq:TE:hat:s:b}
+    \hat \rho(t,x) = \exp\left(  \int_t^1 \nabla \cdot b_{\ODE}(\tau, X_{t,\tau}(x)) d\tau \right) \rho_1( X_{t,1}(x))
+\end{equation}
+\end{enumerate}
+
+\end{restatable}
+The proof of Lemma~\ref{lem:tesol} can be found in Appendix~\ref{app:prrof:de}.  Interestingly, we can obtain a similar result for the solution of the forward and backward FPEs in~\eqref{eq:fpe} and~\eqref{eq:fpe:tr}. These results make use of auxiliary forward and backward SDEs in which the roles of the forward and backward drifts are switched:
+
+\begin{restatable}{theorem}{FK}
+    \label{prop:sde:rho}
+    Given $\eps>0$ and two velocity fields $\hat b_\ODE, \hat s \in C^0([0,1], (C^1(\RR^d))^d)$, define
+\begin{equation}
+    \label{eq:hatb:hats}
+    \hat b_\fwd(t,x) = \hat b(t,x) + \eps \hat s(t,x), \qquad \hat b_\rev(t,x) = \hat b(t,x) - \eps \hat s(t,x),
+\end{equation}
+and let $Y^\fwd_t$ and $Y^\rev_t$ denote solutions of the following forward and backward SDEs:
+\begin{equation}
+    \label{eq:sde:y:1}
+    dY^\fwd_t = b_\rev(t,Y^\fwd_t)dt  + \seps  dW_t,
+\end{equation}
+to be solved forward in time from the initial condition~$Y^\fwd_{t=0}=x$ independent of $W$; and 
+\begin{equation}
+    \label{eq:sde:y:R}
+    dY^\rev_t = b_\fwd(t,Y^\rev_t)dt  + \seps  dW^\rev_t, \quad W_t^\rev = -W_{1-t},
+\end{equation}
+to be solved backwards in time from the final condition~$Y^\rev_{t=1}=x$ independent of $W^\rev$. Then, given the densities $\rho_0$ and $\rho_1$:
+    \begin{enumerate}[leftmargin=0.15in]
+\item The solution to the forward FPE
+\begin{equation}
+    \label{eq:fpe:f:hat}
+    \partial_t \hat \rho_\fwd + \nabla \cdot (\hat b_\fwd \hat \rho_\fwd ) = \eps \Delta \hat \rho_\fwd , \qquad \hat \rho_\fwd (0) = \rho_0,
+\end{equation}
+can be expressed at $t=1$ as
+\begin{equation}
+    \label{eq:fk}
+    \hat \rho_\fwd (1,x) = \EE_\rev^x \left(\exp\left(- \int_0^1\nabla \cdot \hat b_\fwd(t, Y^\rev_t) dt\right)  \rho_0(Y_{t=0}^\rev)\right),
+\end{equation}
+where $\EE_\rev^x$ denotes expectation on the path of $Y_t^\rev$ conditional on the event $Y_{t=1}^\rev = x$.
+
+\item The solution to the backward FPE
+\begin{equation}
+    \label{eq:fpe:r:hat}
+    \partial_t \hat \rho_\rev+ \nabla \cdot (\hat b_\rev \hat \rho_\rev) = -\eps \Delta \hat \rho_\rev, \qquad \hat \rho_\rev(1) = \rho_1,
+\end{equation}
+can be expressed at any $t=0$ as 
+\begin{equation}
+    \label{eq:fk:rev}
+    \hat \rho_\rev(0, x) = \EE_\fwd^x \left(\exp\left( \int_0^1\nabla \cdot \hat b_\rev(t, Y^\fwd_t)  dt\right)\rho_1(Y^\fwd_{t=1})\right),
+\end{equation}
+where $\EE_\fwd^x$ denotes expectation on the path of $Y^\fwd_t$ conditional on $Y^\fwd_{t=0} = x$.
+\end{enumerate}
+\end{restatable}
+
+The proof of Theorem~\ref{prop:sde:rho} can be found in Appendix~\ref{app:prrof:de}.  Note that to generate  data from either $\hat \rho_\fwd(1)$ or $\hat \rho_\rev(0)$ assuming that we can sample exactly the PDF  at the other end, i.e. $\rho_0$ and $\rho_1$ respectively,  we would still rely on the equivalent of the forward and backward  SDE in~\eqref{eq:sde:1} and~\eqref{eq:sde:R}, now used with the approximate drifts in~\eqref{eq:hatb:hats}, i.e.
+
+\begin{equation}
+    \label{eq:sde:h:1}
+    d\hat X^\fwd_t = \hat b_\fwd(t,\hat X^\fwd_t)dt  + \seps  dW_t,
+\end{equation}
+and 
+\begin{equation}
+    \label{eq:sde:h:R}
+    d\hat X^\rev_t = \hat b_\rev(t,\hat X^\rev_t)dt  + \seps  dW^\rev_t, \quad W_t^\rev = -W_{1-t},
+\end{equation}
+If we solve \eqref{eq:sde:h:1} forward in time from initial data $\hat X^\fwd_{t=0} \sim \rho_0$, we then have $\hat X^\fwd_{t=1} \sim \hat \rho_\fwd(1)$ where $\hat \rho_\fwd$ is the solution to the forward FPE~\eqref{eq:fpe:f:hat}. Similarly If we solve \eqref{eq:sde:h:R} backward in time from final data $\hat X^\rev_{t=1} \sim \rho_1$, we then have $\hat X^\rev_{t=0} \sim \hat \rho_\rev(0)$ where $\hat \rho_\rev$ is the solution to the backward FPE~\eqref{eq:fpe:r:hat}. 
+
+
+The results of Lemma~\ref{lem:tesol} and Theorem~\ref{prop:sde:rho} can be used to test the quality of  samples generated by either the ODE~\eqref{eq:ode:1} or the forward and backward SDEs~\eqref{eq:sde:1} and~\eqref{eq:sde:R}. In particular, the following two results are direct consequences of Lemma~\ref{lem:tesol} and Theorem~\ref{prop:sde:rho}, respectively:
+
+\begin{restatable}{corollary}{crossentode}
+    \label{prop:ce:ode}
+    Under the same conditions as Lemma~\ref{lem:tesol}, if $\hat \rho(0) = \rho_0$, the cross-entropy of $\hat \rho(1)$ relative to $\rho_1$ is given by
+\begin{equation}
+    \label{eq:ce:ode}
+    \begin{aligned}
+    \cross{\rho_1}{\hat\rho(1)} &= - \int_{\RR^d} \log \hat\rho(1,x) \rho_1(x) dx\\
+   & = \EE_1 \int_0^1 \nabla \cdot b_{\ODE}(\tau, X_{1,\tau}(x_1)) d\tau - \EE_1 \log \rho_0( X_{1,0}(x_1))
+   \end{aligned}
+\end{equation}
+where $\EE_1$ denotes an expectation over $x_1\sim\rho_1$. Similarly, if $\hat \rho(1) = \rho_1$, the cross-entropy of $\hat \rho(0)$ relative to $\rho_0$ is given by
+\begin{equation}
+    \label{eq:ce:ode:r}
+    \begin{aligned}
+    \cross{\rho_0}{\hat\rho(0)} &= - \int_{\RR^d} \log \hat\rho(0,x) \rho_0(x) dx\\
+   & = -\EE_0 \int_0^1 \nabla \cdot b_{\ODE}(\tau, X_{0,\tau}(x_0)) d\tau - \EE_0 \log \rho_1( X_{0,1}(x_0))
+   \end{aligned}
+\end{equation}
+ where $\EE_0$ denotes an expectation over $x_0\sim\rho_0$.
+\end{restatable} 
+
+\begin{restatable}{corollary}{crossentsde}
+    \label{prop:ce:sde}
+    Under the same conditions as Theorem~\ref{prop:sde:rho}, the cross-entropy of $\hat \rho_\fwd(1)$ relative to $\rho_1$ is given by
+\begin{equation}
+    \label{eq:ce:sde}
+    \begin{aligned}
+    \cross{\rho_1}{\hat \rho_\fwd(1)} &= - \int_{\RR^d} \log \hat \rho_\fwd(1,x) \rho_1(x) dx\\
+   & = -\EE_1 \log \EE_\rev^{x_1} \left(\exp\left(- \int_0^1\nabla \cdot b_\fwd(t, Y^\rev_t) dt\right)  \rho_0(Y_{t=0}^\rev)\right),
+   \end{aligned}
+\end{equation}
+where  $\EE_\rev^{x_1}$ denotes an expectation over $Y^\rev_t$ conditioned on the event $Y^\rev_{t=1}=x_1$, and $\EE_1$ denotes an expectation over $x_1\sim\rho_1$.
+Similarly, the cross-entropy of $\hat \rho_\rev(0)$ relative to $\rho_0$ is given by
+\begin{equation}
+    \label{eq:ce:sde:r}
+    \begin{aligned}
+    \cross{\rho_0}{\hat \rho_\rev(0)} &= - \int_{\RR^d} \log \hat \rho_\rev(0,x) \rho_0(x) dx\\
+   & = -\EE_0 \log \EE_\fwd^{x_0} \left(\exp\left( \int_0^1\nabla \cdot b_\rev(t, Y^\fwd_t)  dt\right)\rho_1(Y^\fwd_{t=1})\right),
+   \end{aligned}
+\end{equation}
+where $\EE_\rev^{x_0}$ denotes an expectation over $Y^\fwd_t$ conditioned on the event $Y^\fwd_{t=0}=x_0$, and $\EE_0$ denotes an expectation over $x_0\sim\rho_0$.
+  
+\end{restatable}
+
+If in~\eqref{eq:ce:ode}, \eqref{eq:ce:ode:r}, \eqref{eq:ce:sde}, and \eqref{eq:ce:sde:r} we approximate the expectations $\EE_0$ and $\EE_1$ over $\rho_0$ and $\rho_1$ by empirical expectations over  the available data, these equations allow us to cross-validate different approximations of $\hat b$ and $\hat s$, as well as to compare the cross-entropies of densities evolved by the TE~\eqref{eq:TE:hat} with those of the forward and backward FPEs~\eqref{eq:fpe:f:hat} and~\eqref{eq:fpe:r:hat}.
+
+\begin{remark}
+    When using  \eqref{eq:ce:sde} and \eqref{eq:ce:sde:r} in practice, taking the $\log$ of the expectations $\EE_\rev^{x_1}$ and $\EE_\fwd^{x_0}$ may create difficulties, such as when using Hutchinson's trace estimator to compute the divergence of $b_\fwd$ or $b_\rev$, which will introduce a bias. One way to remove this bias is to use Jensen's inequality, which leads to the upper bounds
+\begin{equation}
+    \label{eq:ce:sde:bound}
+    \begin{aligned}
+    \cross{\rho_1}{\hat \rho_\fwd(1)} \le  \int_0^1 \EE_1 \EE_\rev^{x_1}\nabla \cdot b_\fwd(t, Y^\rev_t) dt - \EE_1 \EE_\rev^{x_1} \log  \rho_0(Y_{t=0}^\rev),
+   \end{aligned}
+\end{equation}
+and
+\begin{equation}
+    \label{eq:ce:sde:r:bound}
+    \begin{aligned}
+    \cross{\rho_0}{\hat \rho_\rev(0)} \le -\EE_0 \EE_\fwd^{x_0} \int_0^1\nabla \cdot b_\rev(t, Y^\fwd_t)  dt- \EE_0 \EE_\fwd^{x_0} \log \rho_1(Y^\fwd_{t=1}).
+   \end{aligned}
+\end{equation}
+However, these bounds are not sharp in general -- in fact, using calculations similar to the one presented in the proof of Theorem~\ref{prop:ce:sde}, we can derive exact expressions that capture precisely what is lost when applying Jensen's inequality:
+\begin{equation}
+    \label{eq:ce:sde:exact}
+    \begin{aligned}
+    \cross{\rho_1}{\hat \rho_\fwd(1)}=   \int_0^1 \EE_1 \EE_\rev^{x_1}\left(\nabla \cdot b_\fwd(t, Y^\rev_t) -\eps |\nabla \log \hat \rho_\fwd(t,Y_t^\rev)|^2\right)  dt - \EE_1 \EE_\rev^{x_1} \log  \rho_0(Y_{t=0}^\rev),
+   \end{aligned}
+\end{equation}
+and
+\begin{equation}
+    \label{eq:ce:sde:r:exact}
+    \begin{aligned}
+    \cross{\rho_0}{\hat \rho_\rev(0)} = -\EE_0 \EE_\fwd^{x_0} \int_0^1\left(\nabla \cdot b_\rev(t, Y^\fwd_t) +\eps |\nabla \log \hat \rho_\rev(t,Y_t^\fwd)|^2\right) dt- \EE_0 \EE_\fwd^{x_0} \log \rho_1(Y^\fwd_{t=1}).
+   \end{aligned}
+\end{equation}
+Unfortunately, since $\nabla \log \hat\rho_\fwd \not= \hat s$ and $\nabla \log \hat\rho_\rev \not= \hat s$ in general due to approximation errors, we do not know how to estimate the extra terms on the right-hand side of~\eqref{eq:ce:sde:exact} and \eqref{eq:ce:sde:r:exact}. One possibility is to use~$\hat s$ as a proxy for $\nabla \log \hat{\rho}_\fwd$ and $\nabla \log \hat\rho_\rev$, which may be useful in practice, but this approximation is uncontrolled in general.
+\end{remark}

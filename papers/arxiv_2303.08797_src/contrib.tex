@@ -1,0 +1,59 @@
+The approach introduced here is a versatile way to build generative models that unifies and extends many existing algorithms. In Sec.~\ref{sec:theo}, we develop the framework in full generality, where we emphasize the following key contributions:
+\begin{itemize}[leftmargin=0.2in]
+    \item We prove that the stochastic interpolant defined in Section~\ref{sec:si:gm} has a distribution that is absolutely continuous with respect to the Lebesgue measure on $\RR^d$, and that its density $\rho(t)$ satisfies a first-order transport equation (TE) as well as a family of forward and backward Fokker-Planck equations (FPEs) with tunable diffusion coefficients.
+    %
+    \item We show how the stochastic interpolant can be used to learn the drift coefficients that enter the TE and the FPEs. 
+    %
+    We characterize these coefficients as the minimizers of simple quadratic objective functions given in Section~\ref{sec:cont:eq}. 
+    %
+    We introduce a new objective for the score $\nabla\log\rho(t)$ of the interpolant density, as well as an objective function for learning a denoiser $\eta_z$, which we relate to the score.
+    %
+    \item In Section~\ref{sec:generative}, we derive ordinary and stochastic differential equations associated with the TE and FPEs that lead to deterministic and stochastic generative models.
+    %
+    In Section~\ref{sec:likelihood_bounds}, we show that regressing the drift for SDE-based models controls the likelihood, but that regressing the drift alone is not sufficient for ODE-based models, which must also minimize a Fisher divergence. We show how to optimally tune the diffusion coefficient to maximize the likelihood for SDEs.
+    %
+    \item In Section~\ref{sec:density}, we develop a general formula to evaluate the likelihood of SDE-based generative models that serves as a natural counterpart to the continuous change-of-variables formula commonly used to compute the likelihood of ODE-based models. In addition, we give formulas to estimate the cross-entropy.
+\end{itemize}
+
+In Section~\ref{sec:generalization}, we discuss  instantiations of the stochastic interpolant method. 
+%
+In Section~\ref{sec:sb} we first show that interpolants are equivalent to a class of stochastic bridges, but that they avoid the need for Doob's $h$-transform, which is generically unknown; we show that this simplifies the construction of a broad class of generative models.
+%
+In Section~\ref{sec:onesided}, we define the \textit{one-sided interpolant}, which corresponds to the conventional setting in which the base $\rho_0$ is taken to be a Gaussian.
+%
+With a Gaussian base, several aspects of the interpolant simplify, and we detail the corresponding objective functions.
+%
+In Section~\ref{sec:mirror}, we introduce a \textit{mirror interpolant} in which the base $\rho_0$ and the target $\rho_1$ are identical.
+%
+Finally, in Section~\ref{sec:sb}, we show how the interpolant framework leads to a natural formulation of the Schr\"odinger bridge problem between two densities.
+
+In Section~\ref{sec:gen}, we discuss a special case in which the interpolant is spatially linear in $x_0$ and $x_1$. 
+%
+In this case, the velocity field can be factorized, which we show in Section~\ref{sec:factor} leads to a simpler learning problem. 
+%
+We detail specific choices of linear interpolants in Section~\ref{sec:specific:a:b:c}, and in Section~\ref{sec:impact:gam} we illustrate  how these choices influence the performance of the resulting generative model, with a particular focus on the role of the latent variable and the diffusion coefficient. 
+%
+For exposition, we focus on Gaussian mixture densities, for which the drift coefficients can be computed analytically. 
+%
+We provide the resulting formula in Appendix~\ref{app:Gauss:mixt}. 
+%
+Finally, in Section~\ref{sec:spatil:lin:os}, we discuss the case of spatially linear one-sided interpolants. 
+ 
+
+In Section~\ref{sec:connection}, we formalize the connection between stochastic interpolants and related classes of generative models.
+%
+In Section~\ref{sec:SBDM}, we show that score-based diffusion models can be re-written as one-sided interpolants after a reparameterization of time; we highlight how this approach eliminates singularities that appear when naively compressing score-based diffusion onto a finite-time interval.
+%
+In Section~\ref{sec:denoiser}, we show how interpolants can be used to derive the Bayes-optimal estimator for a denoiser, and we show how this approach can be iterated to create a generative model. 
+%
+In Section~\ref{sec:rect}, we consider the possibility of rectifying the flow map of a learned generative model.
+%
+We show that the rectification procedure does not change the underlying generative model, though it may change the time-dependent density of the interpolant.
+
+In Section~\ref{sec:practical}, we provide the details of practical algorithms associated with the mathematical results presented above. 
+%
+In Section~\ref{sec:learning}, we describe how to numerically estimate the objectives given empirical datasets from the base and the target.
+%
+In Section~\ref{sec:sampling}, we complement this discussion on \textit{learning} with algorithms for \textit{sampling} with the ODE or an SDE. 
+
+We provide numerical demonstrations in line with these recommendations in Section~\ref{sec:numerics}, and we conclude with some remarks in Section~\ref{sec:conc}.

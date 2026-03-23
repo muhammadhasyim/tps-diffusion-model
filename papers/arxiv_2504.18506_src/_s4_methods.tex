@@ -1,0 +1,34 @@
+\vspace{-5pt}
+\section{Repurposing Atomistic Generative Models via Action Minimization}
+\label{sec:main_method}
+We now introduce our OM optimization approach to produce high probability transition paths between atomistic structures using pre-trained generative models. Given a pre-trained generative model with a fixed score function $\mathbf{s}_{\theta^*}$, and two atomistic configurations, $\mathbf{x}^{(0)}, \mathbf{x}^{(L)} \in \mathbb{R}^{N_p \times d}$ where $\mathbf{x}^{(0)} \in \mathcal{A}, \mathbf{x}^{(L)} \in \mathcal{B}$, we aim to sample a transition path $\mathbf{X} = \left\{ \mathbf{x}^{(i)} \right\}_{i \in \left[0, L \right]}$ consisting of $L$ discrete steps. Our core inductive bias is to interpret candidate paths as realizations of the denoise-noise SDE in \eqref{eq:latent_sde_def}, enabling tractable computation and optimization of path log-likelihoods via the OM action. Our approach proceeds in three primary steps: 1) computing an initial guess path, 2) performing OM optimization, and (in some cases) 3) decoding the optimized path back to the configurational space $\Omega$. Algorithm \ref{alg:om_optimization} summarizes the procedure without the decoding step.
+\vspace{-5pt}
+\paragraph{Computing an initial guess path.}
+The choice of initial path connecting the endpoints $\mathbf{x}^{(0)} \in \mathcal{A}$ and $\mathbf{x}^{(L)} \in \mathcal{B}$ is crucial in determining the quality of the subsequently optimized path. Na\"ive linear interpolations in configurational space are likely unphysical, since plausible atomistic structures typically lie on a highly non-convex, low-dimensional manifold of $\Omega$. Instead, we opt to linearly interpolate at a \textit{latent} level $\tau_\text{initial}$ of our pre-trained generative model, which is known to produce samples closer to the data manifold \citep{ho2020denoising}. After interpolation, we can either (1) decode the interpolated path back into configurational space and subsequently optimize the OM action there, or (2) directly optimize the OM action at the latent level $\tau_{\text{initial}}$. Both are justified, since the proposed dynamics in \eqref{eq:latent_sde_def} are valid for any $\tau$. See Appendix \ref{sec:om_details} for complete details. 
+\vspace{-5pt}
+\paragraph{Optimization of the OM action.}
+Starting from the initial guess, we find paths which have high probability (low action) under the SDE in \eqref{eq:latent_sde_def} induced by the generative model. The optimization problem simply becomes,
+\vspace{-3 pt}
+\begin{equation}
+\label{eq:action_minimization_problem_fixed_endpoints}
+    \mathbf{X}^* = \argmin_{\mathbf{X} = \left\{ \mathbf{x}^{(i)} \right\}_{i \in \left[0, L \right]}} \ S[\mathbf{X}; \theta^*],
+\end{equation}
+where $S[\cdot ; \theta^*]$ is the generative model action in \eqref{eq:generative_om_action} (computed with the frozen, pre-trained score $\mathbf{s}_{\theta^*}$), and $\xx^{(0)}$ and $\xx^{(L)}$ are kept fixed. We approximate this minimum via gradient descent on the path until the action is converged. Since $S[\cdot;\theta^*]$ is a discretized integral, the entire trajectory is optimized in parallel, which is amenable to multi-device acceleration. In line with previous work \cite{arts2023two}, we find that a small, nonzero value of $\tau_\text{opt}$ leads to better alignment with the true forces, and thus treat it as a hyperparameter (see Appendix \ref{sec:om_details}). To accelerate computation of the divergence term in the OM action, we use the Hutchinson estimator \cite{hutchinson1989stochastic}(see Appendix \ref{sec:om_details} for details).
+\vspace{-10pt}
+\paragraph{Decoding back to configurational space.}
+If OM-optimization was performed at a non-zero latent time $\tau_{\text{initial}}$, we decode the final path, obtained after $K$ iterations of gradient descent, back to the configurational space. If optimization was performed in configurational space (i.e., decoding was already done in the first step), then this step is skipped.
+\begin{algorithm}[t]
+\caption{Onsager-Machlup Transition Path Optimization with Generative Models}
+\begin{algorithmic}[1]
+\label{alg:om_optimization}
+    \STATE \textbf{Input:}
+    \STATE Optimization time $\tau_{\text{opt}}$
+    \STATE Generative model with time-conditional score $\mb{s}_{\theta^*}(\cdot, \tau_\text{opt})$
+    \STATE Two atomistic configurations $\xx^{(0)} \in \mathcal{A} \subset \mathbb{R}^{N_p \times d}$, $\xx^{(L)} \in \mathcal{B} \subset \mathbb{R}^{N_p \times d}$
+    \STATE \textbf{Compute} initial guess $\mathbf{X} = \left \{\xx^{(0)},\dots,\xx^{(L)} \right \} = \text{InitialGuess}(\xx^{(0)}, \xx^{(L)}, \tau_{\text{initial}})$ (Algorithm \ref{alg:gen_initial_guess})
+    \WHILE{not converged}
+        \STATE \textbf{Compute} the OM action, $S[\mathbf{X}; \theta^*]$, with the learned vector field $\mb{s}_{\theta^*}(\cdot, \tau_{\text{opt}})$, using \eqref{eq:generative_om_action}.
+        \STATE \textbf{Update} $\mathbf{X} \leftarrow \text{optimizer}(\mathbf{X}, \nabla_\mathbf{X} S[\mathbf{X}; \theta^*])$ (keeping the endpoints $\xx^{(0)}, \xx^{(L)}$ fixed)
+    \ENDWHILE
+\end{algorithmic}
+\end{algorithm}

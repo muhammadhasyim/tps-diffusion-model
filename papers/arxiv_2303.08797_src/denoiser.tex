@@ -1,0 +1,48 @@
+Consider the spatially-linear one-sided stochastic interpolant defined in~\eqref{eq:interp:os:lin}. By solving this equation for $x_1$, we obtain
+\begin{equation}
+    \label{eq:x1:xt}
+    x_1 = \beta^{-1}(t) \left(x^\OSLIN_t - \alpha(t) z \right )\qquad t \in (0,1].
+\end{equation}
+Taking a conditional expectation at fixed $x^\OSLIN_t$ and using~\eqref{eq:eta:os} implies that 
+\begin{equation}
+    \label{eq:identity:0}
+    \EE (x_1| x^\OSLIN_t ) = \eta^\OS_1(t,x^\OSLIN_t) = \beta^{-1}(t) \left(x^\OSLIN_t - \alpha(t) \eta^\OS_z(t,x^\OSLIN_t) \right )\qquad t \in (0,1]
+\end{equation}
+while trivially $\EE (x_1| x^\OSLIN_{t=0} ) = \EE[x_1]$ since $x^\OSLIN_{t=0} = z$. This expression is commonly used in denoising methods~\citep{simoncelli1996, kadkhodaie2021solving}, and it is Stein’s unbiased risk estimator (SURE) for $x_1$ given the noisy information in $x^\OSLIN_t$~\cite{stein1981estimation}. 
+%
+Rather than considering the conditional expectation of $x_1$, we can consider an analogous quantity for $x_s^{\OSLIN}$ for any $s \in [0, 1]$; this leads to the following result.
+\begin{lemma}[SURE]
+    \label{lem:two:t:denoise}
+ For  $s\in [0,1]$, we have
+ \begin{equation}
+    \label{eq:identity:1}
+    \EE (x^\OSLIN_s| x^\OSLIN_t) = \frac{\beta(s)}{\beta(t)} x^\OSLIN_t + \left( \alpha(s) - \frac{\alpha(t)\beta(s)}{\beta(t)}\right)  \eta^\OS_z(t,x^\OSLIN_t) \qquad t \in (0,1]
+\end{equation}
+and $\EE (x^\OSLIN_s| x^\OSLIN_{t=0}) = \alpha(s) x^\OSLIN_{t=0} + \beta(s) \EE[x_1]$.
+\end{lemma}
+
+\begin{proof}
+    \eqref{eq:identity:1} follows from inserting~\eqref{eq:x1:xt} in the expression for $x^\OSLIN_s$ and taking the conditional expectation using the definition of $\eta_1^\OS$ and $\eta_z^\OS$ in~\eqref{eq:eta:os}. $\EE (x^\OSLIN_s| x^\OSLIN_{t=0}) = \alpha(s) x^\OSLIN_{t=0} + \beta(s) \EE[x_1]$ follows from $x^\OSLIN_{t=0} = z$ together with~\eqref{eq:x1:xt}. 
+\end{proof}
+
+At this stage, equations~\eqref{eq:x1:xt} and \eqref{eq:identity:1} cannot be used as generative models: the random variable $\EE (x_1| x^\OSLIN_t ) $ is not a sample of $\rho_1$, and the random variable  $\EE (x^\OSLIN_s| x^\OSLIN_t) $ is not a sample from $\rho(s)$, the density of $x^\OSLIN_s$. 
+%
+However, the following result shows that if we iterate upon formula~\eqref{eq:identity:1} by taking infinitesimal steps, we obtain a generative model consistent with the probability flow equation~\eqref{eq:ode:1} associated with~$x^\OSLIN_t$.
+\begin{restatable}{theorem}{dn}
+    \label{thm:denoise:iter}
+    Let $t_j=j/N$ with $j\in\{1,\ldots, N\}$, set $X^\DEN_{1} = z$, and define for $j=1,\ldots, N-1$,
+\begin{equation}
+    \label{eq:iterate}
+    X^\DEN_{{j+1}} = \frac{\beta(t_{j+1})}{\beta(t_j)} X^\DEN_{j}+ \left( \alpha(t_{j+1}) - \frac{\alpha(t_j)\beta(t_{j+1})}{\beta(t_j)}\right)  \eta^\OS_z(t_{j},X^\DEN_{j}) .
+\end{equation}
+Then,~\eqref{eq:iterate} is a consistent integration scheme for the probability flow equation~\eqref{eq:ode:1} associated with the velocity field~\eqref{eq:b:ode:os:lin} expressed as in~\eqref{eq:b:os:solved}. 
+%
+That is, if $N,j\to\infty$ with $j/N \to t\in[0,1]$, then $X^\DEN_j \to X_t$ where
+\begin{equation}
+    \label{eq:iterate:lim}
+    \dot X_t  =b(t,X_t) =  \frac{\dot \beta(t)}{\beta(t)} X_t + \left( \dot \alpha(t) - \frac{\alpha(t) \dot\beta(t)}{\beta(t)}\right) \eta^\OS_z(t,X_t), \quad X_{t=0} = z.
+\end{equation}
+In particular, if $z\sim {\sf N}(0,\Id)$, then $X^\DEN_N \to x_1 \sim \rho_1$ in this limit.
+\end{restatable}
+
+The proof of this theorem is given in Appendix~\ref{app:denoise}, and proceeds by Taylor expansion of the right-hand side of \eqref{eq:iterate}.

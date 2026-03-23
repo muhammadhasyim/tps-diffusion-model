@@ -1,0 +1,102 @@
+\documentclass[twoside,11pt]{article}
+\usepackage{jmlr2e}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{subcaption}
+\usepackage{wrapfig}
+\usepackage{adjustbox}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{multicol}
+\usepackage{amsmath}
+\usepackage{textcomp}  % Provides \textquotesingle for TeX Live 2019 compatibility
+\usepackage{pifont}
+\usepackage{setspace}
+\usepackage{microtype}
+\usepackage{lastpage}
+\usepackage{thmtools}
+\usepackage{overpic}
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{array}
+\usepackage{makecell}
+
+\input{commands}
+
+
+\usepackage{lastpage}
+\jmlrheading{26}{2025}{1-\pageref{LastPage}}{12/23; Revised
+9/25}{9/25}{23-1605}{Michael S. Albergo, Nicholas M. Boffi, Eric Vanden-Eijnden}
+\ShortHeadings{Stochastic Interpolants}{Albergo, Boffi, and Vanden-Eijnden}
+\firstpageno{1}
+
+
+\begin{document}
+
+
+\title{Stochastic Interpolants:\\ A Unifying Framework for Flows and Diffusions}
+
+\author{%
+	\name Michael S.~Albergo$^*$ \email albergo@nyu.edu \\
+	\addr Center for Cosmology and Particle Physics\\
+	New York University\\
+	New York, NY 10012, USA
+	\AND
+	\name Nicholas M.~Boffi\thanks{Author ordering alphabetical; authors contributed equally.} \email boffi@cims.nyu.edu \\
+	\addr Courant Institute of Mathematical Sciences\\
+	New York University\\
+	New York, NY 10012, USA
+	\AND
+	\name Eric Vanden-Eijnden \email eve2@cims.nyu.edu \\
+	\addr Courant Institute of Mathematical Sciences\\
+	New York University\\
+	New York, NY 10012, USA
+}
+\editor{Maxim Raginsky}
+\maketitle
+
+\begin{abstract}\input{abstr}\end{abstract}
+
+\tableofcontents
+
+\section{Introduction}
+\input{intro}
+
+\section{Stochastic interpolant framework}
+\label{sec:theo}
+\input{method}
+
+\section{Instantiations and extensions}
+\label{sec:generalization}
+\input{generalizations}
+
+\section{Spatially linear interpolants}
+\label{sec:gen}
+\input{design}
+
+\section{Connections with other methods}
+\label{sec:connection}
+\input{connections}
+
+\section{Algorithmic aspects}
+\label{sec:practical}
+\input{practical}
+
+\section{Numerical results}
+\label{sec:numerics}
+\input{numerics}
+
+\section{Conclusion}
+\label{sec:conc}
+\input{conclusion}
+
+\section*{Acknowledgements}
+\label{sec:ack}
+\input{ack}
+
+\appendix
+\input{app}
+
+\bibliography{refs}
+
+\end{document}

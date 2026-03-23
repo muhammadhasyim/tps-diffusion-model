@@ -1,0 +1,229 @@
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.65\linewidth]{figs/big-comparison-paper.pdf}
+    \caption{\textbf{The effects of $\gamma(t)$ and $\epsilon$ on sample quality: qualitative comparison.} Kernel density estimates of $\hat\rho(1)$ for models with different choices of $\gamma$ and $\epsilon$.  Sampling with $\epsilon = 0$ corresponds to using the probability flow with the learned drift~$\hat b = \hat v - \gamma\dot \gamma \hat s$, whereas sampling with $\epsilon >0 $ corresponds to using the SDE with  the learned drift~$\hat b$ and score~$\hat s$. We find empirically that SDE sampling is generically better than ODE sampling for this target density, though the gap is smallest for the probability flow specified with $\gamma(t) = \sqrt{t(1-t)}$, in agreement with the Remark~\ref{rem:endpoints} regarding the influence of $\gamma$ on $b$ at the endpoints. 
+    %
+    The SDE performs well at any noise level, though numerically integrating it for higher $\epsilon$ requires a smaller step size.}
+    \label{fig:ode-sde-big}
+\end{figure}
+
+So far, we have been focused on the impact of $\alpha$, $\beta$, and $\gamma$ in~\eqref{eq:lin:interp} on the density $\rho(t)$, which we illustrated analytically. 
+%
+In this section, we study examples where the drift coefficients must be learned over parametric function classes. 
+%
+In particular, we explore numerically the tradeoffs between generative models based on ODEs and SDEs, as well as the various design choices introduced in Sections~\ref{sec:generalization},~\ref{sec:gen}, and~\ref{sec:practical}. 
+%
+In Section~\ref{sec:sde:ode}, we consider simple two-dimensional distributions that can be visualized easily.
+%
+In Section~\ref{sec:num_gmm}, we consider high-dimensional Gaussian mixtures, where we can compare our learned models to analytical solutions.
+%
+Finally in Section~\ref{sec:num_images} we perform  some experiments in image generation.
+
+
+\subsection{Deterministic versus stochastic models: 2D}
+\label{sec:sde:ode}
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figs/f_divergence_checker.pdf}
+    \caption{\textbf{The effects of $\gamma(t)$ and $\epsilon$ on sample quality: quantitative comparison.} 
+    %
+    For each~$\gamma$ and each~$\epsilon$ specified in Figure~\ref{fig:ode-sde-big}, we compute the mean and variance of the absolute value of the difference of $\log \rho_1$ (exact) and $\log \hat \rho(1)$ (model). 
+    %
+    The model specified with $\gamma(t) = \sqrt{t(1-t)}$ is the best performing probability flow ($\epsilon = 0$). 
+    %
+    At large $\epsilon$, SDE sampling with the same learned drift~$\hat b$ and score~$\hat s$ performs better, complementing the observations in the previous figure.} 
+    \label{fig:fdiv}
+\end{figure}
+
+
+As shown in Section~\ref{sec:cont:eq}, the evolution of $\rho(t)$ can be captured exactly by either the transport equation~\eqref{eq:transport} or by the forward and backward Fokker-Planck equations~\eqref{eq:fpe} and~\eqref{eq:fpe:tr}.
+%
+These perspectives lead to generative models that are either based on the deterministic dynamics~\eqref{eq:ode:1} or the forward and backward stochastic dynamics~\eqref{eq:sde:1} and~\eqref{eq:sde:R}, where the level of stochasticity can be tuned by varying the diffusion coefficient $\eps(t)$. 
+%
+We showed in Section~\ref{sec:likelihood_bounds} that setting a constant $\eps(t) = \eps > 0$ can offer better control on the likelihood when using an imperfect velocity~$b$ and an imperfect score~$s$.
+%
+Moreover, the optimal choice of $\eps$ is determined by the relative accuracy of the estimates $\hat b$ and $\hat s$. 
+%
+Having laid out the evolution of $\rho(t)$ for different choices of $\gamma$ in the previous section, we now show how different values of~$\epsilon$ can build these densities up from individual trajectories.
+%
+The stochasticity intrinsic to the sampling process increases with $\epsilon$, but by construction, the marginal density $\rho(t)$ for fixed $\alpha$, $\beta$ and $\gamma$ is independent of $\epsilon$.
+
+\paragraph{The roles of $\gamma(t)$ and $\eps$ for 2D density estimation.} 
+%
+To explore the roles of $\gamma$ and $\epsilon$, we consider a target density $\rho_1$ whose mass concentrates on a two-dimensional checkerboard and a base density $\rho_0 = \mathsf{N}(0,\Id)$; here, the target was chosen to highlight the ability of the method to learn a challenging density with sharp boundaries. 
+%
+The same model architecture and training procedure was used to learn both $v$ and $s$ for several choices of $\gamma$ given in Table~\ref{tab:gammas}. 
+%
+The feed-forward network was defined with $4$ layers, each of size $512$, and with the ReLU~\cite{vinod2010} as an activation function.
+
+After training, we draw 300,000 samples using either an ODE ($\epsilon=0$) or an SDE with $\epsilon = 0.5$, $\epsilon=1.0$, or $\epsilon = 2.5$. 
+%
+We compute kernel density estimates for each resulting density, which we compare to the exact density and to the original stochastic interpolant from~\cite{albergo2023building} (obtained by setting $\gamma = 0$). 
+%
+Results are given in Figure~\ref{fig:ode-sde-big} for each $\gamma$ and each $\epsilon$. 
+%
+Sampling with $\epsilon > 0 $ empirically performs better, though the gap is smallest when using the $\gamma$ specified in \eqref{eq:gam:Bt}. 
+%
+Moreover, even when $\epsilon = 0$, using the probability flow with $\gamma$ given by~\eqref{eq:gam:Bt} performs better than the original interpolant from \cite{albergo2023building}. 
+%
+Numerical comparisons of the mean and variance of the absolute value of the difference of $\log \rho_1$ (exact) from $\log \hat\rho(1)$ (model) for the various configurations are given in Figure~\ref{fig:fdiv}, which corroborate the above observations.
+
+\subsection{Deterministic versus stochastic models: 128D Gaussian mixtures}
+\label{sec:num_gmm}
+%
+We now study the performance of the stochastic interpolant method in the case where the target is a high-dimensional Gaussian mixture. Gaussian mixtures (GMs) are a convenient class of target distributions to study, because they can be made arbitrarily complex by increasing the number of modes, their separation, and the overall dimensionality. 
+%
+Moreover, by considering low-dimensional projections, we can compute quantitative error metrics such as the $\mathsf{KL}$-divergence between the target and the model as a function of the (constant) diffusion coefficient $\epsilon$.
+%
+This enables us to quantify the tradeoffs of ODE and SDE-based samplers.
+
+\paragraph{Experimental details.} 
+We consider the problem of mapping $\rho_0 = \mathsf{N}(0, \Id)$ to a Gaussian mixture with five modes in dimension $d=128$. 
+%
+The mean $m_i\in\RR^d$ of each mode is drawn i.i.d. $m_i \sim \mathsf{N}(0, \sigma^2 \Id)$ with $\sigma = 7.5$. 
+%
+To maximize performance at high~$\epsilon$, the timestep should be adapted to~$\epsilon$; here, we chose to use a fixed computational budget that performs well for moderate levels of $\epsilon$ to avoid computational effort that may become unreasonable in practice. 
+%
+\begin{wrapfigure}[16]{r}{0.35\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figs/mixtures_6_6_23/target.pdf}
+\caption{\textbf{Gaussian mixtures: target projection.} Low-dimensional marginal of the target density $\rho_1$ for the Gaussian mixture experiment, visualized via KDE.}
+\label{fig:gmm_target}
+\end{wrapfigure}
+%
+Each covariance $C_i \in \RR^{d\times d}$ is also drawn randomly with $C_i = \tfrac{1}{d}W_i^\T W_i + \Id$ and $(W_i)_{kl} \sim \mathsf{N}(0, 1)$ for $k, l = 1, \hdots, d$; this choice ensures that each covariance is a positive definite perturbation of the identity with diagonal entries that are $O(1)$ with respect to dimension $d$. 
+%
+For a \textit{fixed} random draw of the means $\{m_i\}_{i=1}^5$ and covariances $\{C_i\}_{i=1}^5$, we study the four combinations of learning $b$ or $v$ and $s$ or $\eta_z$ to form a stochastic interpolant from $\rho_0$ to $\rho_1$. 
+%
+In each case, we consider a linear interpolant with $\alpha(t) = 1-t$, $\beta(t) = t$, and $\gamma(t) = \sqrt{t(1-t)}$. 
+%
+For visual reference, a projection of the target density $\rho_1$ onto the first two coordinates is depicted in Figure~\ref{fig:gmm_target} -- it contains significant multimodality, several modes that are difficult to distinguish, and one mode that is well-separated from the others, which requires nontrivial transport to resolve. 
+%
+In the following experiments, all samples were generated with the fourth-order Dormand-Prince adaptive ODE solver (\texttt{dopri5}) for $\epsilon=0$ and by using one thousand timesteps of the Heun SDE integrator introduced in~\cite{Karras2022edm} for $\epsilon \neq 0$. 
+%
+When learning $\eta_z$, to avoid singularity at $t=0$ and $t=1$ when dividing by $\gamma(t)$ in the formula $s(t, x) = -\eta(t, x) / \gamma(t)$, we set $t_0 = 10^{-4}$ and $t_f = 1 - t_0$ in Algorithm~\ref{alg:sampling}. For all other cases, we set $t_0 = 0$ and $t_f = 1$.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=\textwidth]{figs/mixtures_6_6_23/density_errors.pdf}
+    \caption{\textbf{Gaussian mixtures: density errors.} Errors $\hat{\rho}_1(x, y) - \rho_1(x, y)$ in the marginals over the first two coordinates for all four variations of learning $b$ or $v$ and $s$ or $\eta$, computed via kernel density estimation. For small $\epsilon$, the model densities tend to be overly-concentrated, and overestimate the density within the modes and underestimate the densities in the tails. As $\epsilon$ increases, the model becomes less concentrated and more accurately represents the target density. For $\epsilon$ too large, the model becomes overly spread out and under-estimates the density within the modes. \textit{Note: visualizations show two-dimensional slices of a $128$-dimensional density.}}
+    \label{fig:gmm_density_errors}
+\end{figure}
+\paragraph{Quantitative metric} 
+To quantify performance, we make use of an error metric given by a $\mathsf{KL}$-divergence between kernel density estimates (KDE) of low-dimensional marginals of $\rho_1$ and the model density $\hat{\rho}_1$; this error metric was chosen for computational tractability and interpretability. 
+%
+To compute it, we draw $50,000$ samples from $\rho_1$ and each $\hat{\rho}_1$. We obtain samples from the marginal density over the first two coordinates by projection, and then compute a Gaussian KDE with bandwidth parameter chosen by Scott's rule. We then draw a fresh set of $N_e = 50,000$ samples $\{x_i\}_{i=1}^{N_e}$ with each $x_i \sim \rho_1$ for evaluation.
+%
+To compute the $\mathsf{KL}$-divergence, we form a Monte-Carlo estimate with control variate 
+\begin{equation}
+ \KL{\rho_1}{\hat{\rho}_1} \approx \frac{1}{N_e}\sum_{i=1}^{N_e} \left(\log \rho_1(x_i) - \log \hat{\rho}_1(x_i) - \left(\frac{\hat{\rho}_1(x_i)}{\rho_1(x_i)} - 1\right)\right).   
+\end{equation} 
+We found use of the control variate $\hat{\rho}_1 / \rho_1 - 1$ helpful to reduce variance in the Monte-Carlo estimate; moreover, by concavity of the logarithm, use of the control variate ensures that the Monte-Carlo estimate cannot become negative.
+
+\paragraph{Results.}
+\begin{figure*}[t!]
+    \centering
+    \includegraphics[width=\textwidth]{figs/mixtures_6_6_23/densities.pdf}
+    \caption{\textbf{Gaussian mixtures: densities.} A visualization of the marginal densities in the first two variables of the model density $\hat{\rho}_1$ computed for all four variations of learning $b$ or $v$ and $s$ or $\eta$, computed via kernel density estimation. \textit{Note: visualizations show two-dimensional slices of a $128$-dimensional density.}}
+    \label{fig:gmm_densities}
+\end{figure*}
+\begin{figure*}
+\centering
+\includegraphics[width=0.5\linewidth]{figs/mixtures_6_6_23/kl.pdf}
+\caption{\textbf{Gaussian mixtures: quantitative comparison.} $\KL{\rho_1}{\hat{\rho}_1^{\epsilon}}$ as a function of $\epsilon$ when learning each of the four possible sets of drift coefficients $(b,s)$, $(b, \eta)$, $(v,s)$, $(v, \eta)$. The best performance is achieved when learning $b$ and $\eta$, along with a proper choice of $\epsilon > 0$.}
+\label{fig:gmm_kl}
+\end{figure*}
+
+
+Figures~\ref{fig:gmm_density_errors} and~\ref{fig:gmm_densities} display two-dimensional projections (computed via KDE) of the model density error $\hat{\rho}_1 - \rho_1$ and the model density $\hat{\rho}_1$ itself, respectively, for different instantiations of Algorithms~\ref{alg:learning:b} and~\ref{alg:learning:eta:sde} and different choices of $\epsilon$ in Algorithm~\ref{alg:sampling}. 
+%
+Taken together with Figure~\ref{fig:gmm_target}, these results demonstrate qualitatively that small values of $\epsilon$ tend to over-estimate the density within the modes and under-estimate the density in the tails. 
+%
+Conversely, when $\epsilon$ is taken too large, the model tends to under-estimate the modes and over-estimate the tails. Somewhere in between (and for differing levels of $\epsilon$), every model obtains its optimal performance. 
+%
+Figure~\ref{fig:gmm_kl} makes these observations quantitative, and displays the $\mathsf{KL}$-divergence from the target marginal to the model marginal $\KL{\rho_1}{\hat{\rho}_1^\epsilon}$ as a function of $\epsilon$, with each data point on the curve matching the models depicted in Figures~\ref{fig:gmm_density_errors} and~\ref{fig:gmm_densities}. 
+%
+We find that for each case, there is an optimal value of $\epsilon \neq 0$, in line with the qualitative picture put forth by Figures~\ref{fig:gmm_density_errors} and~\ref{fig:gmm_densities}. 
+%
+Moreover, we find that learning $b$ generically performs better than learning $v$, and that learning $\eta$ generically performs better than learning $s$ (except when $\epsilon$ is taken large enough that performance starts to degrade). 
+%
+With proper treatment of the singularity in the sampling algorithm when using the denoiser in the construction of $s(t, x) = -\eta(t, x)/\gamma(t)$ -- either by capping $t_0 \neq 0$ and $t_f \neq 1$ or by properly tuning $\epsilon(t)$ as discussed in Section \ref{sec:sampling} -- our results suggest that learning the denoiser is best practice.
+
+\subsection{Image generation}
+\label{sec:num_images}
+In the following, we demonstrate that the proposed method scales straightforwardly to high-dimensional problems like image generation. 
+%
+To this end, we illustrate the use of our approach  on the $128\times128$ Oxford flowers dataset \cite{Nilsback06} by testing two different variations of the interpolant for image generation: the one-sided interpolant, using $\rho_0 = \mathsf{N}(0,\Id)$, as well as the mirror interpolant, where $\rho_0 = \rho_1$ both represent the data distribution.
+%
+The purpose of this section is to demonstrate that our theory is well-motivated, and that it provides a framework that is both scalable and flexible. 
+%
+In this regard, image generation is a convenient exercise, but is not the main focus of this work, and we will leave a more thorough study on other datasets such as ImageNet with standard benchmarks such as the Frechet Inception Distance (FID) for a future study. 
+
+\paragraph{Generation from Gaussian $\rho_0$.} 
+We train spatially-linear one-sided interpolants $x_t = (1 -t)z + t x_1$ and $x_t = \cos({\tfrac{\pi}{2}}t) z + \sin({\tfrac{\pi}{2} t}) x_1$ on the $128\times128$ Oxford flowers dataset, where we take $z \sim \mathsf{N}(0,\Id)$ and $x_1$ from the data distribution. 
+%
+Based on our results for Gaussian mixtures, we learn the drift $b(t,x)$, the score $s(t,x)$, and the denoiser $\eta_z(t,x)$ to benchmark our generative models based on ODEs or SDEs.
+%
+In all cases, we parameterize the networks representing $\hat \eta$, $\hat s$ and $\hat b$ using the U-Net architecture used in~\cite{ho2020}. 
+%
+Minimization of the objective functions given in Section \ref{sec:onesided} is performed using the Adam optimizer. 
+%
+Details of the architecture in both cases and all training hyperparameters are provided in Appendix \ref{app:exp:img}. 
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=\linewidth]{figs/imgs_ode_sde_flowers_many_eps_paper.pdf}
+    \caption{\textbf{Image generation: Oxford flowers.}
+    %
+    Example generated flowers from the same initial condition $x_0$ using either the ODE with $\epsilon = 0$ and learned $b$ or the SDE for various increasing values of $\epsilon$ with learned $b$ and $s$.
+    %
+    For $\epsilon = 0$, sampling is done using the \texttt{dopri5} solver and therefore the number of steps is adaptive. 
+    %
+    Otherwise, $2000$, $2500$, and $4000$ steps were taken using the Heun solver for $\epsilon = 1.0$, $2.0$, and $4.0$ respectively. }
+    \label{fig:flowers:sde:many}
+\end{figure}
+
+Like in the case of learning Gaussian mixtures, we use the fourth-order \texttt{dopri5} solver when sampling with the ODE and the Heun method for the SDE, as detailed in Algorithm \ref{alg:sampling}. 
+%
+When learning a denoiser $\eta_z$, we found it beneficial to complete the image generation with a final denoising step, in which we set $\eps=0$ and switch the integrator to the one given in~\eqref{eq:iterate}.
+
+Exemplary images generated from the model using the ODE and the SDE with various value of the diffusion coefficient $\epsilon$ are shown in Figure~\ref{fig:flowers:sde:many}, starting from the same sample from $\rho_0$. 
+%
+The result illustrates that different images can be generated from the same sample when using the SDE, and their diversity increases as we increase the diffusion coefficient $\eps$.
+%
+To highlight that the model does not memorize the training set,  in Figure~\ref{fig:overfit} we compare an example generated image to its five nearest neighbors in the training set (measured in $\ell_1$ norm), which appear visually quite different.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.6\linewidth]{figs/5_nearest_img6.pdf}
+    \caption{\textbf{No memorization.} Top: An example generated image from a trained linear one-sided interpolant. Bottom: Five nearest neighbors (in $\ell_1$ norm) to the generated image in the dataset. The nearest neighbors are visually distinct, highlighting that the interpolant does not overfit on the dataset.}
+    \label{fig:overfit}
+\end{figure}
+
+\paragraph{Mirror interpolant.}
+%
+We consider the mirror interpolant $x_t = x_1 + \gamma(t) z$, for which~\eqref{eq:mirror:b:2}  shows that the drift $b$ is given in terms the denoiser $\eta_z$ by $b(t,x) = \dot \gamma(t) \eta_z(t)$; this means that it is sufficient to only learn an estimate $\hat{\eta}_z$ to construct a generative model.
+%
+Similar to the previous section, we demonstrate this on the Oxford flowers dataset, again making use of a U-Net parameterization for $\hat{\eta}_z(t, x)$.
+%
+Further experimental details can be found in Appendix~\ref{app:exp:img}.
+%
+In this setup the output image at time $t=1$ is the same as the input image if we use the ODE~\eqref{eq:ode:1}; with the SDE, however, we can generate new images from the same input. This is illustrated  in Figure~\ref{fig:mirror}, where we show how a sample image from the dataset $\rho_1$ is pushed forward through the SDE \eqref{eq:sde:1} with $\eps(t) = \eps = 10$. 
+%
+As can be seen the original image is resampled to a proximal flower not seen in the dataset.
+%
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=\linewidth]{figs/mirror_ex1.pdf}
+    \caption{\textbf{Mirror interpolant.} 
+    %
+    Example trajectory from a learned denoiser model $\hat b = \dot \gamma(t)\hat \eta_z$ for the mirror interpolant $x_t = x_1 + \gamma(t) z$ on the $128\times128$ Oxford flowers dataset with $\gamma(t) = \sqrt{t(1-t)}$. 
+    %
+    The parametric form for $\hat \eta_z$ is the U-Net from \cite{ho2020}, with hyperparameter details given in Appendix \ref{app:exp}. 
+    %
+    The choice of $\epsilon$ in the generative SDE given in \eqref{eq:sde:1} influences the extent to which the generated image differs from the original. Here, $\epsilon(t) = 10.0$.}
+    \label{fig:mirror}
+\end{figure}
+
+

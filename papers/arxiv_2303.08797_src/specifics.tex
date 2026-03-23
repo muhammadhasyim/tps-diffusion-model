@@ -1,0 +1,208 @@
+It is useful to assume that both $\rho_0$ and $\rho_1$ have been scaled to have zero mean and identity covariance (which can be achieved in practice, for example, by an affine transformation of the data). In this case, the time-dependent mean and covariance of~\eqref{eq:lin:interp} are given by
+\begin{equation}
+\label{eq:mean:var}
+\EE [x^\LIN_t] = 0, \qquad \EE [ x^\LIN_t (x^\LIN_t)^\T] = (\alpha^2(t)+\beta^2(t)+\gamma^2(t)) \Id.
+\end{equation}
+Preserving the identity covariance at all times therefore leads to the constraint
+\begin{equation}
+\label{eq:sumto1}
+\forall t \in [0,1] \quad : \quad \alpha^2(t)+\beta^2(t)+\gamma^2(t) = 1.
+\end{equation}
+%
+This choice is also sensible if $\rho_0$ and $\rho_1$ have covariances that are not the identity but are on a similar scale. In this case we no longer need to enforce~\eqref{eq:sumto1} exactly, and could, for example, take three functions whose sum of squares is of order one. For definiteness, in the sequel we discuss possible choices that satisfy~\eqref{eq:sumto1} exactly, with the understanding that the corresponding functions $\alpha$, $\beta$, and $\gamma$ could all be slightly modified without significantly affecting the conclusions.
+
+\paragraph{Linear and trigonometric $\alpha$ and $\beta$.} 
+%
+One way to ensure that~\eqref{eq:sumto1} holds while maintaining the influence of $\rho_0$ and $\rho_1$ everywhere on $[0,1]$ except at the endpoints is to choose 
+\begin{equation}
+\label{eq:lin:a:b:c}
+\alpha(t) = t, \qquad \beta(t) = 1-t, \qquad \gamma(t) = \sqrt{2t(1-t)}.
+\end{equation}
+This choice was advocated in~\cite{liu2022}, without the inclusion of the latent variable ($\gamma =0$). Another possibility that gives more leeway is to pick any $\gamma: [0,1]\to[0,1]$ and set
+\begin{equation}
+\label{eq:trig}
+\alpha(t) = \sqrt{1-\gamma^2(t)} \cos(\tfrac 12 \pi t), \qquad \beta(t) = \sqrt{1-\gamma^2(t)} \sin(\tfrac 12 \pi t).
+\end{equation}
+With $\gamma=0$, this was the choice preferred in~\cite{albergo2023building}. The PDF $\rho(t)$ obtained with the choices~\eqref{eq:lin:a:b:c} and~\eqref{eq:trig} when $\rho_0$ and $\rho_1$ are both Gaussian mixture densities are shown in Figure~\ref{fig:gmm_rhot}. As this example shows, when $\rho_0$ and $\rho_1$ have distinct complex features, these would be duplicated in $\rho(t)$ at intermediate times if not for the smoothing effect of the latent variable; this behavior is seen in Figure~\ref{fig:gmm_rhot}, where it is most prominent in the first row with $\gamma(t) = 0$. From a statistical learning perspective, eliminating the formation of spurious features will simplify the estimation of the velocity field $b$, which becomes smoother as the formation of such features is suppressed.
+
+
+
+\label{sec:reg:noise}
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=\textwidth]{figs/gmm_rhot.pdf}   
+    \caption{\textbf{The effect of $\gamma(t)z$ on $\rho(t)$.} A visualization of how the choice of $\gamma(t)$ changes the density $\rho(t)$ of $x^\LIN_t=\alpha(t) x_0 + \beta(t) x_1+ \gamma(t)z $ when $\rho_0$ and $\rho_1$ are Gaussian mixture densities with two modes and three modes, respectively.
+    %
+    The first row depicts $\gamma(t)=0$, which reduces to the stochastic interpolant developed in~\cite{albergo2023building}. This case forms a valid transport between $\rho_0$ and $\rho_1$, but produces spurious intermediate modes in $\rho(t)$.
+    %
+    The second row depicts the choice of $\gamma(t) = \sqrt{2t(1-t)}$. In this case, the spurious modes are partially damped by the addition of the latent variable, leading to a simpler $\rho(t)$.
+    %
+    The final row shows the Gaussian encoding-decoding, which smoothly encodes $\rho_0$ into a standard normal distribution on the time interval $[0, 1/2)$, which is then decoded into $\rho_1$ on the interval $(1/2, 1]$. In this case, no intermediate modes form in $\rho(t)$: the two modes in $\rho_0$ collide to form $\mathsf{N}(0, 1)$ at $t=\tfrac12$, which then spreads into the three modes of $\rho_1$. 
+    % 
+    A visualization of individual sample trajectories from deterministic and stochastic generative models based on ODEs and SDEs whose solutions have density $\rho(t)$ can be seen in Figure~\ref{fig:gmm_trajs}.
+    }
+    \label{fig:gmm_rhot}
+\end{figure}
+
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=\textwidth]{figs/gmm_trajs.pdf}   
+    \caption{\textbf{The effect of $\epsilon$ on sample trajectories.} A visualization of how the choice of $\epsilon$ affects the sample trajectories obtained by solving the ODE~\eqref{eq:ode:1} or the forward SDE~\eqref{eq:sde:1}. The set-up is the same as in Figure~\ref{fig:gmm_rhot}:
+    %
+    $\rho_0$ and $\rho_1$ are taken to be the same Gaussian mixture densities, and the analytical expressions for $b$ and $s$ are used.
+    %
+    In the three panels in each column the value of $\gamma$ is the same, and each panel shows trajectories with different $\eps$. 
+    Three specific trajectories from the same three initial conditions drawn from $\rho_0$ are also highlighted in white in every panel.
+    %
+    As $\epsilon$ increases but $\gamma$ stays the same, the density $\rho(t)$ is unchanged, but the individual trajectories become increasingly stochastic.
+    %
+    While all choices are equivalent with exact $b$ and $s$, Theorem~\ref{thm:kl:bound} shows that nonzero values of $\epsilon$ provide control on the likelihood in terms of the error in $b$ and $s$ when they are approximate.}
+    \label{fig:gmm_trajs}
+\end{figure}
+
+\paragraph{Gaussian encoding-decoding.}
+A useful limiting case is to devolve the data from $\rho_0$ completely into noise by the halfway point $t=\tfrac12$ and to reconstruct $\rho_1$ completely from noise starting from $t=\frac12$. One choice that allows us to do so while satisfying~\eqref{eq:sumto1} is
+\begin{equation}
+    \label{eq:alpha:beta:2}
+    \alpha(t) = \cos^2(\pi t) 1_{[0,\frac12)}(t), \qquad \beta(t) = \cos^2(\pi t)1_{(\frac12,1]}(t), \qquad \gamma(t) = \sin^2(\pi t),
+\end{equation}
+where $1_{A}(t)$ is the indicator function of $A$, i.e. $1_A(t) =1$ if $t\in A$ and $1_A(t)=0$ otherwise.
+With this choice, it is easy to see that $x_{t=\frac12} = \gamma(\tfrac{1}{2}) z \sim {\sf N}(0,\gamma^2(\tfrac{1}{2}))$, which seamlessly glues together two interpolants: one between $\rho_0$ and a standard Gaussian, and one between a standard Gaussian and $\rho_1$.
+
+Even though the choice~\eqref{eq:alpha:beta:2} encodes $\rho_0$ into pure noise on the interval $[0,\tfrac12]$, which is then decoded into $\rho_1$ on the interval $[\tfrac12,1]$ (and vice-versa when proceeding backwards in time), the resulting velocity $b$ still defines a single continuity equation that maps $\rho_0$ to $\rho_1$ on $[0, 1]$. 
+%
+This is most clearly seen at the level of the probability flow~\eqref{eq:ode:1}, since its solution $X_t$ is a bijection between the initial and final conditions $X_{t=0}$ and $X_{t=1}$, but a similar pairing can also be observed in the solutions to the forward and backward SDEs~\eqref{eq:sde:1} and~\eqref{eq:sde:R}, whose solutions at time $t=1$ or $t=0$ remain correlated with the initial or final condition used. 
+%
+\begin{wrapfigure}[10]{r}{0.6\textwidth}
+\centering
+\vspace{-0.0cm}
+  \includegraphics[width=1.0\linewidth]{figs/alphas-betas-gammas.pdf}
+  \caption{\textbf{The functions $\alpha(t)$, $\beta(t)$, and $\gamma(t)$} for the linear \eqref{eq:lin:a:b:c}, trigonometric~\eqref{eq:trig} with $\gamma(t)=\sqrt{2t(1-t)}$, Gaussian encoding-decoding~\eqref{eq:alpha:beta:2}, one-sided~\eqref{eq:stochinterp:os}, and mirror~\eqref{eq:stochinterp:mirror} interpolants.}
+  \label{fig:interps}
+\end{wrapfigure}
+%
+This allows for a more direct means of image-to-image translation with diffusions when compared to the recent approach described in \cite{su2023dual}. 
+%
+The choice~\eqref{eq:alpha:beta:2} is depicted in the final row of Figure~\ref{fig:gmm_rhot}, where no spurious modes form at all; individual sample trajectories of the deterministic and stochastic generative models based on ODEs and SDEs whose solutions have this $\rho(t)$ as density can be seen in the panels forming the third column in Figure~\ref{fig:gmm_trajs}.
+%
+We note that the elimination of spurious intermediate modes can also be implemented by use of a data-adapted coupling $\nu(dx_0, dx_1)$, as considered in~\cite{albergo_stochastic_2023}.
+
+Unsurprisingly, it is necessary to have $\gamma(t) > 0$ for the choice~\eqref{eq:alpha:beta:2}: for $\gamma(t) = 0$, the density $\rho(t)$ collapses to a Dirac measure at $t=\frac12$. This consideration highlights that the inclusion of the latent variable $\gamma(t) z$ matters even for the deterministic dynamics~\eqref{eq:ode:1}, and its presence is distinct from the stochasticity inherent to the SDEs~\eqref{eq:sde:1} and \eqref{eq:sde:R}.
+
+\subsection{Impact of the latent variable $\gamma(t) z$ and the diffusion coefficient~$\epsilon(t)$}
+\label{sec:impact:gam}
+
+%
+The stochastic interpolant framework enables us to discern the independent roles of the latent variable $\gamma(t) z$ and the diffusion coefficient $\epsilon(t)$ we use in a generative model.
+%
+As shown in Theorem~\ref{prop:interpolate}, the presence of the latent variable $\gamma(t) z$ for $\gamma \neq 0$ smooths both the density $\rho(t)$ and the velocity $b$ defined in~\eqref{eq:b:ode:def} spatially.
+%
+This provides a computational advantage at sample generation time because it simplifies the required numerical integration of~\eqref{eq:ode:1},~\eqref{eq:sde:1}, and~\eqref{eq:sde:R}. 
+%
+Intuitively, this is because the density $\rho(t)$ of $x_t$ can be represented exactly as the density that would be obtained with $\gamma(t) = 0$ convolved with $\mathsf{N}(0, \gamma^2(t)Id)$ at each $t\in(0,1)$. A comparison between the density $\rho(t)$ obtained with trigonometric interpolants with $\gamma(t) = 0$ and $\gamma(t) = \sqrt{2t(1-t)}$ can be seen in the first and second row of Figure~\ref{fig:gmm_rhot}.
+
+By contrast, the diffusion coefficient $\eps(t)$ leaves the density  $\rho(t)$ unchanged, and only affects the way we sample it. 
+%
+In particular, the probability flow ODE~\eqref{eq:ode:1} results in a map that pushes every $X_{t=0}=x_0$ onto a single $X_{t=1}=x_1$ and vice-versa. 
+%
+The forward SDE~\eqref{eq:sde:1} maps each $X^\fwd_{t=0}=x_0$ onto an ensemble $X^\fwd_{t=1} $ whose spread is controlled by the amplitude of $\epsilon(t)$ (and similarly for the reversed SDE ~\eqref{eq:sde:R} that maps each $X^\rev_{t=1}=x_1$ onto an ensemble $X^\rev_{t=0}$). 
+%
+This ensemble is not distributed according to $\rho_1$ for finite $\epsilon(t)$ -- like with the ODE, we need to sample initial conditions from $\rho_0$ to get solutions at time $t=1$ that sample $\rho_1$ -- but its density converges towards $\rho_1$ as $\epsilon(t) \to \infty$. 
+%
+These features are illustrated in Figure~\ref{fig:gmm_trajs}. 
+
+\begin{remark}
+\label{rem:endpoints}
+    Another potential advantage of including the latent variable $\gamma(t) z$ is its impact on the velocity $b$ at the end points. Since $x_{t=0}=x_0$ and $x_{t=1}=x_1$, it is easy to see that the velocity $b$ of the linear interpolant $x_t$ defined in~\eqref{eq:lin:interp} satisfies
+\begin{equation}
+    \label{eq:vel:0:1}
+    \begin{aligned}
+    b(0,x) &= \dot\alpha(0) x + \dot \beta(0) \EE [x_1|x_0=x] - \lim_{t\to0} \gamma(t) \dot\gamma(t) s_0(x),\\
+    b(1,x) &= \dot\alpha(1) \EE [x_0|x_1=x] + \dot \beta(1) x - \lim_{t\to1} \gamma(t) \dot\gamma(t) s_1(x),
+    \end{aligned}
+\end{equation}
+where  $s_0 = \nabla \log \rho_0$ and $s_1 = \nabla \log \rho_1$. If $\gamma\in C^2([0,1])$, because $\gamma(0)=\gamma(1)=0$, the terms involving the scores $s_0$ and $s_1$ in these expressions vanish. Choosing $\gamma^2 \in C^1([0,1])$ but $\gamma$ not differentiable at $t=0$ or $t=1$ leaves open the possibility that the limits remain nonzero. For example, if we take one of the choices discussed in Section~\ref{sec:sisb}, i.e. 
+\begin{equation}
+    \label{eq:gam:Bt}
+    \gamma(t) = \sqrt{a t(1-t)}, \qquad a>0,
+\end{equation}
+we obtain
+\begin{equation}
+    \label{eq:gam:Bt:lim}
+    \lim_{t\to0}\gamma(t)\dot{\gamma}(t) = - \lim_{t\to1}\gamma(t)\dot{\gamma}(t) = \frac{a}{2}.
+\end{equation}
+As a result, the choice~\eqref{eq:gam:Bt} ensures that the velocity $b$ encodes information about the score of the densities $\rho_0$ and $\rho_1$ at the end points. 
+%
+We stress however that, while the choice of $\gamma(t)$ given in \eqref{eq:gam:Bt} is appealing because of its nontrivial influence on the velocity $b$ at the endpoints, the user is free to explore a variety of alternatives. 
+%
+We present some examples in Table~\ref{tab:gammas}, specifying the differentiability of $\gamma$ at $t=0$ and $t=1$. The function $\gamma(t)$ specified in~\eqref{eq:gam:Bt} is the only featured case for which the contribution from the score is non-vanishing in the velocity $b$ at the endpoints. In Section~\ref{sec:numerics}, we illustrate on numerical examples that there are tradeoffs between different choices of $\gamma$, which might be directly related to this fact. 
+%
+When using the ODE as a generative model, the score is only felt through $b$, whereas it is explicit when using the SDE as a generative model.
+\end{remark} 
+
+\begin{table}[t!]
+    \centering
+    \captionsetup{justification=raggedright} % Center caption
+    \newcolumntype{C}{>{\centering\arraybackslash}p{1.5cm}} % Define a new centered column type with a fixed width
+    \begin{tabular}{ccccc}
+    \toprule
+       $\gamma(t):$ & $\sqrt{a t(1-t)}$ & $ t(1-t)$ & $\hat \sigma(t)$ & $\sin^2(\pi t)$ \\
+    \midrule
+    $C^1$ at $t=0,1$ & \ding{55}   & \ding{51}   & \ding{51} &  \ding{51} \\
+    \bottomrule
+    \end{tabular}
+    \caption{\textbf{Differentiability of $\gamma(t)z$.} 
+    %
+    A characterization of the possible choices of $\gamma(t)$ with respect to their differentiability. The column specified by $\hat \sigma(t)$ is sum of sigmoid functions, made compact by the notation $\hat\sigma(t) = \sigma(f (t - \tfrac{1}{2}) + 1) - \sigma(f(t - \tfrac{1}{2}) - 1) - \sigma(-\tfrac{f}{2}+1) + \sigma(-\tfrac{f}{2}-1) $, where $\sigma(t) = e^t/(1+e^t)$ and $f$ is a scaling factor.}
+    \label{tab:gammas}
+\end{table}
+
+
+\subsection{Spatially linear one-sided interpolants}
+\label{sec:spatil:lin:os}
+
+Much of the discussion above generalizes to one-sided interpolants if we take the function $J(t,x_1)$ in \eqref{eq:stochinterp:os} to be linear in $x_1$ and define
+\begin{equation}
+    \label{eq:interp:os:lin}
+    x^\OSLIN_t = \alpha(t) z + \beta(t) x_1, \qquad t\in[0,1]
+\end{equation}
+where $\alpha^2,\beta\in C^2([0,1])$ and $\alpha(0)=\beta(1) = 1$, $\alpha(1) = \beta(0) = 0$, and $\alpha(t) >0$ for all $t\in[0,1)$. 
+The velocity~$b$ and the score~$s$ defined in~\eqref{eq:b:ode:def} and \eqref{eq:s:def} can now be expressed as
+\begin{equation}
+    \label{eq:b:ode:os:lin}
+    b_\ODE(t,x) = \dot\alpha(t) \eta^\OS_z(t,x) + \dot \beta(t) \eta^\OS_1(t,x), \qquad s(t,x) = -\alpha^{-1}(t) \eta^\OS_z(t,x),
+\end{equation}
+where the second expression holds for all $t\in [0,1)$ and we defined:
+\begin{equation}
+    \label{eq:eta:os}
+    \eta^\OS_z(t,x) = \EE(z|x^\OSLIN_t = x), \qquad \eta^\OS_1(t,x) = \EE(x_1|x^\OSLIN_t = x).
+\end{equation}
+Note that, by definition of the conditional expectation, $\eta^\OS_z$ and $\eta^\OS_1$ satisfy
+\begin{equation}
+    \label{eq:eta:os:c}
+    \forall (t,x) \in [0,1]\times \RR^d \quad : \quad \alpha(t) \eta^\OS_z(t,x) + \beta(t) \eta^\OS_1(t,x)  = x. 
+\end{equation}
+As a result, only one of them needs to be estimated. 
+For example, we can express $\eta^\OS_1$ as a function of $\eta^\OS_z$ for all $t$ such that $\beta(t)\not=0$, and use the result to express the velocity~\eqref{eq:b:ode:os:lin} as
+\begin{equation}
+    \label{eq:b:os:solved}
+    b_\ODE(t,x) = \dot \beta(t) \beta^{-1}(t) x + \big( \dot \alpha(t) - \alpha(t) \dot\beta(t) \beta^{-1}(t)\big) \eta^\OS_z(t,x) \qquad \forall t \ : \ \beta(t)\not=0.
+\end{equation}
+Assuming that $\beta(t)\not=0$ for all $t\in(0,1]$, this formula only needs to be supplemented at $t=0$ with
+\begin{equation}
+    \label{eq:b:lin:t1}
+    b_\ODE(0,x) = \dot\alpha(0) x + \dot\beta(0) \EE[x_1]
+\end{equation}
+which follows from~\eqref{eq:b:ode:os:lin} since $x^\OSLIN_{t=0} = z$. 
+%
+Later in Section \ref{sec:denoiser} we will show that using the velocity $b$ in \eqref{eq:b:os:solved} to solve the probability flow ODE \eqref{eq:ode:1} can be seen as using a denoiser to construct a generative model. 
+
+Finally note that $\eta_z$ and/or $\eta_1$ can be estimated using the following two objective functions, respectively:
+\begin{equation}
+    \label{eq:obj:sbdm:eta}
+    \begin{aligned}
+    \mathcal L_{\eta_z}(\hat \eta^\OS_z) &= \int_0^1 \EE \left[\tfrac12|\hat \eta^\OS_z(t,x^\OSLIN_t)|^2 - z\cdot \hat \eta^\OS_z(t,x^\OSLIN_t)\right] dt,\\
+    \mathcal L_{\eta_1}(\hat \eta^\OS_1) &= \int_0^1 \EE \left[\tfrac12|\hat \eta^\OS_1(t,x^\OSLIN_t)|^2 - x_1\cdot \hat \eta^\OS_1(t,x^\OSLIN_t)\right] dt.
+    \end{aligned}
+\end{equation}

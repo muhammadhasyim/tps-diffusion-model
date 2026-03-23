@@ -1,0 +1,83 @@
+A common choice of base density for generative modeling in the absence of prior information is to choose $\rho_0 = \mathsf{N}(0, \Id)$. 
+%
+In this setting, we can group the effect of the latent variable $z$ with $x_0$.
+%
+This leads to a simpler type of stochastic interpolant that, in particular, will enables us to instantiate score-based diffusion within our general framework (see Section~\ref{sec:sb}).
+
+\begin{definition}[One-sided stochastic interpolant]
+\label{def:interp:os}
+ Given a probability density function $\rho_1: {\RR^d} \rightarrow \RR_{\geq 0}$, a \textit{one-sided stochastic interpolant} between  ${\sf N}(0,\Id)$ and $\rho_1$ is a stochastic process $x^\OS_t$
+\begin{equation}
+    \label{eq:stochinterp:os}
+    x^\OS_t = \alpha(t) z+ J(t,x_1),  \qquad t\in [0, 1]
+\end{equation}
+that fulfills the requirements:
+\begin{enumerate}[leftmargin=0.15in]
+\item $J\in C^2([0,1],C^2(\RR^d)^d)$ satisfies the boundary conditions $J(0,x_1) = 0$ and $J(1,x_1) = x_1$.
+\item $x_1$ and $z$ are  independent random variables drawn  from $\rho_1$ and ${\sf N}(0,\Id)$, respectively.
+\item $\alpha: [0,1] \to \RR $ satisfies $\alpha(0)=1$, $\alpha(1) = 0$, $\alpha(t)>0$ for all $t \in [0, 1)$, and $\alpha^2 \in C^2([0,1])$.
+\end{enumerate}
+\end{definition}
+
+By construction, $x^\OS_{t=0} = z \sim {\sf N}(0,\Id)$ and $x^\OS_{t=1} = x_1 \sim \rho_1$, so that the distribution of the stochastic process~$x^\OS_t$ bridges ${\sf N}(0,\Id)$ and $\rho_1$. It is easy to see that the one-sided stochastic interpolant defined in~\eqref{eq:stochinterp:os} will have the same density as the stochastic interpolant defined in~\eqref{eq:stochinterp} if we set $I(t,x_0,x_1) = J_t(x_1) + \delta(t) x_0$ and take $\delta^2(t)+ \gamma^2(t) = \alpha^2(t)$.  Restricting to this case, our earlier theoretical results apply where the velocity field $b$ defined in~\eqref{eq:b:ode:def} becomes
+\begin{equation}
+    \label{eq:b:ode:def:os}
+    b_\ODE(t,x) = \EE ( \dot \alpha(t) z + \partial_t J(t,x_1)| x^\OS_t = x),
+\end{equation}
+and the quadratic objective in~\eqref{eq:obj:v} becomes
+\begin{equation}
+    \label{eq:obj:v:os}
+    \mathcal{L}_b[\hat{b}] =\int_0^1   \EE \left( \tfrac12|\hat b(t,x^\OS_t)|^2 - \left(\dot \alpha(t) z + \partial_t J(t,x_1) \right) \cdot \hat b(t,x^\OS_t) \right) dt.
+\end{equation}
+In the expression above, $x^\OS_t$ is given by~\eqref{eq:stochinterp:os} and the expectation $\EE$ is taken independently over $x_1\sim \rho_1$ and $z\sim {\sf N}(0,\Id)$. Similarly, the score is given by
+\begin{equation}
+    \label{eq:obj:s:os}
+    s(t,x) = - \alpha^{-1}(t) \eta_z(t,x), \qquad \eta_z(t,x) = \EE(z|x^\OS_t=x),
+\end{equation}
+where $\eta_z(t,x)$ is the equivalent of the denoiser defined in~\eqref{eq:denoiser}. These functions are the unique minimizers of the objectives
+\begin{equation}
+    \label{eq:os:obj}
+    \mathcal{L}_s[\hat{s}] =\int_0^1   \EE \left( \tfrac12|\hat s(t,x^\OS_t)|^2  +\gamma^{-1}(t) z \cdot \hat s(t,x^\OS_t) \right) dt,
+\end{equation}
+\begin{equation}
+    \label{eq:os:obj:etaz}
+    \mathcal{L}_{\eta_z}[\hat{\eta}_z] =\int_0^1   \EE \left( \tfrac12|\hat \eta_z(t,x^\OS_t)|^2  - z \cdot \hat \eta_z(t,x^\OS_t) \right) dt.
+\end{equation}
+Moreover, we can weaken Assumption~\ref{as:rho:I} to the following requirement:
+
+\begin{assumption}
+\label{as:rho:J}
+The density $\rho_1 \in C^2(\RR^d)$, satisfies $\rho_1(x) > 0$ for all $x \in \RR^d$, and:
+\begin{equation}
+    \label{eq:rho0:sc}
+     \int_{\RR^d} |\nabla \log \rho_1(x)|^2 \rho_1(x) dx < \infty.
+\end{equation}
+The function $J$ satisfies
+\begin{equation}
+    \label{eq:bound:dJ}
+    \begin{aligned}
+        &\exists C_1<\infty  \   : \ 
+        &&|\partial_t J(t,x_1)|\le C_1|x_1|
+        \quad  &&\text{for all}\quad (t,x_1) \in [0,1]\times \RR^d,
+        \end{aligned}
+\end{equation}
+and
+\begin{equation}
+    \label{eq:Jt:L2}
+    \exists M_1,M_2 < \infty  \ \ : \ \  \EE\big[ |\partial_t J(t,x_1)|^4\big] \le M_1; \quad \EE\big[ |\partial^2_t J(t,x_1)|^2\big] \le M_2, \quad  \text{for all}\quad t\in [0,1],
+\end{equation}
+where the expectation is taken over $x_1\sim \rho_1$.
+\end{assumption}
+
+
+\begin{remark}
+    The construction above can easily be generalized to the case where $\rho_0 = \mathsf{N}(0, C_0)$ with $C_0$ a positive-definite matrix. Without loss of generality, we can then assume that $C_0$ can be represented as $C_0 = \sigma_0 \sigma_0^\T$ where $\sigma_0$ is a lower-triangular matrix and replace \eqref{eq:stochinterp:os}
+    \begin{equation}
+    \label{eq:stochinterp:os:C}
+    x^\OS_t = \alpha(t) \sigma_0 z + J(t,x_1) ,  \qquad t\in [0, 1],
+\end{equation}
+with $J$ and $\alpha$ satisfying the conditions listed in Definition~\ref{def:interp:os} and where $z\sim {\sf N}(0,\Id)$.
+\end{remark}
+
+
+

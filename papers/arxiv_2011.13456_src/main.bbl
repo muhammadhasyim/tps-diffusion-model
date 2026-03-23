@@ -1,0 +1,345 @@
+\begin{thebibliography}{51}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Allgower \& Georg(2012)Allgower and Georg]{allgower2012numerical}
+Eugene~L Allgower and Kurt Georg.
+\newblock \emph{Numerical continuation methods: an introduction}, volume~13.
+\newblock Springer Science \& Business Media, 2012.
+
+\bibitem[Anderson(1982)]{Anderson1982-ny}
+Brian D~O Anderson.
+\newblock Reverse-time diffusion equation models.
+\newblock \emph{Stochastic Process. Appl.}, 12\penalty0 (3):\penalty0 313--326,
+  May 1982.
+
+\bibitem[Behrmann et~al.(2019)Behrmann, Grathwohl, Chen, Duvenaud, and
+  Jacobsen]{behrmann2019invertible}
+Jens Behrmann, Will Grathwohl, Ricky~TQ Chen, David Duvenaud, and
+  J{\"o}rn-Henrik Jacobsen.
+\newblock Invertible residual networks.
+\newblock In \emph{International Conference on Machine Learning}, pp.\
+  573--582, 2019.
+
+\bibitem[Bordes et~al.(2017)Bordes, Honari, and Vincent]{bordes2017learning}
+Florian Bordes, Sina Honari, and Pascal Vincent.
+\newblock Learning to generate samples from noise through infusion training.
+\newblock \emph{arXiv preprint arXiv:1703.06975}, 2017.
+
+\bibitem[Brock et~al.(2018)Brock, Donahue, and Simonyan]{brock2018large}
+Andrew Brock, Jeff Donahue, and Karen Simonyan.
+\newblock Large scale gan training for high fidelity natural image synthesis.
+\newblock In \emph{International Conference on Learning Representations}, 2018.
+
+\bibitem[Cai et~al.(2020)Cai, Yang, Averbuch-Elor, Hao, Belongie, Snavely, and
+  Hariharan]{ShapeGF}
+Ruojin Cai, Guandao Yang, Hadar Averbuch-Elor, Zekun Hao, Serge Belongie, Noah
+  Snavely, and Bharath Hariharan.
+\newblock Learning gradient fields for shape generation.
+\newblock In \emph{Proceedings of the European Conference on Computer Vision
+  (ECCV)}, 2020.
+
+\bibitem[Chen et~al.(2020)Chen, Zhang, Zen, Weiss, Norouzi, and
+  Chan]{chen2020wavegrad}
+Nanxin Chen, Yu~Zhang, Heiga Zen, Ron~J Weiss, Mohammad Norouzi, and William
+  Chan.
+\newblock Wavegrad: Estimating gradients for waveform generation.
+\newblock \emph{arXiv preprint arXiv:2009.00713}, 2020.
+
+\bibitem[Chen et~al.(2018)Chen, Rubanova, Bettencourt, and
+  Duvenaud]{chen2018neural}
+Ricky~TQ Chen, Yulia Rubanova, Jesse Bettencourt, and David~K Duvenaud.
+\newblock Neural ordinary differential equations.
+\newblock In \emph{Advances in neural information processing systems}, pp.\
+  6571--6583, 2018.
+
+\bibitem[Chen et~al.(2019)Chen, Behrmann, Duvenaud, and
+  Jacobsen]{chen2019residual}
+Ricky~TQ Chen, Jens Behrmann, David~K Duvenaud, and J{\"o}rn-Henrik Jacobsen.
+\newblock Residual flows for invertible generative modeling.
+\newblock In \emph{Advances in Neural Information Processing Systems}, pp.\
+  9916--9926, 2019.
+
+\bibitem[Dinh et~al.(2016)Dinh, Sohl-Dickstein, and Bengio]{dinh2016density}
+Laurent Dinh, Jascha Sohl-Dickstein, and Samy Bengio.
+\newblock Density estimation using real nvp.
+\newblock \emph{arXiv preprint arXiv:1605.08803}, 2016.
+
+\bibitem[Dormand \& Prince(1980)Dormand and Prince]{dormand1980family}
+John~R Dormand and Peter~J Prince.
+\newblock A family of embedded runge-kutta formulae.
+\newblock \emph{Journal of computational and applied mathematics}, 6\penalty0
+  (1):\penalty0 19--26, 1980.
+
+\bibitem[Du \& Mordatch(2019)Du and Mordatch]{du2019implicit}
+Yilun Du and Igor Mordatch.
+\newblock Implicit generation and modeling with energy based models.
+\newblock In H.~Wallach, H.~Larochelle, A.~Beygelzimer, F.~d\textquotesingle
+  Alch\'{e}-Buc, E.~Fox, and R.~Garnett (eds.), \emph{Advances in Neural
+  Information Processing Systems}, volume~32, pp.\  3608--3618. Curran
+  Associates, Inc., 2019.
+
+\bibitem[Efron(2011)]{efron2011tweedie}
+Bradley Efron.
+\newblock Tweedie’s formula and selection bias.
+\newblock \emph{Journal of the American Statistical Association}, 106\penalty0
+  (496):\penalty0 1602--1614, 2011.
+
+\bibitem[Goodfellow et~al.(2014)Goodfellow, Pouget-Abadie, Mirza, Xu,
+  Warde-Farley, Ozair, Courville, and Bengio]{goodfellow2014generative}
+Ian Goodfellow, Jean Pouget-Abadie, Mehdi Mirza, Bing Xu, David Warde-Farley,
+  Sherjil Ozair, Aaron Courville, and Yoshua Bengio.
+\newblock Generative adversarial nets.
+\newblock In \emph{Advances in neural information processing systems}, pp.\
+  2672--2680, 2014.
+
+\bibitem[Goyal et~al.(2017)Goyal, Ke, Ganguli, and
+  Bengio]{goyal2017variational}
+Anirudh Goyal Alias~Parth Goyal, Nan~Rosemary Ke, Surya Ganguli, and Yoshua
+  Bengio.
+\newblock Variational walkback: Learning a transition operator as a stochastic
+  recurrent net.
+\newblock In \emph{Advances in Neural Information Processing Systems}, pp.\
+  4392--4402, 2017.
+
+\bibitem[Grathwohl et~al.(2018)Grathwohl, Chen, Bettencourt, Sutskever, and
+  Duvenaud]{grathwohl2018ffjord}
+Will Grathwohl, Ricky~TQ Chen, Jesse Bettencourt, Ilya Sutskever, and David
+  Duvenaud.
+\newblock Ffjord: Free-form continuous dynamics for scalable reversible
+  generative models.
+\newblock In \emph{International Conference on Learning Representations}, 2018.
+
+\bibitem[Grenander \& Miller(1994)Grenander and
+  Miller]{grenander1994representations}
+Ulf Grenander and Michael~I Miller.
+\newblock Representations of knowledge in complex systems.
+\newblock \emph{Journal of the Royal Statistical Society: Series B
+  (Methodological)}, 56\penalty0 (4):\penalty0 549--581, 1994.
+
+\bibitem[Ho et~al.(2019)Ho, Chen, Srinivas, Duan, and Abbeel]{ho2019flow++}
+Jonathan Ho, Xi~Chen, Aravind Srinivas, Yan Duan, and Pieter Abbeel.
+\newblock Flow++: Improving flow-based generative models with variational
+  dequantization and architecture design.
+\newblock In \emph{International Conference on Machine Learning}, pp.\
+  2722--2730, 2019.
+
+\bibitem[Ho et~al.(2020)Ho, Jain, and Abbeel]{ho2020denoising}
+Jonathan Ho, Ajay Jain, and Pieter Abbeel.
+\newblock Denoising diffusion probabilistic models.
+\newblock \emph{Advances in Neural Information Processing Systems}, 33, 2020.
+
+\bibitem[Hutchinson(1990)]{hutchinson1990stochastic}
+Michael~F Hutchinson.
+\newblock A stochastic estimator of the trace of the influence matrix for
+  {Laplacian} smoothing splines.
+\newblock \emph{Communications in Statistics-Simulation and Computation},
+  19\penalty0 (2):\penalty0 433--450, 1990.
+
+\bibitem[Hyv{\"a}rinen(2005)]{hyvarinen2005estimation}
+Aapo Hyv{\"a}rinen.
+\newblock Estimation of non-normalized statistical models by score matching.
+\newblock \emph{Journal of Machine Learning Research}, 6\penalty0
+  (Apr):\penalty0 695--709, 2005.
+
+\bibitem[Jolicoeur-Martineau et~al.(2020)Jolicoeur-Martineau,
+  Pich{\'e}-Taillefer, Combes, and Mitliagkas]{jolicoeur2020adversarial}
+Alexia Jolicoeur-Martineau, R{\'e}mi Pich{\'e}-Taillefer, R{\'e}mi Tachet~des
+  Combes, and Ioannis Mitliagkas.
+\newblock Adversarial score matching and improved sampling for image
+  generation.
+\newblock \emph{arXiv preprint arXiv:2009.05475}, 2020.
+
+\bibitem[Karras et~al.(2018)Karras, Aila, Laine, and
+  Lehtinen]{karras2018progressive}
+Tero Karras, Timo Aila, Samuli Laine, and Jaakko Lehtinen.
+\newblock Progressive growing of gans for improved quality, stability, and
+  variation.
+\newblock In \emph{International Conference on Learning Representations}, 2018.
+
+\bibitem[Karras et~al.(2019)Karras, Laine, and Aila]{karras2019style}
+Tero Karras, Samuli Laine, and Timo Aila.
+\newblock A style-based generator architecture for generative adversarial
+  networks.
+\newblock In \emph{Proceedings of the IEEE Conference on Computer Vision and
+  Pattern Recognition}, pp.\  4401--4410, 2019.
+
+\bibitem[Karras et~al.(2020{\natexlab{a}})Karras, Aittala, Hellsten, Laine,
+  Lehtinen, and Aila]{karras2020training}
+Tero Karras, Miika Aittala, Janne Hellsten, Samuli Laine, Jaakko Lehtinen, and
+  Timo Aila.
+\newblock Training generative adversarial networks with limited data.
+\newblock \emph{Advances in Neural Information Processing Systems}, 33,
+  2020{\natexlab{a}}.
+
+\bibitem[Karras et~al.(2020{\natexlab{b}})Karras, Laine, Aittala, Hellsten,
+  Lehtinen, and Aila]{Karras2019stylegan2}
+Tero Karras, Samuli Laine, Miika Aittala, Janne Hellsten, Jaakko Lehtinen, and
+  Timo Aila.
+\newblock Analyzing and improving the image quality of {StyleGAN}.
+\newblock In \emph{Proc. CVPR}, 2020{\natexlab{b}}.
+
+\bibitem[Kingma \& Dhariwal(2018)Kingma and Dhariwal]{kingma2018glow}
+Durk~P Kingma and Prafulla Dhariwal.
+\newblock Glow: Generative flow with invertible 1x1 convolutions.
+\newblock In \emph{Advances in Neural Information Processing Systems}, pp.\
+  10215--10224, 2018.
+
+\bibitem[Kloeden \& Platen(2013)Kloeden and Platen]{kloeden2013numerical}
+Peter~E Kloeden and Eckhard Platen.
+\newblock \emph{Numerical solution of stochastic differential equations},
+  volume~23.
+\newblock Springer Science \& Business Media, 2013.
+
+\bibitem[Kong et~al.(2020)Kong, Ping, Huang, Zhao, and
+  Catanzaro]{kong2020diffwave}
+Zhifeng Kong, Wei Ping, Jiaji Huang, Kexin Zhao, and Bryan Catanzaro.
+\newblock Diffwave: A versatile diffusion model for audio synthesis.
+\newblock \emph{arXiv preprint arXiv:2009.09761}, 2020.
+
+\bibitem[Krizhevsky et~al.(2009)Krizhevsky, Hinton,
+  et~al.]{krizhevsky2009learning}
+Alex Krizhevsky, Geoffrey Hinton, et~al.
+\newblock Learning multiple layers of features from tiny images.
+\newblock 2009.
+
+\bibitem[Liu et~al.(2015)Liu, Luo, Wang, and Tang]{liu2015faceattributes}
+Ziwei Liu, Ping Luo, Xiaogang Wang, and Xiaoou Tang.
+\newblock Deep learning face attributes in the wild.
+\newblock In \emph{Proceedings of International Conference on Computer Vision
+  (ICCV)}, December 2015.
+
+\bibitem[Maoutsa et~al.(2020)Maoutsa, Reich, and Opper]{maoutsa2020interacting}
+Dimitra Maoutsa, Sebastian Reich, and Manfred Opper.
+\newblock Interacting particle solutions of fokker-planck equations through
+  gradient-log-density estimation.
+\newblock \emph{arXiv preprint arXiv:2006.00702}, 2020.
+
+\bibitem[Neal et~al.(2011)]{neal2011mcmc}
+Radford~M Neal et~al.
+\newblock Mcmc using hamiltonian dynamics.
+\newblock \emph{Handbook of markov chain monte carlo}, 2\penalty0
+  (11):\penalty0 2, 2011.
+
+\bibitem[Niu et~al.(2020)Niu, Song, Song, Zhao, Grover, and Ermon]{niu20a}
+Chenhao Niu, Yang Song, Jiaming Song, Shengjia Zhao, Aditya Grover, and Stefano
+  Ermon.
+\newblock Permutation invariant graph generation via score-based generative
+  modeling.
+\newblock volume 108 of \emph{Proceedings of Machine Learning Research}, pp.\
+  4474--4484, Online, 26--28 Aug 2020. PMLR.
+
+\bibitem[{\O}ksendal(2003)]{oksendal2003stochastic}
+Bernt {\O}ksendal.
+\newblock Stochastic differential equations.
+\newblock In \emph{Stochastic differential equations}, pp.\  65--84. Springer,
+  2003.
+
+\bibitem[Pang et~al.(2020)Pang, Xu, Li, Song, Ermon, and
+  Zhu]{pang2020efficient}
+Tianyu Pang, Kun Xu, Chongxuan Li, Yang Song, Stefano Ermon, and Jun Zhu.
+\newblock Efficient learning of generative models via finite-difference score
+  matching.
+\newblock \emph{arXiv preprint arXiv:2007.03317}, 2020.
+
+\bibitem[Parisi(1981)]{parisi1981correlation}
+Giorgio Parisi.
+\newblock Correlation functions and computer simulations.
+\newblock \emph{Nuclear Physics B}, 180\penalty0 (3):\penalty0 378--384, 1981.
+
+\bibitem[Razavi et~al.(2019)Razavi, van~den Oord, and
+  Vinyals]{razavi2019generating}
+Ali Razavi, Aaron van~den Oord, and Oriol Vinyals.
+\newblock Generating diverse high-fidelity images with vq-vae-2.
+\newblock In \emph{Advances in Neural Information Processing Systems}, pp.\
+  14837--14847, 2019.
+
+\bibitem[Roeder et~al.(2020)Roeder, Metz, and Kingma]{roeder2020linear}
+Geoffrey Roeder, Luke Metz, and Diederik~P Kingma.
+\newblock On linear identifiability of learned representations.
+\newblock \emph{arXiv preprint arXiv:2007.00810}, 2020.
+
+\bibitem[S{\"a}rkk{\"a} \& Solin(2019)S{\"a}rkk{\"a} and
+  Solin]{sarkka2019applied}
+Simo S{\"a}rkk{\"a} and Arno Solin.
+\newblock \emph{Applied stochastic differential equations}, volume~10.
+\newblock Cambridge University Press, 2019.
+
+\bibitem[Skilling(1989)]{skilling1989eigenvalues}
+John Skilling.
+\newblock The eigenvalues of mega-dimensional matrices.
+\newblock In \emph{Maximum Entropy and Bayesian Methods}, pp.\  455--466.
+  Springer, 1989.
+
+\bibitem[Sohl-Dickstein et~al.(2015)Sohl-Dickstein, Weiss, Maheswaranathan, and
+  Ganguli]{sohl2015deep}
+Jascha Sohl-Dickstein, Eric Weiss, Niru Maheswaranathan, and Surya Ganguli.
+\newblock Deep unsupervised learning using nonequilibrium thermodynamics.
+\newblock In \emph{International Conference on Machine Learning}, pp.\
+  2256--2265, 2015.
+
+\bibitem[Song \& Ermon(2019)Song and Ermon]{song2019generative}
+Yang Song and Stefano Ermon.
+\newblock Generative modeling by estimating gradients of the data distribution.
+\newblock In \emph{Advances in Neural Information Processing Systems}, pp.\
+  11895--11907, 2019.
+
+\bibitem[Song \& Ermon(2020)Song and Ermon]{song2020improved}
+Yang Song and Stefano Ermon.
+\newblock Improved techniques for training score-based generative models.
+\newblock \emph{Advances in Neural Information Processing Systems}, 33, 2020.
+
+\bibitem[Song et~al.(2019{\natexlab{a}})Song, Garg, Shi, and
+  Ermon]{song2019sliced}
+Yang Song, Sahaj Garg, Jiaxin Shi, and Stefano Ermon.
+\newblock Sliced score matching: {A} scalable approach to density and score
+  estimation.
+\newblock In \emph{Proceedings of the Thirty-Fifth Conference on Uncertainty in
+  Artificial Intelligence, {UAI} 2019, Tel Aviv, Israel, July 22-25, 2019},
+  pp.\  204, 2019{\natexlab{a}}.
+
+\bibitem[Song et~al.(2019{\natexlab{b}})Song, Meng, and Ermon]{song2019mintnet}
+Yang Song, Chenlin Meng, and Stefano Ermon.
+\newblock Mintnet: Building invertible neural networks with masked
+  convolutions.
+\newblock In \emph{Advances in Neural Information Processing Systems}, pp.\
+  11002--11012, 2019{\natexlab{b}}.
+
+\bibitem[Tancik et~al.(2020)Tancik, Srinivasan, Mildenhall, Fridovich-Keil,
+  Raghavan, Singhal, Ramamoorthi, Barron, and Ng]{tancik2020fourfeat}
+Matthew Tancik, Pratul~P. Srinivasan, Ben Mildenhall, Sara Fridovich-Keil,
+  Nithin Raghavan, Utkarsh Singhal, Ravi Ramamoorthi, Jonathan~T. Barron, and
+  Ren Ng.
+\newblock Fourier features let networks learn high frequency functions in low
+  dimensional domains.
+\newblock \emph{NeurIPS}, 2020.
+
+\bibitem[Vincent(2011)]{vincent2011connection}
+Pascal Vincent.
+\newblock A connection between score matching and denoising autoencoders.
+\newblock \emph{Neural computation}, 23\penalty0 (7):\penalty0 1661--1674,
+  2011.
+
+\bibitem[Yu et~al.(2015)Yu, Seff, Zhang, Song, Funkhouser, and
+  Xiao]{yu2015lsun}
+Fisher Yu, Ari Seff, Yinda Zhang, Shuran Song, Thomas Funkhouser, and Jianxiong
+  Xiao.
+\newblock Lsun: Construction of a large-scale image dataset using deep learning
+  with humans in the loop.
+\newblock \emph{arXiv preprint arXiv:1506.03365}, 2015.
+
+\bibitem[Zagoruyko \& Komodakis(2016)Zagoruyko and
+  Komodakis]{zagoruyko2016wide}
+Sergey Zagoruyko and Nikos Komodakis.
+\newblock Wide residual networks.
+\newblock \emph{arXiv preprint arXiv:1605.07146}, 2016.
+
+\bibitem[Zhang(2019)]{zhang2019shiftinvar}
+Richard Zhang.
+\newblock Making convolutional networks shift-invariant again.
+\newblock In \emph{ICML}, 2019.
+
+\end{thebibliography}

@@ -1,0 +1,8 @@
+% \vspace{-5pt}
+\section{Conclusion}
+We have presented a method to repurpose atomistic generative models for transition path sampling by finding paths over the data manifold which minimize the Onsager-Machlup action under the model's learned score function. Our approach, which requires no TPS-specific training procedure, aligns well with the growing trend of leveraging large-scale, well-tested, general-purpose generative models—a direction already standard in the language and vision communities. 
+\vspace{-6pt}
+\paragraph{Limitations.} Our approach does not provably sample the full posterior distribution over paths, as in traditional shooting methods and recent ML approaches \cite{du2024doob}. However, we sample diverse paths by exploiting the stochastic generative model encoding and decoding process. Initiating traditional MD or umbrella sampling simulations is another way to explore the potential energy surface around the OM-optimized paths (see Appendix \ref{sec:alanine_dipeptide_details}).
+\vspace{-6pt}
+\paragraph{Future work.} Incorporating OM optimization into larger generative models trained on more diverse data \cite{lewis2024scalable, jing2024alphafoldmeetsflowmatching} is a natural area for future development. Given the success of large-scale, co-evolutionary modeling of proteins \cite{jumper2021highly}, it would be interesting to investigate the extent to which pre-training generative models on large structural databases enables TPS on unseen systems. More broadly, OM action-minimization could be a powerful framework to generate interpolation paths in a variety of data modalities, including images, videos, and audio.
+

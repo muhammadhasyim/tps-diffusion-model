@@ -1,0 +1,99 @@
+We now discuss how stochastic interpolants can be \textit{rectified} according to the procedure proposed in~\cite{liu2022}.
+%
+Suppose that we have perfectly learned the velocity field $b$ in the probability flow equation~\eqref{eq:ode:1} for a given stochastic interpolant. 
+%
+Denote by $X_t(x)$ the solution to this ODE with the initial condition $X_{t=0}(x)=x$, i.e.
+%
+\begin{equation}
+    \label{eq:ode:1:os:x0}
+    \frac{d}{dt}  X_t(x) = b_\ODE(t, X_t(x)), \qquad X_{t=0}(x)=x.
+\end{equation}
+We can use the map $X_{t=1}: \RR^d \to \RR^d$ to define a new stochastic interpolant 
+%with $z\sim {\sf N} (0,\Id)$
+\begin{equation}
+    \label{eq:new:os}
+    x^\REC_t = \alpha(t) \new{x_0} + \beta(t) X_{t=1}(\new{x_0}),
+\end{equation}
+where $\alpha^2,\beta\in C^2([0,1])$ satisfy $\alpha(0)=\beta(1) = 1$, $\alpha(1) = \beta(0)w= 0$, and $\alpha(t) >0$ for all $t\in[0,1)$.
+%
+Clearly, we then have $x^\REC_{t=0} = \new{x_0}\sim \rho_0$ since $X_{t=0}(\new{x_0})=\new{x_0}$ and $x^\REC_{t=1} = X_{t=1}(\new{x_0}) \sim \rho_1$ by definition of the probability flow equation. 
+%
+We can define a new probability flow equation associated with the velocity field
+\begin{equation}
+    \label{eq:b:rec}
+    b^\REC(t,x) =  \EE[ \dot x^\REC_t | x^\REC_t =x] = \dot\alpha(t) \EE[\new{x_0} | x^\REC_t =x] + \dot\beta(t) \EE[X_{t=1}(\new{x_0})| x^\REC_t =x].
+\end{equation}
+It is easy to see that this velocity field is amenable to estimation, since it is the unique minimizer of 
+\begin{equation}
+    \label{eq:obj:brec}
+    \mathcal L_{b^\REC}[\hat b^\REC] = \int_0^1 \EE \big[ \tfrac12 |\hat b^\REC(t,x^\REC_t) |^2 - (\dot\alpha(t) \new{x_0} + \dot\beta(t) X_{t=1}(\new{x_0})) \cdot \hat b^\REC(t,x^\REC_t)\big] dt,
+\end{equation}
+where $x^\REC_t$ is given in~\eqref{eq:new:os} and the expectation is now only on $\new{x_0 \sim \rho_0}$. Our next result show that the probability flow equation associated with the velocity field \eqref{eq:b:rec} has straight line solutions, but ultimately it leads to a generative model that is identical to the one based on~\eqref{eq:ode:1:os:x0}. 
+%
+To phrase this result, we first make an assumption on the invertibility of $x_t^{\REC}$.
+\begin{assumption}
+    \label{as:rec}
+    The map $x\to M(t,x) $ where $M(t,x) = \alpha(t) x + \beta(t) X_{t=1}(x)$ with $X_t(x)$ solution to \eqref{eq:ode:1:os:x0} is invertible for all $(t,x)\in[0,1]\times\RR^d$, i.e. $\exists N(t,\cdot,): \RR^d \to \RR^d $ such that
+    \begin{equation}
+    \label{eq:q:def}
+    \forall (t,x)\in[0,1]\times\RR^d \quad : \quad N(t,M(t,x))=  M(t,N(t,x)) = x.
+    \end{equation}
+\end{assumption}
+This is equivalent to requiring that the determinant of the Jacobian of $M(t,x)$ is nonzero for all $(t,x)\in[0,1]\times\RR^d$; put differently, Assumption~\ref{as:rec} requires that the Jacobian of $X_{t=1}(x)$ never has eigenvalues precisely equal to $-\alpha(t)/\beta(t)$, which is generic.
+%
+Under this assumption, we state the following theorem.
+\begin{restatable}{theorem}{rec}
+    \label{thm:cond}
+    Consider the probability flow equation associated with~\eqref{eq:b:rec}, 
+    \begin{equation}
+        \label{eq:prob:flow:rec}
+        \frac{d}{dt}  X^\REC_t(x) = b^\REC_\ODE(t, X^\REC_t(x)), \qquad X^\REC_{t=0}(x)=x.
+    \end{equation}
+    Then, all solutions are such that $X^\REC_{t=1}(\new{x_0})\sim \rho_1$ if $\new{x_0 \sim \rho_0}$. In addition, 
+    if Assumption~\eqref{as:rec} holds, the velocity field defined in~\eqref{eq:b:rec} reduces to
+    \begin{equation}
+        \label{eq:b:explicit}
+        b^\REC(t,x) = \dot \alpha(t) N(t,x) + \dot\beta(t) X_{t=1}(N(t,x))
+    \end{equation}
+    and the solution to the probability flow ODE~\eqref{eq:prob:flow:rec} is simply
+    \begin{equation}
+        \label{eq:prod:flow:sol}
+        X^\REC_t(x)= \alpha(t)x + \beta(t)X_{t=1}(x).
+    \end{equation}
+\end{restatable}
+
+The proof is given in Appendix~\ref{app:rect}. 
+
+Theorem~\ref{thm:cond} implies that  $X^\REC_t(x)$ is a simpler flow than $X_t(x)$, but we stress that they give the \textit{same} map, $X^\REC_{t=1}=X_{t=1}$.   In particular, $X^\REC_t(x)$ reduces to a straight line between $x$ and $X_{t=1}(x)$ for $\alpha(t)=1-t$ and $\beta(t)=t$.
+%
+We also note that  the approach can be used to learn a single-step map, since~\eqref{eq:b:explicit} and $N(t=0,x) = x$ give
+\begin{equation}
+        \label{eq:b:explicit:t0}
+        b^\REC(t=0,x) = \dot \alpha(0) x + \dot\beta(0) X_{t=1}(x),
+\end{equation}
+which expresses $X_{t=1}(x)$ in terms of known quantities as long as $\dot \beta(0) \not = 0$.
+%
+For example, if $\dot\alpha(0)=0$ and $\dot \beta(0) = 1$, we obtain $b^\REC(t=0,x) = X_{t=1}(x)$.
+
+\begin{remark}[Optimal transport]
+    The discussion above highlights the fact that a probability flow equation can have straight line solutions and lead to a map that exactly pushes $\rho_0$ onto $\rho_1$ but is not the optimal transport map.
+    %
+    That is,  straight line solutions is a necessary condition for optimal transport, but it is not sufficient.
+\end{remark}
+
+\begin{remark}[Gradient fields]
+    The map is unaffected by the rectification procedure because we do not impose that the velocity $b^\REC(t,x)$ be a gradient field. 
+    %
+    If we do impose this structure by setting $b^\REC(t,x) = \nabla \phi(t,x)$ for some $\phi: \RR^d \to \RR$, then $X_{t=1}^\REC \not = X_{t=1}$. 
+    %
+    As shown in~\cite{liu2022-ot}, iterating over this procedure eventually gives the optimal transport map. 
+    %
+    That is, implemented over gradient fields and iterated infinitely, rectification computes Brenier's polar decomposition of the map~\citep{brenier1987polar}. 
+\end{remark}
+
+
+\begin{remark}[Consistency models]
+    Recent work has introduced the notion of \textit{consistency models}~\citep{song_consistency_2023}, which distill a velocity field learned via score-based diffusion into a single-step map.
+    %
+    Section~\ref{sec:SBDM} and the previous discussion provide an alternative perspective on consistency models, and show how they may be computed in the framework of stochastic interpolants via rectification.
+\end{remark}
