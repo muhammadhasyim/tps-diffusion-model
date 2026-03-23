@@ -1,0 +1,7 @@
+# ignore python bytecode files
+*pyc
+
+_installed_version.py
+
+# ignore tag files
+tags

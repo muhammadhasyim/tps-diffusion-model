@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genai-tps"
+version = "0.1.0"
+description = "Path sampling (TPS) for generative models — vendored OpenPathSampling plus optional backends (e.g. Boltz-2)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  # Vendored OpenPathSampling runtime (see openpathsampling/setup.cfg upstream)
+  "future",
+  "psutil",
+  "numpy>=1.26",
+  "scipy",
+  "pandas",
+  "netcdf4",
+  "svgwrite",
+  "networkx",
+  "matplotlib",
+  "ujson>=4.0.2",
+  "dill",
+  "sqlalchemy>=1.4.1",
+  "mdtraj",
+]
+
+[project.optional-dependencies]
+boltz = [
+  "torch>=2.2",
+]
+dev = [
+  "pytest>=7",
+  "hypothesis>=6",
+]
+
+[tool.setuptools.packages.find]
+where = ["src/python"]
+exclude = ["openpathsampling.tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src/python"]

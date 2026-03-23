@@ -1,0 +1,188 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Transition Path Sampling for Boltz-2 Reverse Diffusion\\
+\large Extended state space, kernels, and discrete-time TPS}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We formulate Boltz-2's reverse diffusion sampler as a discrete-time stochastic
+dynamical system with an explicit transition kernel on an extended state that
+includes SE(3) augmentation and Gaussian noise draws. We give path
+probabilities, Jacobian factors for acceptance ratios, a discussion of SDE
+versus Markov-chain viewpoints, and shooting moves including backward
+re-noising for non-equilibrium generative dynamics.
+\end{abstract}
+
+\section{Setup and extended state space}
+
+Let $M$ denote the number of (padded) atoms. The Boltz-2 reverse sampler
+advances a coordinate tensor $x \in \mathbb{R}^{M \times 3}$ along a fixed
+schedule of noise levels $\sigma_0 > \sigma_1 > \cdots > \sigma_L = 0$ with
+$L = \texttt{num\_sampling\_steps}$. The natural ``time'' parameter is the
+\emph{diffusion step index} $i \in \{0,1,\ldots,L\}$, not physical time.
+
+At step $i$ (before applying the transition from level $\sigma_{i}$ toward
+$\sigma_{i+1}$ in the code's indexing of the loop), we record an extended
+state comprising:
+\begin{itemize}
+  \item coordinates $x_i \in \mathbb{R}^{M \times 3}$;
+  \item a rotation $R_i \in \mathrm{SO}(3)$, sampled via normalized quaternions
+    mapped to matrices (Haar measure on $\mathrm{SO}(3)$, up to numerical
+    implementation);
+  \item a translation $\tau_i \in \mathbb{R}^{1 \times 3}$ with
+    $\tau_i \sim \mathcal{N}(0, s_{\mathrm{trans}}^2 I)$ (see
+    \texttt{compute\_random\_augmentation} in Boltz);
+  \item additive noise $\varepsilon_i \in \mathbb{R}^{M \times 3}$;
+  \item the step index $i$.
+\end{itemize}
+
+States A and B for TPS are defined by collective variables on $x_i$ at the
+endpoints (e.g.\ high noise at A, structural quality at B).
+
+\section{Transition kernel with SE(3) augmentation}
+
+Following the sampling loop in Boltz's \texttt{AtomDiffusion.sample}, each
+iteration performs:
+\begin{enumerate}
+  \item \textbf{Centering and SE(3) augmentation.} Let $\bar{x}_i$ be the
+    per-structure mean of $x_i$ (mask-weighted in general). Define
+    \[
+      \tilde{x}_i = R_i (x_i - \bar{x}_i) + \tau_i .
+    \]
+  \item \textbf{Noise injection.} With $\sigma^{\mathrm{tm}}$ the current
+    $\sigma$, $\gamma$ the schedule parameter, $\hat{t} = \sigma^{\mathrm{tm}}(1+\gamma)$,
+    and $\eta = \texttt{noise\_scale}$,
+    \[
+      v_i = \eta^2 \bigl(\hat{t}^2 - (\sigma^{\mathrm{tm}})^2\bigr), \qquad
+      \varepsilon_i \sim \mathcal{N}(0, v_i I), \qquad
+      x_i^{\mathrm{noisy}} = \tilde{x}_i + \varepsilon_i .
+    \]
+  \item \textbf{Denoising update.} Let $f_\theta$ denote the preconditioned
+    score network and $\hat{x}_i = c_{\mathrm{skip}} x_i^{\mathrm{noisy}} +
+    c_{\mathrm{out}} f_\theta(c_{\mathrm{in}} x_i^{\mathrm{noisy}}, \ldots)$.
+    With $s = \texttt{step\_scale}$ and $\sigma^{\mathrm{t}}$ the next $\sigma$,
+    \[
+      x_{i+1} = x_i^{\mathrm{noisy}}
+        + s\,(\sigma^{\mathrm{t}} - \hat{t})\,
+          \frac{x_i^{\mathrm{noisy}} - \hat{x}_i}{\hat{t}} .
+    \]
+\end{enumerate}
+
+Conditioned on $x_i$, the randomness is $(R_i,\tau_i,\varepsilon_i)$ with
+\[
+  p(x_{i+1}, R_i, \tau_i, \varepsilon_i \mid x_i)
+  = \mu_{\mathrm{Haar}}(R_i)\,
+    \mathcal{N}(\tau_i; 0, s_{\mathrm{trans}}^2 I)\,
+    \mathcal{N}(\varepsilon_i; 0, v_i I)\,
+    \delta\bigl(x_{i+1} - T_i(x_i, R_i, \tau_i, \varepsilon_i)\bigr),
+\]
+where $T_i$ is the deterministic map described above.
+
+\paragraph{Option A (full SE(3)).} Store $(R_i,\tau_i)$ at every step. This
+avoids assuming exact SE(3) equivariance of the network. Successive frames live
+in different rigid frames; post-alignment (e.g.\ Kabsch) is for analysis only.
+
+\paragraph{Acceptance ratios.} Haar density is constant on $\mathrm{SO}(3)$;
+translation densities are Gaussian and cancel when $(R_i,\tau_i)$ are
+resampled i.i.d.\ in shooting moves. Paths retain augmentation; ratio
+simplifications mirror the noise terms.
+
+\paragraph{SE(3) inversion for backward moves.} Given $(\tilde{x}_i, R_i, \tau_i)$,
+  $x_i = R_i^\top (\tilde{x}_i - \tau_i) + \bar{x}_i$.
+
+\paragraph{Remark (Option B).} If the model were exactly equivariant, one could
+fix $R_i = I$, $\tau_i = 0$ without changing marginal path distributions; we do
+not rely on this here.
+
+\section{Path probability and Jacobians}
+
+Let $\rho(x_0)$ be the initial density (e.g.\ Gaussian at $\sigma_0$). The
+extended path
+\[
+  \mathcal{X} =
+  \bigl((x_0,R_0,\tau_0,\varepsilon_0), \ldots,
+  (x_{L-1},R_{L-1},\tau_{L-1},\varepsilon_{L-1}), x_L\bigr)
+\]
+has formal density (suppressing constants from Haar)
+\[
+  P(\mathcal{X}) = \rho(x_0) \prod_{i=0}^{L-1}
+  \bigl[
+    \mu_{\mathrm{Haar}}(R_i)\,
+    \mathcal{N}(\tau_i; 0, s_{\mathrm{trans}}^2 I)\,
+    \mathcal{N}(\varepsilon_i; 0, v_i I)
+  \bigr]
+\]
+under the deterministic constraints $x_{i+1} = T_i(\cdot)$.
+
+\paragraph{Log factors.} Terms $\log \mathcal{N}(\varepsilon_i)$ contribute
+$-\|\varepsilon_i\|^2/(2 v_i)$ up to constants. When the map from
+$\varepsilon_i$ to $x_{i+1}$ is smooth and the network output is treated as
+fixed when differentiating w.r.t.\ $\varepsilon_i$ in a single step, the
+Jacobian is a scalar multiple of the identity on $\mathbb{R}^{3M}$, yielding a
+determinant factor $|1 + s(\sigma^{\mathrm{t}} - \hat{t})/\hat{t}|^{3M}$ per
+step---schedule-dependent and cancelling in ratios with identical schedules.
+
+\paragraph{Recovering $\varepsilon_i$.} Given $(x_i, R_i, \tau_i, x_{i+1})$,
+recompute $\tilde{x}_i$, $x_i^{\mathrm{noisy}}$ by inverting the affine
+dependence on $\varepsilon_i$ together with one network evaluation (see
+implementation).
+
+\section{SDE viewpoint versus discrete-time Markov chain}
+
+Boltz-2's sampler is \emph{not} a standard Euler--Maruyama discretization of a
+fixed SDE: EDM preconditioning, $\gamma$-injection, and \texttt{step\_scale}
+define a bespoke integrator, and $f_\theta$ is a black-box neural map.
+
+Formally one may write $dx = b(x,t)\,dt + g(t)\,dW_t$ after reparameterizing
+``time'' by $\sigma$, but this is heuristic. Discrete-time TPS is nonetheless
+rigorous: Mora, Walczak, and Zamponi (path sampling as Markov chains) and the
+extended-ensemble formulation of Falkner \emph{et al.}\ apply whenever
+transition kernels and path weights are computable---which holds here.
+
+\section{TPS in the extended ensemble}
+
+Following Falkner \emph{et al.}, for fixed path length the path ensemble
+weight ratio often reduces to checking reactivity $H_{AB}(X)$ when internal
+length weights cancel. For \emph{non-reversible} generative dynamics,
+one-way forward shooting avoids backward kernels; two-way shooting requires a
+backward proposal $p^{\mathrm{bwd}}$ (re-noising) and explicit path weight
+ratios built from Gaussian densities, as in the plan's quotient of products of
+forward and backward kernels times initial densities.
+
+\section{Shooting moves}
+
+\paragraph{Forward shooting.} Fix $x_0,\ldots,x_k$, optionally perturb $x_k$,
+resample $\varepsilon_k,\ldots,\varepsilon_{L-1}$ (and fresh $(R,\tau)$), run
+the Boltz-2 map forward.
+
+\paragraph{Backward shooting.} Fix $x_k,\ldots,x_L$; propose earlier frames by
+re-noising using the chosen backward kernel; include Gaussian log-density
+ratios in acceptance.
+
+\paragraph{Perturbation.} Small Gaussian noise at the shooting point improves
+mixing.
+
+\section{Collective variables}
+
+Useful CVs: RMSD to a reference, radius of gyration, contact maps, predicted
+pLDDT from the denoised structure, attention entropy, and the diffusion step
+index.
+
+\begin{thebibliography}{9}
+\bibitem{mora2012} T. Mora, A. M. Walczak, and F. Zamponi,
+  \emph{Transition path sampling for discrete time Markov dynamics},
+  arXiv:1202.0622.
+\bibitem{falkner2024} S. Falkner \emph{et al.},
+  \emph{Transition path sampling for generative models},
+  arXiv:2408.03054.
+\end{thebibliography}
+
+\end{document}

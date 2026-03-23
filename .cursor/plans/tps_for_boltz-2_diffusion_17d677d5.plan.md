@@ -4,34 +4,34 @@ overview: Apply classical Bolhuis-Chandler-Dellago transition path sampling to B
 todos:
   - id: tex-formulation
     content: "Write docs/tps_diffusion_theory.tex: setup, extended state space with SE(3), transition kernel with augmentation, path probability, SDE-equivalent discussion, discrete-time Markov chain fallback, acceptance criterion, shooting moves, CVs"
-    status: in_progress
+    status: completed
   - id: snapshot-class
     content: Implement GPU-native custom snapshot class storing (atom_coords, step_index, sigma, eps_used, rotation_R, translation_t) as torch tensors
-    status: pending
+    status: completed
   - id: engine-wrapper
     content: Implement BoltzDiffusionEngine with generate_next_frame wrapping one Boltz-2 diffusion step, all tensor ops on GPU
-    status: pending
+    status: completed
   - id: gpu-ops-bridge
     content: "Write thin OPS<->GPU bridge: GPU tensor pool, lazy CPU materialization only for OPS storage/serialization, batch-parallel trial trajectories"
-    status: pending
+    status: completed
   - id: backward-shooting
     content: Implement backward (re-noising) direction in the engine with correct noise kernel and SE(3) inversion
-    status: pending
+    status: completed
   - id: state-volumes
     content: "Implement state volume definitions: A (noise at high sigma), B (quality filter on final structure)"
-    status: pending
+    status: completed
   - id: path-probability
     content: Implement log path probability computation from stored noise realizations and SE(3) augmentation variables
-    status: pending
+    status: completed
   - id: cvs
     content: Implement collective variables (RMSD, pLDDT of x0-prediction, step index, Rg) as GPU-evaluated functions
-    status: pending
+    status: completed
   - id: run-script
     content: Write orchestration script that loads Boltz-2, seeds TPS with an initial trajectory, and runs shooting rounds on GPU
-    status: pending
+    status: completed
   - id: tests
     content: "Write tests: path probability consistency, forward-backward symmetry, acceptance ratio validation, SE(3) marginalization check"
-    status: pending
+    status: completed
 isProject: false
 ---
 

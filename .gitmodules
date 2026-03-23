@@ -4,9 +4,9 @@
 [submodule "boltz"]
 	path = boltz
 	url = https://github.com/jwohlwend/boltz
-[submodule "openpathsampling"]
-	path = openpathsampling
-	url = https://github.com/openpathsampling/openpathsampling.git
 [submodule "plumed2"]
 	path = plumed2
 	url = https://github.com/plumed/plumed2.git
+[submodule "all-atom-diffusion-transformer"]
+	path = all-atom-diffusion-transformer
+	url = https://github.com/facebookresearch/all-atom-diffusion-transformer

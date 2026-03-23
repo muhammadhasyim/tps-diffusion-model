@@ -1,0 +1,46 @@
+# genai-tps
+
+**genai-tps** is a Python library for **transition path sampling (TPS)** and related path-ensemble methods applied to **generative models** (e.g. diffusion samplers). It **vendors [OpenPathSampling](https://github.com/openpathsampling/openpathsampling)** (MIT) as the sampling driver—ensembles, moves, networks—so you do not need a separate `pip install openpathsampling`.
+
+- **`import openpathsampling as paths`** — full path-sampling API (unchanged package name under `src/python/openpathsampling/`).
+- **`import genai_tps`** — convenience re-exports plus **`genai_tps.backends.boltz`** for a Boltz-2–specific `DynamicsEngine` wrapper.
+
+Boltz-2 itself is **not** vendored; keep the [`boltz/`](boltz/) submodule (or install `boltz` editable) for structure prediction. See **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)** for the OpenPathSampling license and attribution.
+
+## Install
+
+```bash
+pip install -e ".[boltz,dev]"   # torch + Boltz backend + tests
+```
+
+Or conda: `conda env create -f environment.yml` then `conda activate genai-tps`.
+
+## Relationship to OpenPathSampling
+
+We ship a **snapshot** of upstream OPS inside this repo. To refresh the vendor tree, compare against a tagged upstream release and merge carefully (internal imports stay `openpathsampling.*`). Details: **[docs/vendor_openpathsampling.md](docs/vendor_openpathsampling.md)**.
+
+## Deprecated import path
+
+The old package name **`tps_boltz`** still works as a thin shim but emits `DeprecationWarning`. Prefer:
+
+- `genai_tps.backends.boltz` — Boltz engine, snapshots, path probability, etc.
+- `genai_tps` — top-level shortcuts (Boltz symbols + common OPS types).
+
+## Tests
+
+```bash
+pip install -e ".[boltz,dev]"
+pip install -e ./boltz   # submodule: needed for Boltz imports in backend tests
+pytest tests/
+```
+
+`tests/conftest.py` adds `boltz/src` to `sys.path` when the submodule exists; you still need Boltz’s dependencies (install editable as above).
+
+## Documentation
+
+- Theory note: [docs/tps_diffusion_theory.tex](docs/tps_diffusion_theory.tex) (compile with `pdflatex`).
+- Vendoring policy: [docs/vendor_openpathsampling.md](docs/vendor_openpathsampling.md).
+
+## License
+
+genai-tps project license applies to original files; vendored OpenPathSampling remains MIT—see **THIRD_PARTY_NOTICES.md**.

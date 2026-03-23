@@ -1,0 +1,12 @@
+# Development environment: `conda env create -f environment.yml` from repo root.
+# OpenPathSampling is vendored under src/python/openpathsampling; Boltz stays a submodule.
+# Activate: `conda activate genai-tps`
+name: genai-tps
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - -e ./boltz
+    - -e .[boltz,dev]
