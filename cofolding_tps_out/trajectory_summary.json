@@ -1,0 +1,274 @@
+{
+  "yaml": "/home/mh7373/GitRepos/tps-diffusion-model/examples/cofolding_multimer_msa_empty.yaml",
+  "benchmark_note": "Two-chain heterodimer (Boltz multimer-style example; msa: empty).",
+  "n_atoms": 1792,
+  "diffusion_steps": 32,
+  "sigma0": 2560.0,
+  "n_frames": 33,
+  "frames": [
+    {
+      "frame": 0,
+      "step_index": 0,
+      "sigma": 2560.0,
+      "rms_vs_frame0_ang": 0.0,
+      "coord_norm": 186316.921875
+    },
+    {
+      "frame": 1,
+      "step_index": 1,
+      "sigma": 2097.465087890625,
+      "rms_vs_frame0_ang": 2814.519287109375,
+      "coord_norm": 62388.1875
+    },
+    {
+      "frame": 2,
+      "step_index": 2,
+      "sigma": 1708.4921875,
+      "rms_vs_frame0_ang": 2643.880126953125,
+      "coord_norm": 42769.3125
+    },
+    {
+      "frame": 3,
+      "step_index": 3,
+      "sigma": 1383.0640869140625,
+      "rms_vs_frame0_ang": 2574.0986328125,
+      "coord_norm": 33686.5625
+    },
+    {
+      "frame": 4,
+      "step_index": 4,
+      "sigma": 1112.28125,
+      "rms_vs_frame0_ang": 2555.685302734375,
+      "coord_norm": 26629.732421875
+    },
+    {
+      "frame": 5,
+      "step_index": 5,
+      "sigma": 888.2733154296875,
+      "rms_vs_frame0_ang": 2560.819580078125,
+      "coord_norm": 20809.31640625
+    },
+    {
+      "frame": 6,
+      "step_index": 6,
+      "sigma": 704.1033325195312,
+      "rms_vs_frame0_ang": 2547.37548828125,
+      "coord_norm": 15974.9931640625
+    },
+    {
+      "frame": 7,
+      "step_index": 7,
+      "sigma": 553.6830444335938,
+      "rms_vs_frame0_ang": 2549.39306640625,
+      "coord_norm": 12380.5927734375
+    },
+    {
+      "frame": 8,
+      "step_index": 8,
+      "sigma": 431.6929626464844,
+      "rms_vs_frame0_ang": 2546.2265625,
+      "coord_norm": 9438.671875
+    },
+    {
+      "frame": 9,
+      "step_index": 9,
+      "sigma": 333.50567626953125,
+      "rms_vs_frame0_ang": 2542.8232421875,
+      "coord_norm": 6954.6845703125
+    },
+    {
+      "frame": 10,
+      "step_index": 10,
+      "sigma": 255.118408203125,
+      "rms_vs_frame0_ang": 2542.761474609375,
+      "coord_norm": 5317.79736328125
+    },
+    {
+      "frame": 11,
+      "step_index": 11,
+      "sigma": 193.08493041992188,
+      "rms_vs_frame0_ang": 2541.69677734375,
+      "coord_norm": 3798.415771484375
+    },
+    {
+      "frame": 12,
+      "step_index": 12,
+      "sigma": 144.45718383789062,
+      "rms_vs_frame0_ang": 2541.69384765625,
+      "coord_norm": 2783.91015625
+    },
+    {
+      "frame": 13,
+      "step_index": 13,
+      "sigma": 106.728515625,
+      "rms_vs_frame0_ang": 2540.975341796875,
+      "coord_norm": 2041.29150390625
+    },
+    {
+      "frame": 14,
+      "step_index": 14,
+      "sigma": 77.78192901611328,
+      "rms_vs_frame0_ang": 2540.50732421875,
+      "coord_norm": 1524.1275634765625
+    },
+    {
+      "frame": 15,
+      "step_index": 15,
+      "sigma": 55.843448638916016,
+      "rms_vs_frame0_ang": 2541.0791015625,
+      "coord_norm": 1167.5692138671875
+    },
+    {
+      "frame": 16,
+      "step_index": 16,
+      "sigma": 39.437870025634766,
+      "rms_vs_frame0_ang": 2540.667724609375,
+      "coord_norm": 980.734619140625
+    },
+    {
+      "frame": 17,
+      "step_index": 17,
+      "sigma": 27.349811553955078,
+      "rms_vs_frame0_ang": 2541.104736328125,
+      "coord_norm": 939.081787109375
+    },
+    {
+      "frame": 18,
+      "step_index": 18,
+      "sigma": 18.587575912475586,
+      "rms_vs_frame0_ang": 2541.11083984375,
+      "coord_norm": 851.8121337890625
+    },
+    {
+      "frame": 19,
+      "step_index": 19,
+      "sigma": 12.350757598876953,
+      "rms_vs_frame0_ang": 2541.084716796875,
+      "coord_norm": 857.7172241210938
+    },
+    {
+      "frame": 20,
+      "step_index": 20,
+      "sigma": 8.001129150390625,
+      "rms_vs_frame0_ang": 2541.169677734375,
+      "coord_norm": 853.9525756835938
+    },
+    {
+      "frame": 21,
+      "step_index": 21,
+      "sigma": 5.036601543426514,
+      "rms_vs_frame0_ang": 2540.920166015625,
+      "coord_norm": 799.6980590820312
+    },
+    {
+      "frame": 22,
+      "step_index": 22,
+      "sigma": 3.0682132244110107,
+      "rms_vs_frame0_ang": 2540.890869140625,
+      "coord_norm": 765.3067016601562
+    },
+    {
+      "frame": 23,
+      "step_index": 23,
+      "sigma": 1.7997956275939941,
+      "rms_vs_frame0_ang": 2540.870849609375,
+      "coord_norm": 739.8828735351562
+    },
+    {
+      "frame": 24,
+      "step_index": 24,
+      "sigma": 1.0102767944335938,
+      "rms_vs_frame0_ang": 2541.148681640625,
+      "coord_norm": 732.2644653320312
+    },
+    {
+      "frame": 25,
+      "step_index": 25,
+      "sigma": 0.5383878350257874,
+      "rms_vs_frame0_ang": 2541.23779296875,
+      "coord_norm": 727.875244140625
+    },
+    {
+      "frame": 26,
+      "step_index": 26,
+      "sigma": 0.269601047039032,
+      "rms_vs_frame0_ang": 2540.99853515625,
+      "coord_norm": 732.5560302734375
+    },
+    {
+      "frame": 27,
+      "step_index": 27,
+      "sigma": 0.1251358687877655,
+      "rms_vs_frame0_ang": 2541.083251953125,
+      "coord_norm": 734.716552734375
+    },
+    {
+      "frame": 28,
+      "step_index": 28,
+      "sigma": 0.05283724516630173,
+      "rms_vs_frame0_ang": 2540.94921875,
+      "coord_norm": 730.79150390625
+    },
+    {
+      "frame": 29,
+      "step_index": 29,
+      "sigma": 0.0197612214833498,
+      "rms_vs_frame0_ang": 2541.078857421875,
+      "coord_norm": 728.4817504882812
+    },
+    {
+      "frame": 30,
+      "step_index": 30,
+      "sigma": 0.006290842778980732,
+      "rms_vs_frame0_ang": 2541.26220703125,
+      "coord_norm": 727.8392944335938
+    },
+    {
+      "frame": 31,
+      "step_index": 31,
+      "sigma": 0.0015999983297660947,
+      "rms_vs_frame0_ang": 2541.369384765625,
+      "coord_norm": 729.1178588867188
+    },
+    {
+      "frame": 32,
+      "step_index": 32,
+      "sigma": 0.0,
+      "rms_vs_frame0_ang": 2541.24853515625,
+      "coord_norm": 729.2255859375
+    }
+  ],
+  "shooting_log": "/home/mh7373/GitRepos/tps-diffusion-model/cofolding_tps_out/shooting_log.txt",
+  "tps_steps": [
+    {
+      "step": 1,
+      "accepted": false,
+      "metropolis_acceptance": null,
+      "mover": "PathSimulatorMover"
+    },
+    {
+      "step": 2,
+      "accepted": false,
+      "metropolis_acceptance": null,
+      "mover": "PathSimulatorMover"
+    },
+    {
+      "step": 3,
+      "accepted": true,
+      "metropolis_acceptance": 1.0,
+      "mover": "PathSimulatorMover"
+    },
+    {
+      "step": 4,
+      "accepted": false,
+      "metropolis_acceptance": null,
+      "mover": "PathSimulatorMover"
+    },
+    {
+      "step": 5,
+      "accepted": false,
+      "metropolis_acceptance": null,
+      "mover": "PathSimulatorMover"
+    }
+  ]
+}

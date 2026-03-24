@@ -163,9 +163,93 @@ forward and backward kernels times initial densities.
 resample $\varepsilon_k,\ldots,\varepsilon_{L-1}$ (and fresh $(R,\tau)$), run
 the Boltz-2 map forward.
 
-\paragraph{Backward shooting.} Fix $x_k,\ldots,x_L$; propose earlier frames by
-re-noising using the chosen backward kernel; include Gaussian log-density
+With a uniform shooting-point selector the Metropolis-Hastings acceptance for
+forward shooting is $\min(1, 1) = 1$ for any reactive trial path: the
+generation probability for the new suffix equals the path weight of the new
+suffix, so both cancel in the ratio $\pi(X') / \pi(X) \cdot
+p_{\mathrm{gen}}(X \to X') / p_{\mathrm{gen}}(X' \to X)$.
+
+\paragraph{Backward shooting.}  Fix $x_k,\ldots,x_L$; propose earlier frames
+by re-noising using the chosen backward kernel; include Gaussian log-density
 ratios in acceptance.
+
+Let $X = (x_0,\ldots,x_L)$ be the current (accepted) path and
+$X' = (x'_0,\ldots,x'_k,x_k,\ldots,x_L)$ the trial path, which shares the
+suffix from index $k$ onwards.  The Metropolis-Hastings acceptance ratio is
+
+\[
+  r = \frac{\pi(X')}{\pi(X)} \cdot
+      \frac{q_{\mathrm{bwd}}(X_{0:k} \mid x_k)}{q_{\mathrm{bwd}}(X'_{0:k} \mid x_k)},
+\]
+
+where $q_{\mathrm{bwd}}(\cdot \mid x_k)$ is the backward (re-noising) proposal
+density for the prefix $0,\ldots,k$ conditioned on the fixed shooting point
+$x_k$.  The suffix $k,\ldots,L$ cancels in $\pi(X')/\pi(X)$.  Writing
+$\log\pi_{\mathrm{fwd}}(X_{0:k}) \equiv \log\rho(x_0) + \sum_{i=0}^{k-1} \log\mathcal{N}(\varepsilon_i; 0, v_i I)$
+(with optional Jacobian terms), we obtain:
+
+\begin{align}
+  \log r &= \bigl[\log\pi_{\mathrm{fwd}}(X'_{0:k}) - \log\pi_{\mathrm{fwd}}(X_{0:k})\bigr] \notag\\
+         &\quad + \bigl[\log q_{\mathrm{bwd}}(X_{0:k}) - \log q_{\mathrm{bwd}}(X'_{0:k})\bigr]. \label{eq:logr}
+\end{align}
+
+Expanding,
+\[
+  \log r =
+    \underbrace{(\mathrm{lf\_new} - \mathrm{lf\_old})}_{\text{path-weight prefix ratio}}
+  + \underbrace{(\mathrm{lb\_old} - \mathrm{lb\_new})}_{\text{Hastings correction}}
+  + (\log\rho(x'_0) - \log\rho(x_0)),
+\]
+where $\mathrm{lf\_*}$ denotes the prefix forward-transition log density
+(Gaussian noise plus Jacobian) and $\mathrm{lb\_*}$ denotes the backward-kernel
+log density (also Gaussian in our re-noising scheme).  The implementation in
+\texttt{backward\_shooting\_metropolis\_bias} applies $\min(1, e^{\log r})$.
+
+\textbf{Common sign-error pitfall.}  Reversing the signs of the
+$\mathrm{lf}$ and $\mathrm{lb}$ terms (i.e.\ computing
+$\mathrm{lf\_old} - \mathrm{lf\_new} + \mathrm{lb\_new} - \mathrm{lb\_old}$)
+gives $\log(1/r)$ instead of $\log r$.  When the correct $r < 1$ (move
+should be penalised), the inverted formula yields $\exp(-\log r) > 1$, which
+clamps to 1 and always accepts.  When $r > 1$ (move should be freely accepted),
+the inverted formula gives $\exp(\log(1/r)) < 1$ and rejects moves that should
+be accepted.  Both effects together completely invert the sampling, producing
+unphysical (exploded) terminal structures.
+
+\paragraph{SE(3) augmentation for noise recovery.}
+When \texttt{single\_backward\_step}$(x_{i+1}, i)$ runs, it samples a fresh
+augmentation $(R_i, \tau_i)$ and stores it on the \emph{result} frame $x_i$.
+Thus, for a backward-generated frame $x_i$ (i.e.\ $s_0$ in the edge
+$(s_0, s_1)$ of the prefix), the correct augmentation to pass to
+\texttt{recover\_forward\_noise} is $s_0.R$ and $s_0.\tau$, not $s_1.R$
+and $s_1.\tau$ (which belong to the next step $i+1$).
+
+\paragraph{Rescaled fixed-point iteration for backward inversion.}
+Backward shooting requires inverting the Boltz denoising update to recover the
+intermediate $x^{\mathrm{noisy}}$ from the step output $x_{\mathrm{out}}$:
+\[
+  x_{\mathrm{out}} = (1 + \alpha)\,x^{\mathrm{noisy}} - \alpha\,\hat{x}, \qquad
+  \alpha = s\,(\sigma^{\mathrm{t}} - \hat{t})/\hat{t}.
+\]
+The na\"ive fixed-point iteration
+$x \leftarrow (x_{\mathrm{out}} + \alpha\,D(x,\hat{t}))/(1+\alpha)$
+diverges at low noise because the preconditioned denoiser's skip connection
+$c_{\mathrm{skip}} = \sigma_{\mathrm{data}}^2/(\hat{t}^2 + \sigma_{\mathrm{data}}^2)$
+makes $D(x) \approx c_{\mathrm{skip}}\,x$, giving a Jacobian with spectral
+radius $|\alpha\,c_{\mathrm{skip}}/(1+\alpha)| > 1$ when $s > 1$.
+Factoring out $c_{\mathrm{skip}}$ yields the rescaled equation
+\[
+  \gamma_{\mathrm{eff}}\,x = x_{\mathrm{out}} + \alpha\bigl(D(x) - c_{\mathrm{skip}}\,x\bigr),
+  \qquad \gamma_{\mathrm{eff}} = 1 + \alpha\,(1 - c_{\mathrm{skip}}),
+\]
+with iteration
+$x \leftarrow \bigl(x_{\mathrm{out}} + \alpha(\hat{x} - c_{\mathrm{skip}}\,x)\bigr)/\gamma_{\mathrm{eff}}$.
+The Jacobian is now
+$\alpha\,(D'(x) - c_{\mathrm{skip}})/\gamma_{\mathrm{eff}} \approx
+\alpha\,c_{\mathrm{out}}\,c_{\mathrm{in}}\,F'(\cdot)/\gamma_{\mathrm{eff}}$,
+which is bounded and small at all noise levels.
+When \texttt{alignment\_reverse\_diff} is enabled, the rigid alignment from
+the forward sampling loop is applied inside the iteration to ensure the
+recovered $x^{\mathrm{noisy}}$ is consistent with the forward kernel.
 
 \paragraph{Perturbation.} Small Gaussian noise at the shooting point improves
 mixing.

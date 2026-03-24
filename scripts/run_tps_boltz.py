@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Orchestrate TPS-style sampling with Boltz-2 (GPU) and OpenPathSampling.
+"""Orchestrate TPS sampling with Boltz-2 (GPU) and OpenPathSampling.
 
 Requires a Lightning checkpoint and a conditioning bundle (pickle) containing
 ``s_trunk``, ``s_inputs``, ``feats``, ``diffusion_conditioning`` tensors (see
 ``genai_tps.backends.boltz.utils.load_conditioning_bundle``). Produce such a bundle from a
 Boltz inference run or a regression-style tensor dump.
+
+Runs **fixed-length** one-way shooting with Metropolis acceptance via OPS
+:class:`PathSampling` (see ``genai_tps.backends.boltz.tps_sampling``).
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import pickle
 from pathlib import Path
 
@@ -21,10 +25,8 @@ from openpathsampling.engines.trajectory import Trajectory
 from genai_tps.backends.boltz.bridge import snapshot_from_gpu
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
-from genai_tps.backends.boltz.path_probability import compute_log_path_prob
-from genai_tps.backends.boltz.snapshot import BoltzSnapshot, boltz_snapshot_descriptor
-from genai_tps.backends.boltz.states import state_volume_high_sigma, state_volume_quality
-from genai_tps.backends.boltz.collective_variables import make_plddt_proxy_cv, make_sigma_cv
+from genai_tps.backends.boltz.snapshot import boltz_snapshot_descriptor
+from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.backends.boltz.utils import (
     build_network_condition_kwargs,
     load_boltz2_module,
@@ -34,9 +36,9 @@ from genai_tps.backends.boltz.utils import (
 
 def initial_trajectory(core: BoltzSamplerCore, n_steps: int | None = None) -> Trajectory:
     """Run one full forward diffusion path (noise to structure)."""
-    n = n_steps if n_steps is not None else core.num_sampling_steps
     x = core.sample_initial_noise()
-    snaps: list[BoltzSnapshot] = []
+    n = n_steps if n_steps is not None else core.num_sampling_steps
+    snaps: list = []
     sig0 = float(core.schedule[0].sigma_tm)
     snaps.append(
         snapshot_from_gpu(x, 0, None, None, None, sig0, center_mean_before_step=None)
@@ -57,40 +59,34 @@ def initial_trajectory(core: BoltzSamplerCore, n_steps: int | None = None) -> Tr
     return Trajectory(snaps)
 
 
-def run_tps_rounds(
-    engine: BoltzDiffusionEngine,
-    core: BoltzSamplerCore,
-    init_traj: Trajectory,
-    n_rounds: int,
-    log_path: Path,
-) -> None:
-    """Simple shooting: resample from random interior frames (demonstration)."""
-    L = len(init_traj) - 1
-    log_path.write_text("")
-    for r in range(n_rounds):
-        k = int(np.random.randint(1, max(2, L)))
-        x0 = init_traj[k]._tensor_coords_gpu
-        if x0 is None:
-            continue
-        _, eps_new, _, _, meta_new = core.generate_segment(x0, k, L)
-        lp = compute_log_path_prob(
-            eps_new,
-            meta_new,
-            initial_coords=None,
-            sigma0=None,
-            include_jacobian=True,
-            n_atoms=x0.shape[1],
-        )
-        with log_path.open("a") as f:
-            f.write(f"round {r} shoot {k} log_path_prob {float(lp):.4f}\n")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="TPS orchestration for Boltz-2 diffusion")
     parser.add_argument("--checkpoint", type=Path, required=True, help="Boltz2 .ckpt path")
-    parser.add_argument("--conditioning", type=Path, required=True, help="Pickle with diffusion conditioning tensors")
+    parser.add_argument(
+        "--conditioning",
+        type=Path,
+        required=True,
+        help="Pickle with diffusion conditioning tensors",
+    )
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--rounds", type=int, default=5)
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Print TPS progress every N MC steps to stderr (0 = quiet).",
+    )
+    parser.add_argument(
+        "--forward-only",
+        action="store_true",
+        default=False,
+        help=(
+            "Use only forward shooting moves (no backward re-noising). "
+            "Forward shooting always accepts reactive paths (bias = 1), making this "
+            "a guaranteed-correct baseline for validating TPS ensemble wiring."
+        ),
+    )
     parser.add_argument("--out", type=Path, default=Path("genai_tps_boltz_run.log"))
     args = parser.parse_args()
 
@@ -115,27 +111,31 @@ def main() -> None:
     engine = BoltzDiffusionEngine(
         core,
         descriptor,
-        options={"n_frames_max": core.num_sampling_steps + 2},
-    )
-
-    sigma_cv = make_sigma_cv()
-    state_a = state_volume_high_sigma(sigma_min=float(core.schedule[0].sigma_tm) * 0.5)
-    state_b = state_volume_quality(make_plddt_proxy_cv(), plddt_min=30.0)
-    _ = paths.FixedLengthTPSNetwork(
-        initial_states=[state_a],
-        final_states=[state_b],
-        length=core.num_sampling_steps + 1,
+        options={"n_frames_max": core.num_sampling_steps + 4},
     )
 
     init_traj = initial_trajectory(core)
-    run_tps_rounds(engine, core, init_traj, args.rounds, args.out)
+    log_path = args.out
+    final_traj, tps_step_log = run_tps_path_sampling(
+        engine,
+        init_traj,
+        args.rounds,
+        log_path,
+        progress_every=args.progress_every,
+        forward_only=args.forward_only,
+    )
 
     meta = {
-        "n_frames": len(init_traj),
+        "n_frames": len(final_traj),
         "sigma0": float(core.schedule[0].sigma_tm),
+        "tps_steps": tps_step_log,
+        "shooting_log": str(log_path.resolve()),
     }
     with Path(args.out.with_suffix(".pkl")).open("wb") as f:
         pickle.dump(meta, f)
+    summary_json = args.out.with_suffix(".json")
+    summary_json.write_text(json.dumps(meta, indent=2))
+    print(f"Wrote {summary_json}")
 
 
 if __name__ == "__main__":

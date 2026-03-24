@@ -1,0 +1,15 @@
+# Heterodimer co-folding example (two protein chains), single-sequence mode.
+# Derived from the Boltz repository `examples/multimer.yaml`, with `msa: empty`
+# on each chain so preprocessing does not require local MSA files or the MSA server.
+#
+# Reference: Boltz input format — https://github.com/jwohlwend/boltz (docs/prediction.md)
+version: 1
+sequences:
+  - protein:
+      id: A
+      sequence: MAHHHHHHVAVDAVSFTLLQDQLQSVLDTLSEREAGVVRLRFGLTDGQPRTLDEIGQVYGVTRERIRQIESKTMSKLRHPSRSQVLRDYLDGSSGSGTPEERLLRAIFGEKA
+      msa: empty
+  - protein:
+      id: B
+      sequence: MRYAFAAEATTCNAFWRNVDMTVTALYEVPLGVCTQDPDRWTTTPDDEAKTLCRACPRRWLCARDAVESAGAEGLWAGVVIPESGRARAFALGQLRSLAERNGYPVRDHRVSAQSA
+      msa: empty

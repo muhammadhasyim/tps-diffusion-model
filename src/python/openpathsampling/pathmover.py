@@ -552,6 +552,11 @@ class SampleMover(PathMover):
             else:
                 probability *= sample.bias
 
+        import math
+        if not math.isfinite(probability):
+            accepted = False
+            probability = 0.0
+
         rand = self._rng.random()
 
         if rand > probability:

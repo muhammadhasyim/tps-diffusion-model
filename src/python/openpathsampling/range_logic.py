@@ -4,7 +4,7 @@
 This file consists of the logic functions to combine two sets defined as
 ranges of numbers. The functions are such that "and" is the intersection of
 two sets, "or" is the union of two sets, and "sub" means that A - B is the
-relative complement of B in A (usually denoted A \ B).
+relative complement of B in A (usually denoted A \\ B).
 
 The sets are defined by their minima and maxima; for set A this is amin and
 amax, and for set B this is bmin and bmax. Since everything in this code is

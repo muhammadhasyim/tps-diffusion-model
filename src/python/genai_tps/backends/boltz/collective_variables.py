@@ -50,6 +50,47 @@ def rmsd_to_reference(
     return float(torch.sqrt(d + 1e-12).detach().cpu())
 
 
+def kabsch_rmsd_aligned(
+    coords_a: np.ndarray,
+    coords_b: np.ndarray,
+) -> float:
+    """Kabsch-superposed RMSD between two coordinate sets (N, 3) in any consistent unit.
+
+    Optimally superimposes ``coords_a`` onto ``coords_b`` via a proper rotation
+    (det R = +1) and then computes the root-mean-square deviation.
+
+    Algorithm (Kabsch 1976):
+      1. Centre both sets at the origin.
+      2. Compute the cross-covariance matrix H = P^T Q.
+      3. SVD: H = U S V^T.
+      4. Correct for reflections: d = sign(det(V U^T)).
+      5. Optimal rotation: R = V diag(1, 1, d) U^T.
+      6. RMSD = sqrt(mean ||R P_i - Q_i||^2).
+
+    Args:
+        coords_a: (N, 3) array — coordinates to rotate (e.g. pre-minimization Cα).
+        coords_b: (N, 3) array — reference coordinates (e.g. post-minimization Cα).
+
+    Returns:
+        RMSD in the same units as the input coordinates.
+    """
+    coords_a = np.asarray(coords_a, dtype=np.float64)
+    coords_b = np.asarray(coords_b, dtype=np.float64)
+    if coords_a.shape != coords_b.shape or coords_a.ndim != 2 or coords_a.shape[1] != 3:
+        raise ValueError(
+            f"Both arrays must have shape (N, 3); got {coords_a.shape} and {coords_b.shape}"
+        )
+    P = coords_a - coords_a.mean(axis=0)
+    Q = coords_b - coords_b.mean(axis=0)
+    H = P.T @ Q
+    U, _, Vt = np.linalg.svd(H)
+    d = np.sign(np.linalg.det(Vt.T @ U.T))
+    correction = np.diag([1.0, 1.0, d])
+    R = Vt.T @ correction @ U.T
+    P_rot = P @ R.T
+    return float(np.sqrt(((P_rot - Q) ** 2).sum(axis=-1).mean()))
+
+
 def diffusion_step_index_cv(snapshot) -> float:
     return float(getattr(snapshot, "step_index", 0))
 

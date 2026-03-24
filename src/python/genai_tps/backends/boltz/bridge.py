@@ -35,11 +35,9 @@ def snapshot_from_gpu(
     sigma: float | None,
     center_mean_before_step: torch.Tensor | None = None,
 ) -> BoltzSnapshot:
-    """Build :class:`BoltzSnapshot` with numpy coordinates materialized lazily."""
-    c = coords_gpu.detach().cpu().numpy().astype(np.float32)[0]
-    return BoltzSnapshot(
-        c,
-        tensor_coords_gpu=coords_gpu,
+    """Build :class:`BoltzSnapshot` via :meth:`BoltzSnapshot.from_gpu_batch` (GPU-native)."""
+    return BoltzSnapshot.from_gpu_batch(
+        coords_gpu,
         step_index=step_index,
         sigma=sigma,
         eps_used=eps,

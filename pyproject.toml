@@ -12,7 +12,8 @@ dependencies = [
   # Vendored OpenPathSampling runtime (see openpathsampling/setup.cfg upstream)
   "future",
   "psutil",
-  "numpy>=1.26",
+  # Aligned with boltz submodule (numpy 2.x) and numba>=0.61.2.
+  "numpy>=2.0,<2.3",
   "scipy",
   "pandas",
   "netcdf4",
@@ -33,6 +34,10 @@ dev = [
   "pytest>=7",
   "hypothesis>=6",
 ]
+viz = [
+  # PyPI often only has pre-releases for current Python (e.g. 3.2.0a0).
+  "pymol-open-source>=3.2.0a0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src/python"]
@@ -41,3 +46,16 @@ exclude = ["openpathsampling.tests*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src/python"]
+markers = [
+  "cuda: test requires a CUDA device (skipped when unavailable)",
+  "benchmark: regression tied to an external / upstream example (Boltz YAML)",
+]
+# Third-party noise during test collection: fix upstream or reinstall wheels when possible.
+filterwarnings = [
+  "ignore:.*enablePackrat.*:DeprecationWarning:mdtraj.core.selection",
+  "ignore:numpy.ndarray size changed:RuntimeWarning",
+  # SWIG-generated bindings (e.g. netCDF / OpenMM) under Python 3.12+ deprecation rules
+  "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+  "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+  "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+]

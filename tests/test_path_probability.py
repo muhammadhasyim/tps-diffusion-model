@@ -10,6 +10,7 @@ from genai_tps.backends.boltz.path_probability import (
     compute_log_path_prob,
     log_det_jacobian_step,
     log_gaussian_isotropic,
+    min_metropolis_acceptance_path,
 )
 
 
@@ -46,6 +47,15 @@ def test_path_prob_linear_in_noise():
 
 
 def test_acceptance_ratio():
-    acc = acceptance_ratio_fixed_length(-1.0, -2.0, True)
-    assert acc == pytest.approx(min(1.0, math.exp(-1.0)))
+    # log_p_old, log_p_new: min(1, exp(log_p_new - log_p_old)) = π_new/π_old capped
+    acc = acceptance_ratio_fixed_length(-2.0, -1.0, True)
+    assert acc == pytest.approx(min(1.0, math.exp(1.0)))
+    acc2 = acceptance_ratio_fixed_length(-1.0, -2.0, True)
+    assert acc2 == pytest.approx(min(1.0, math.exp(-1.0)))
+    assert min_metropolis_acceptance_path(0.0, 0.0, reactive=False) == 0.0
     assert acceptance_ratio_fixed_length(0.0, 0.0, False) == 0.0
+
+
+def test_min_metropolis_no_exp_overflow():
+    """Large log-density improvement: min(1, exp(d)) is 1 without calling exp(d)."""
+    assert min_metropolis_acceptance_path(-1e9, 0.0, reactive=True) == 1.0

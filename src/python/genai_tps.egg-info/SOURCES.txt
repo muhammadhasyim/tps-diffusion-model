@@ -8,6 +8,7 @@ src/python/genai_tps.egg-info/requires.txt
 src/python/genai_tps.egg-info/top_level.txt
 src/python/genai_tps/backends/__init__.py
 src/python/genai_tps/backends/boltz/__init__.py
+src/python/genai_tps/backends/boltz/boltz2_trunk.py
 src/python/genai_tps/backends/boltz/bridge.py
 src/python/genai_tps/backends/boltz/collective_variables.py
 src/python/genai_tps/backends/boltz/engine.py
@@ -15,6 +16,7 @@ src/python/genai_tps/backends/boltz/gpu_core.py
 src/python/genai_tps/backends/boltz/path_probability.py
 src/python/genai_tps/backends/boltz/snapshot.py
 src/python/genai_tps/backends/boltz/states.py
+src/python/genai_tps/backends/boltz/tps_sampling.py
 src/python/genai_tps/backends/boltz/utils.py
 src/python/openpathsampling/__init__.py
 src/python/openpathsampling/_installed_version.py
@@ -307,5 +309,10 @@ src/python/openpathsampling/tests/pathsimulators/test_hooks.py
 src/python/openpathsampling/tests/utils/test_storage_interfaces.py
 src/python/openpathsampling/utils/storage_interfaces.py
 src/python/tps_boltz/__init__.py
+tests/test_benchmark_prot_no_msa_tps.py
+tests/test_gpu_core_device_propagation.py
 tests/test_path_probability.py
+tests/test_snapshot_gpu_contract.py
 tests/test_tps_boltz_unit.py
+tests/test_tps_integration.py
+tests/test_visualize_cofolding_trajectory.py
