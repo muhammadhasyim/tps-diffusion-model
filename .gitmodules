@@ -3,7 +3,7 @@
 	url = https://github.com/ASK-Berkeley/OM-TPS
 [submodule "boltz"]
 	path = boltz
-	url = https://github.com/jwohlwend/boltz
+	url = https://github.com/muhammadhasyim/boltz.git
 [submodule "plumed2"]
 	path = plumed2
 	url = https://github.com/plumed/plumed2.git
