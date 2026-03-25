@@ -7,10 +7,26 @@ channels:
 dependencies:
   - python=3.11
   - pip
+
+  # ── OpenMM + PDBFixer (conda-forge preferred for CUDA plugin bundling) ───────
+  # openmm from conda-forge bundles CUDA/OpenCL plugins and the force-field XML
+  # files; pdbfixer from conda-forge handles missing-residue repair used by the
+  # RMSD-to-local-minimum CV (scripts/compute_cv_rmsd.py, OpenMMLocalMinRMSD).
+  - openmm>=8.0
+  - pdbfixer>=1.9
+
+  # ── Additional force-field parameters (AMBER14, GBn2 implicit solvent) ──────
+  # openmmforcefields provides AMBER14 + GAFF2 + SMIRNOFF templates used by
+  # compute_cv_rmsd.minimize_pdb (amber14-all.xml, implicit/gbn2.xml).
+  - openmmforcefields>=0.14
+
   - pip:
     # Pin numpy 2.x before editable installs (aligned with boltz + numba>=0.61.2).
     - "numpy>=2.0,<2.3"
     - -e ./boltz
-    - -e .[boltz,dev]
+    - -e .[boltz,dev,enhanced_sampling]
+    # JAX for GPU-accelerated MBAR (pymbar auto-detects jax if installed).
+    # jax[cuda12] requires a CUDA 12 driver; use jax[cpu] for CPU-only machines.
+    - "jax[cuda12]>=0.4"
     # Optional: cartoon PNGs from scripts/visualize_cofolding_trajectory.py --render-cartoon
-    # - -e .[boltz,dev,viz]
+    # - -e .[boltz,dev,viz,enhanced_sampling]

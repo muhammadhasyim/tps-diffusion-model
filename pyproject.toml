@@ -47,6 +47,11 @@ enhanced_sampling = [
   # For pure NumPy fallback: pip install pymbar.
   # Source: https://github.com/choderalab/pymbar
   "pymbar>=4.0",
+  # OpenMM + PDBFixer: required by OpenMMLocalMinRMSD (RMSD-to-local-minimum CV).
+  # Prefer conda-forge: conda install -c conda-forge openmm pdbfixer openmmforcefields
+  # because conda-forge bundles CUDA plugins and force-field XML data files.
+  "openmm>=8.0",
+  "pdbfixer>=1.9",
 ]
 
 [tool.setuptools.packages.find]
