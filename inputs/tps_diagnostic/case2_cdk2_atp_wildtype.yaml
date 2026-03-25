@@ -1,0 +1,32 @@
+version: 1
+# Case 2: CDK2 + ATP wild-type (PDB 1B38) -- memorised / good prediction
+#
+# Paper basis:
+#   Masters et al. (Nat Commun 2025, doi:10.1038/s41467-025-63947-5) reports all
+#   four co-folding models correctly predict ATP binding to CDK2 (AF3: RMSD 0.2 A;
+#   Boltz-1: near-native).  CDK2-ATP is explicitly in the co-folding training data.
+#   Skrinjar et al. (Runs N' Poses, bioRxiv 2025.02.03.636309) confirm that ATP is
+#   a promiscuous cofactor with >100 training analogs; success in lower-similarity
+#   bins for such ligands reflects memorisation rather than generalisation.
+#
+# TPS diagnostic expectation:
+#   Narrow, high-weight path ensembles converging to state B (RMSD < 2 A to 1B38
+#   crystal ATP pose + LDDT-PLI > 0.8).  Positive control showing that TPS finds a
+#   well-defined generative tube for memorised systems.
+#
+# Protein: CDK2 (CDKN2A), 298 residues, PDB 1B38 chain A entity 1
+#           (N-terminal ACE cap stripped; canonical sequence from RCSB)
+# Ligand:  ATP  -- adenosine 5'-triphosphate (CCD code ATP)
+# Cofactor: MG  -- magnesium ion (CCD code MG, present in 1B38 active site)
+
+sequences:
+  - protein:
+      id: A
+      sequence: "MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVRTYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFRTLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISAKAALAHPFFQDVTKPVPHLRL"
+      msa: empty
+  - ligand:
+      id: B
+      ccd: ATP
+  - ligand:
+      id: C
+      ccd: MG

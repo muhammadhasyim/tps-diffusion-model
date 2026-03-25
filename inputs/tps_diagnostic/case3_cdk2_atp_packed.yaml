@@ -1,0 +1,71 @@
+version: 1
+# Case 3: CDK2 + ATP with all binding-site residues packed to Phe (PDB 1B38 mutant)
+# Adversarial / confident-but-wrong example
+#
+# Paper basis:
+#   Masters et al. (Nat Commun 2025, doi:10.1038/s41467-025-63947-5), Figure 1 and
+#   Table 1.  Mutating all 11 ATP-contacting residues (<3.5 A) to Phe fills the
+#   pocket with bulky hydrophobes that should sterically displace ATP and destroy all
+#   native salt bridges to the triphosphate.  Yet Boltz-1, AF3, and Chai-1 still
+#   predict near-native ATP placement with high ligand pLDDT and protein-ligand
+#   ipTM.  Funnel metadynamics (Amber ff14SB/GAFF2, 1 µs x3) confirms the bound
+#   state probability collapses to essentially zero for the packing mutant (Table 1).
+#
+# Mutations applied (from Masters et al. Methods "Packing with bulky hydrophobes"):
+#   All 11 contacting residues (<3.5 A from any ATP heavy atom) mutated to Phe:
+#
+#   PDB 1B38 residue numbering   Wild-type -> Phe
+#   ----------------------------------------
+#   I10F   (beta-strand 1, N-lobe)
+#   T14F   (Gly-rich P-loop)
+#   V18F   (P-loop)
+#   A31F   (beta-strand 3)
+#   K33F   (beta-strand 3, phosphate anchor)
+#   D86F   (hinge-region linker)
+#   K129F  (C-lobe, triphosphate contact)
+#   Q131F  (C-lobe)
+#   N132F  (C-lobe)
+#   L134F  (C-lobe)
+#   D145F  (DFG motif Asp, Mg2+ coordinator)
+#
+#   All 11 verified against PDB 1B38 chain A canonical sequence (RCSB polymer entity 1).
+#
+# TPS diagnostic expectation:
+#   Model still channels diffusion trajectories toward B_crystal (RMSD < 2 A to
+#   1B38 ATP crystal pose) despite the absence of driving forces.  Define two
+#   endpoint definitions:
+#     B_crystal : RMSD < 2 A to crystal ATP heavy atoms
+#     B_phys    : physically reasonable binding (no steric clashes > threshold,
+#                 favourable polar contacts present)
+#   TPS should reveal the model's tubes converge to B_crystal but not B_phys,
+#   exposing the confidence-calibration failure documented by the funnel metadynamics
+#   data in Masters et al.
+#
+# Protein: CDK2 with 11x Phe substitutions (298 residues, same length as WT)
+# Ligand:  ATP  (CCD code ATP)
+# Cofactor: MG  (CCD code MG)
+
+sequences:
+  - protein:
+      id: A
+      # Phe-packed sequence (mutated positions capitalised in annotation, not here;
+      # all 11 substitutions verified by comparison to WT sequence above):
+      # pos  10: I->F
+      # pos  14: T->F
+      # pos  18: V->F
+      # pos  31: A->F
+      # pos  33: K->F
+      # pos  86: D->F
+      # pos 129: K->F
+      # pos 131: Q->F
+      # pos 132: N->F
+      # pos 134: L->F
+      # pos 145: D->F
+      sequence: "MENFQKVEKFGEGFYGVFYKARNKLTGEVVFLFKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQFLKKFMDASALTGIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLFPFFLFINTEGAIKLAFFGLARAFGVPVRTYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFRTLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISAKAALAHPFFQDVTKPVPHLRL"
+      msa: empty
+  - ligand:
+      id: B
+      ccd: ATP
+  - ligand:
+      id: C
+      ccd: MG

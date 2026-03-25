@@ -1,0 +1,30 @@
+version: 1
+# Case 1: MEK1 + FZC inhibitor (PDB 7XLP) -- novel / bad-prediction system
+#
+# Paper basis:
+#   Masters et al. (Nat Commun 2025, doi:10.1038/s41467-025-63947-5) identifies
+#   7XLP as held-out from training (sucos_shape_pocket_qcov = 46.21).  RFAA fails
+#   outright; three remaining co-folding models produce near-native poses despite
+#   the novelty, but these are the exception rather than rule for this regime.
+#   Skrinjar et al. (Runs N' Poses, bioRxiv 2025.02.03.636309) shows success rate
+#   drops steeply in low-similarity bins (0-20, 20-40) for drug-like ligands.
+#
+# TPS diagnostic expectation:
+#   High path-ensemble variance, low fraction of trajectories reaching state B
+#   (RMSD < 2 A to 7XLP crystal pose + LDDT-PLI > 0.8).  Negative control showing
+#   TPS correctly diagnoses failure to generalise.
+#
+# Protein: MEK1 (MAP2K1), 382 residues, PDB 7XLP chain A entity 1
+# Ligand:  FZC  -- (1R,3S)-3-[[6-[2-chloro-4-(4-methylpyrimidin-2-yl)oxy-phenyl]-
+#                    3-methyl-1H-indazol-4-yl]oxy]cyclohexan-1-amine
+#          CAS formula: C25H26ClN5O2  (CCD code FZC)
+#          SMILES canonical: Cc1ccnc(n1)Oc2ccc(c(c2)Cl)c3cc4c(c(n[nH]4)C)c(c3)O[C@H]5CCC[C@H](C5)N
+
+sequences:
+  - protein:
+      id: A
+      sequence: "GLEELELDEQQRKRLEAFLTQKQKVGELKDDDFEKISELGAGNGGVVFKVSHKPSGLVMARKLIHLEIKPAIRNQIIRELQVLHECNSPYIVGFYGAFYSDGEISICMEHMDGGSLDQVLKKAGRIPEQILGKVSIAVIKGLTYLREKHKIMHRDVKPSNILVNSRGEIKLCDFGVSGQLIDSMANSFVGTRSYMSPERLQGTHYSVQSDIWSMGLSLVEMAVGRYPIPPPDAKELELMFGCQVEGDAAETPPRPRTPGRPLNKKGMDSRPPMAIFELLDYIVNEPPPKLPSGVFSLEFQDFVNKCLIKNPAERADLKQLMVHAFIKRSDAEEVDFAGWLCSTIGLNQ"
+      msa: empty
+  - ligand:
+      id: B
+      ccd: FZC
