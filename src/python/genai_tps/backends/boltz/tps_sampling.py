@@ -32,6 +32,7 @@ from genai_tps.backends.boltz.states import state_volume_high_sigma, state_volum
 if TYPE_CHECKING:
     from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
     from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
+    from genai_tps.enhanced_sampling import EnhancedSamplingBias
 
 _tps_logger = logging.getLogger(__name__)
 
@@ -133,6 +134,26 @@ class _NaNRejectingShootMixin:
             )
             trial.bias = 0.0
 
+    def _apply_enhanced_bias(self, trial, input_sample, trial_trajectory):
+        """Multiply trial.bias by the enhanced sampling acceptance factor.
+
+        The enhanced bias and CV function are stored on ``self.engine`` by
+        :func:`run_tps_path_sampling` when enhanced sampling is active.
+        """
+        es_bias = getattr(self.engine, "_enhanced_bias", None)
+        cv_fn = getattr(self.engine, "_cv_function", None)
+        if es_bias is None or cv_fn is None:
+            return
+        try:
+            cv_old = cv_fn(input_sample.trajectory)
+            cv_new = cv_fn(trial_trajectory)
+            factor = es_bias.compute_acceptance_factor(cv_old, cv_new)
+            trial.bias *= factor
+        except Exception as exc:
+            _tps_logger.warning(
+                "Enhanced bias evaluation failed (%s); leaving trial.bias unchanged.", exc
+            )
+
 
 class BoltzDiffusionForwardShootMover(_NaNRejectingShootMixin, ForwardShootMover):
     """Forward shooting that auto-rejects trajectories with NaN coordinates."""
@@ -143,6 +164,7 @@ class BoltzDiffusionForwardShootMover(_NaNRejectingShootMixin, ForwardShootMover
             input_sample, shooting_index, trial_trajectory,
             stopping_reason, run_details,
         )
+        self._apply_enhanced_bias(trial, input_sample, trial_trajectory)
         self._reject_if_nan(trial, trial_trajectory)
         return trial, trial_details
 
@@ -189,6 +211,7 @@ class BoltzDiffusionBackwardShootMover(_NaNRejectingShootMixin, BackwardShootMov
                     shooting_index,
                     core,
                 )
+        self._apply_enhanced_bias(trial, input_sample, trial_trajectory)
         self._reject_if_nan(trial, trial_trajectory)
         return trial, trial_details
 
@@ -269,6 +292,19 @@ class GlobalReshuffleMover(paths.PathMover):
             _tps_logger.debug(
                 "GlobalReshuffleMover: trial not reactive or has NaN; rejecting."
             )
+
+        if bias > 0.0:
+            es_bias = getattr(self.engine, "_enhanced_bias", None)
+            cv_fn = getattr(self.engine, "_cv_function", None)
+            if es_bias is not None and cv_fn is not None:
+                try:
+                    cv_old = cv_fn(old_traj)
+                    cv_new = cv_fn(new_traj)
+                    bias *= es_bias.compute_acceptance_factor(cv_old, cv_new)
+                except Exception as exc:
+                    _tps_logger.warning(
+                        "GlobalReshuffleMover: enhanced bias failed (%s).", exc
+                    )
 
         trial = paths.Sample(
             replica=input_sample.replica,
@@ -448,6 +484,8 @@ def run_tps_path_sampling(
     log_path_prob_every: int = 1,
     forward_only: bool = False,
     reshuffle_probability: float = 0.1,
+    enhanced_bias: "EnhancedSamplingBias | None" = None,
+    cv_function: Callable[[Trajectory], float] | None = None,
 ) -> tuple[Trajectory, list[dict[str, Any]]]:
     """Run OPS :class:`PathSampling` with one-way shooting; return final trajectory and step log.
 
@@ -486,7 +524,22 @@ def run_tps_path_sampling(
         Fraction of MC steps that use a global reshuffle move (draw a completely fresh
         path from the prior; always accepts when reactive).  Default ``0.1``.
         Set to ``0`` to disable.
+    enhanced_bias
+        Optional :class:`~genai_tps.enhanced_sampling.EnhancedSamplingBias` object
+        that modifies the Metropolis acceptance probability.  When set alongside
+        ``cv_function``, each mover multiplies ``trial.bias`` by the enhanced
+        sampling acceptance factor, and the bias is updated after each MC step.
+    cv_function
+        Callable that takes a :class:`Trajectory` and returns a scalar CV value
+        (e.g. RMSD of the last frame).  Required when ``enhanced_bias`` is set.
     """
+    if enhanced_bias is not None and cv_function is None:
+        raise ValueError("cv_function is required when enhanced_bias is set.")
+
+    # Attach enhanced sampling context to the engine so movers can access it.
+    engine._enhanced_bias = enhanced_bias  # type: ignore[attr-defined]
+    engine._cv_function = cv_function  # type: ignore[attr-defined]
+
     core = engine.core
     state_a, state_b = sigma_tps_state_volumes(core)
     n_frames = len(init_traj)
@@ -568,15 +621,32 @@ def run_tps_path_sampling(
                 "path_reactive": reactive,
                 "min_1_r": min_1_r,
             }
+
+            cv_val: float | None = None
+            if enhanced_bias is not None and cv_function is not None:
+                cur_traj = _rep0_trajectory(sampler.sample_set)
+                if cur_traj is not None:
+                    try:
+                        cv_val = cv_function(cur_traj)
+                        enhanced_bias.update(cv_val, i + 1)
+                    except Exception as exc:
+                        _tps_logger.warning(
+                            "Enhanced bias update failed at step %d: %s", i + 1, exc
+                        )
+                entry["cv_value"] = cv_val
+
             step_log.append(entry)
 
             # OPS does not always set metropolis_acceptance on nested MoveChange; then metro_p
             # is None (log as "na", not a blank field).
             mp = "na" if metro_p is None else f"{float(metro_p):.6g}"
             m1 = "na" if min_1_r is None else f"{float(min_1_r):.6g}"
+            cv_str = "na" if cv_val is None else f"{cv_val:.6g}"
             log_file.write(
                 f"step {entry['step']} accepted {accepted} "
-                f"metropolis_acceptance {mp} min_1_r {m1} mover {mover_name}\n"
+                f"metropolis_acceptance {mp} min_1_r {m1} mover {mover_name}"
+                + (f" cv {cv_str}" if enhanced_bias is not None else "")
+                + "\n"
             )
             log_file.flush()
 
@@ -612,6 +682,9 @@ def run_tps_path_sampling(
                             cb(step_1, cur)
     finally:
         log_file.close()
+        # Clean up engine attributes set for enhanced sampling
+        engine._enhanced_bias = None  # type: ignore[attr-defined]
+        engine._cv_function = None  # type: ignore[attr-defined]
 
     # Avoid SampleSet[int] which uses random.choice per replica_dict API.
     rep0 = [s for s in sampler.sample_set.samples if s.replica == 0]

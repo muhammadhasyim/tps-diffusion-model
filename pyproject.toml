@@ -42,6 +42,12 @@ analysis = [
   # ProDy 2.x is compatible with NumPy 2.x (tested with 2.6.1 / NumPy 2.2).
   "prody>=2.0",
 ]
+enhanced_sampling = [
+  # pymbar with JAX for GPU-accelerated MBAR (pip install pymbar[jax]).
+  # For pure NumPy fallback: pip install pymbar.
+  # Source: https://github.com/choderalab/pymbar
+  "pymbar>=4.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src/python"]
