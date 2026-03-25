@@ -389,6 +389,27 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--forward-only",
+        action="store_true",
+        default=False,
+        help=(
+            "Use only forward shooting moves (no backward re-noising, no global reshuffles). "
+            "Forward shooting always accepts reactive paths so this is a fast baseline. "
+            "Default: False (use forward + backward + global reshuffle for full ergodicity)."
+        ),
+    )
+    parser.add_argument(
+        "--reshuffle-probability",
+        type=float,
+        default=0.1,
+        metavar="P",
+        help=(
+            "Fraction of MC steps devoted to global reshuffle moves (draw a completely "
+            "fresh path from the prior; always accepts when reactive). "
+            "Ignored when --forward-only is set. Default: 0.1."
+        ),
+    )
+    parser.add_argument(
         "--kernels",
         action="store_true",
         help=(
@@ -536,6 +557,19 @@ def main() -> None:
     )
 
     shoot_log = work_root / "shooting_log.txt"
+
+    # Log the active move scheme to stderr before starting
+    _fwd_only = bool(args.forward_only)
+    _reshuffle_p = float(args.reshuffle_probability)
+    if _fwd_only:
+        _scheme_desc = "forward-only (always accepts reactive paths)"
+    else:
+        _shoot_w = (1.0 - _reshuffle_p) / 2.0
+        _scheme_desc = (
+            f"forward ({_shoot_w:.0%}) + backward ({_shoot_w:.0%})"
+            + (f" + global-reshuffle ({_reshuffle_p:.0%})" if _reshuffle_p > 0 else "")
+        )
+    print(f"[TPS] move scheme: {_scheme_desc}", flush=True)
     cartoon_every = max(0, int(args.cartoon_every))
     periodic_cb: Callable[[int, Trajectory], None] | None = None
     if cartoon_every > 0:
@@ -589,6 +623,8 @@ def main() -> None:
         periodic_every=cartoon_every,
         periodic_callbacks=periodic_extra if periodic_extra else None,
         log_path_prob_every=max(0, int(args.log_path_prob_every)),
+        forward_only=bool(args.forward_only),
+        reshuffle_probability=float(args.reshuffle_probability),
     )
 
     frames_meta = []

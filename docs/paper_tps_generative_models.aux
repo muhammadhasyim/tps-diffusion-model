@@ -1,0 +1,80 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{alphafold3}
+\citation{boltz2}
+\citation{rfaa}
+\citation{gopalan2025}
+\citation{skrinjar2025}
+\citation{hitawala2025}
+\citation{dorman2026}
+\citation{dellago1998,bolhuis2002}
+\citation{buijsman2020}
+\citation{boltz2_tps_theory}
+\citation{falkner2024,buijsman2020}
+\citation{karras2022}
+\newlabel{FirstPage}{{}{1}{}{section*.1}{}}
+\@writefile{toc}{\contentsline {title}{Probing Generative Protein Structure Models with Transition Path Sampling}{1}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {abstract}{Abstract}{1}{section*.1}\protected@file@percent }
+\newlabel{alg:tps}{{}{1}{}{section*.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {}TPS for diffusion dynamics}{1}{section*.3}\protected@file@percent }
+\citation{boltz2_tps_theory}
+\citation{falkner2024}
+\citation{ops}
+\citation{bolhuis2002}
+\citation{song2021,lipman2022}
+\citation{falkner2023}
+\citation{falkner2024,buijsman2020}
+\newlabel{eq:aug}{{1}{2}{}{equation.0.1}{}}
+\newlabel{eq:inject}{{2}{2}{}{equation.0.2}{}}
+\newlabel{eq:update}{{3}{2}{}{equation.0.3}{}}
+\newlabel{eq:logpath}{{4}{2}{}{equation.0.4}{}}
+\newlabel{eq:delta}{{5}{2}{}{equation.0.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {}Results}{2}{section*.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {TPS-sampled structural ensemble.} Final denoised structures extracted from 10 consecutive accepted TPS paths (MC steps 10--100 in increments of 10), rendered as C$\alpha $ ribbon cartoons. Both chains of the heterodimer are shown; chain coloring is preserved across panels. The overall fold and interface geometry are consistent across the ensemble, with the largest variations confined to exposed loop regions. The visual similarity is quantified in Fig.\nobreakspace  {}\ref  {fig:distributions}. }}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:structures}{{1}{2}{\textbf {TPS-sampled structural ensemble.} Final denoised structures extracted from 10 consecutive accepted TPS paths (MC steps 10--100 in increments of 10), rendered as C$\alpha $ ribbon cartoons. Both chains of the heterodimer are shown; chain coloring is preserved across panels. The overall fold and interface geometry are consistent across the ensemble, with the largest variations confined to exposed loop regions. The visual similarity is quantified in Fig.~\ref {fig:distributions}}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {}Discussion}{2}{section*.5}\protected@file@percent }
+\bibcite{dorman2026}{{1}{}{{}}{{}}}
+\bibcite{gopalan2025}{{2}{}{{}}{{}}}
+\bibcite{skrinjar2025}{{3}{}{{}}{{}}}
+\bibcite{hitawala2025}{{4}{}{{}}{{}}}
+\bibcite{boltz2}{{5}{}{{}}{{}}}
+\bibcite{alphafold3}{{6}{}{{}}{{}}}
+\bibcite{rfaa}{{7}{}{{}}{{}}}
+\bibcite{dellago1998}{{8}{}{{}}{{}}}
+\bibcite{bolhuis2002}{{9}{}{{}}{{}}}
+\bibcite{karras2022}{{10}{}{{}}{{}}}
+\bibcite{boltz2_tps_theory}{{11}{}{{}}{{}}}
+\bibcite{song2021}{{12}{}{{}}{{}}}
+\bibcite{lipman2022}{{13}{}{{}}{{}}}
+\bibcite{falkner2024}{{14}{}{{}}{{}}}
+\bibcite{buijsman2020}{{15}{}{{}}{{}}}
+\bibcite{falkner2023}{{16}{}{{}}{{}}}
+\bibcite{ops}{{17}{}{{}}{{}}}
+\bibdata{paper_tps_generative_modelsNotes}
+\bibstyle{apsrev4-2}
+\citation{REVTEX42Control}
+\citation{apsrev42Control}
+\providecommand\NAT@force@numbers{}\NAT@force@numbers
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Structural and energetic distributions of the TPS ensemble.} (a) C$\alpha $ RMSD values of each accepted checkpoint structure relative to the first TPS-accepted structure, for 10 structures sampled at MC steps 10--100. The distribution is narrow ($0.48$--$0.69$\nobreakspace  {}\r A, mean $0.59 \pm 0.06$\nobreakspace  {}\r A), indicating strong structural convergence across distinct denoising trajectories. (b) Total potential energy (kJ/mol) evaluated by OpenMM energy minimization for each TPS checkpoint structure. All structures fall in the range $-42{,}201$ to $-41{,}653$\nobreakspace  {}kJ/mol with a spread of $\approx 548$\nobreakspace  {}kJ/mol, confirming that TPS-sampled structures are physically reasonable across the ensemble. }}{3}{figure.2}\protected@file@percent }
+\newlabel{fig:distributions}{{2}{3}{\textbf {Structural and energetic distributions of the TPS ensemble.} (a) C$\alpha $ RMSD values of each accepted checkpoint structure relative to the first TPS-accepted structure, for 10 structures sampled at MC steps 10--100. The distribution is narrow ($0.48$--$0.69$~\AA , mean $0.59 \pm 0.06$~\AA ), indicating strong structural convergence across distinct denoising trajectories. (b) Total potential energy (kJ/mol) evaluated by OpenMM energy minimization for each TPS checkpoint structure. All structures fall in the range $-42{,}201$ to $-41{,}653$~kJ/mol with a spread of $\approx 548$~kJ/mol, confirming that TPS-sampled structures are physically reasonable across the ensemble}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {}Acknowledgments}{3}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {}References}{3}{section*.7}\protected@file@percent }
+\newlabel{LastBibItem}{{17}{3}{}{section*.7}{}}
+\newlabel{LastPage}{{}{3}{}{}{}}
+\gdef \@abspage@last{3}

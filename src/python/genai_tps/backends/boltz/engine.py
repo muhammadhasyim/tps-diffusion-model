@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
 import torch
 
 import openpathsampling as paths
@@ -80,6 +79,7 @@ class BoltzDiffusionEngine(DynamicsEngine):
         self._last_tau = snap.translation_t
         self._last_sigma = snap.sigma
         self._last_center_mean = getattr(snap, "center_mean_before_step", None)
+        self._snapshot_generated_backward = getattr(snap, "generated_by_backward", False)
 
     def iter_generate(self, initial, running=None, direction=+1, intervals=10, max_length=0):
         self._integration_direction = int(direction)
@@ -124,8 +124,12 @@ class BoltzDiffusionEngine(DynamicsEngine):
                 Trajectory([]),
             )
         step_idx = k - 1
+        # Always use center_mean_before=None (zeros) for backward steps.
+        # Passing the previous forward centroid is incorrect for steps beyond the
+        # first because the original per-frame centroids are not stored; using
+        # zeros consistently here matches what recover_forward_noise expects.
         xn, eps, rr, tr, meta = self.core.single_backward_step(
-            self._current_coords, step_idx, center_mean_before=self._last_center_mean
+            self._current_coords, step_idx
         )
         self._current_coords = xn
         self._current_step_index = k - 1
@@ -134,7 +138,11 @@ class BoltzDiffusionEngine(DynamicsEngine):
         self._last_tau = tr
         self._last_sigma = float(meta["sigma_tm"])
         self._last_meta = meta
-        self._last_center_mean = None
+        # Store explicit zeros so the snapshot carries center_mean_before_step as
+        # a tensor (not None), signalling the zeros convention to recover_forward_noise.
+        self._last_center_mean = torch.zeros(
+            (xn.shape[0], 1, 3), device=xn.device, dtype=xn.dtype
+        )
         self._snapshot_generated_backward = True
         return self.current_snapshot
 

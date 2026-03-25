@@ -38,6 +38,10 @@ viz = [
   # PyPI often only has pre-releases for current Python (e.g. 3.2.0a0).
   "pymol-open-source>=3.2.0a0",
 ]
+analysis = [
+  # ProDy 2.x is compatible with NumPy 2.x (tested with 2.6.1 / NumPy 2.2).
+  "prody>=2.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src/python"]

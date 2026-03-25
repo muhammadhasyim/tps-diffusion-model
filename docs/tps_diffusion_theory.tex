@@ -1,5 +1,6 @@
 \documentclass[11pt]{article}
 \usepackage{amsmath,amssymb,bm}
+\usepackage{amsthm}
 \usepackage{hyperref}
 \usepackage{geometry}
 \geometry{margin=1in}
@@ -8,6 +9,9 @@
 \large Extended state space, kernels, and discrete-time TPS}
 \author{}
 \date{}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{remark}{Remark}
 
 \begin{document}
 \maketitle
@@ -22,6 +26,7 @@ re-noising for non-equilibrium generative dynamics.
 \end{abstract}
 
 \section{Setup and extended state space}
+\label{sec:setup}
 
 Let $M$ denote the number of (padded) atoms. The Boltz-2 reverse sampler
 advances a coordinate tensor $x \in \mathbb{R}^{M \times 3}$ along a fixed
@@ -158,6 +163,7 @@ ratios built from Gaussian densities, as in the plan's quotient of products of
 forward and backward kernels times initial densities.
 
 \section{Shooting moves}
+\label{sec:shooting}
 
 \paragraph{Forward shooting.} Fix $x_0,\ldots,x_k$, optionally perturb $x_k$,
 resample $\varepsilon_k,\ldots,\varepsilon_{L-1}$ (and fresh $(R,\tau)$), run
@@ -254,6 +260,220 @@ recovered $x^{\mathrm{noisy}}$ is consistent with the forward kernel.
 \paragraph{Perturbation.} Small Gaussian noise at the shooting point improves
 mixing.
 
+\section{Backward proposal kernel: explicit derivation}
+\label{sec:bwd-kernel}
+
+The Boltz-2 denoising map $T_i$ is strictly one-directional ($\sigma$ decreases
+at every step), so its time-reversal under the same kernel is ill-defined.  We
+construct instead an explicit \emph{proposal kernel}
+$q_{\mathrm{bwd}}(x_i \mid x_{i+1})$ that goes from a less-noisy frame back to a
+more-noisy one, and derive the exact Metropolis--Hastings correction required to
+maintain the correct stationary distribution over reactive paths.
+
+\subsection{Step 1: Invert the denoising map}
+
+The forward update (Section~\ref{sec:setup}) satisfies
+\[
+  x_{i+1} = (1+\alpha)\,x_i^{\mathrm{noisy}} - \alpha\,\hat{x}_i, \qquad
+  \alpha = s\,\frac{\sigma^{\mathrm{t}} - \hat{t}}{\hat{t}},
+\]
+where $\hat{x}_i = c_{\mathrm{skip}}\,x_i^{\mathrm{noisy}} +
+c_{\mathrm{out}}\,f_\theta(c_{\mathrm{in}}\,x_i^{\mathrm{noisy}},\ldots)$ is the
+preconditioned denoiser.  Given $x_{i+1}$, recovering $x_i^{\mathrm{noisy}}$
+requires solving this implicit equation.  The rescaled fixed-point iteration
+\[
+  x \;\leftarrow\; \frac{x_{i+1} + \alpha\bigl(\hat{x}(x,\hat{t}) - c_{\mathrm{skip}}\,x\bigr)}
+                       {\gamma_{\mathrm{eff}}}, \qquad
+  \gamma_{\mathrm{eff}} = 1 + \alpha(1 - c_{\mathrm{skip}}),
+\]
+is contractive at all noise levels because the residual Jacobian is
+$\alpha\,c_{\mathrm{out}}\,c_{\mathrm{in}}\,F'(\cdot)/\gamma_{\mathrm{eff}}$,
+small for typical EDM schedules (see Section~\ref{sec:shooting}).  Convergence
+in 4 iterations is sufficient in practice.  Denote the recovered intermediate
+$x_i^{\mathrm{noisy}} \approx \mathcal{I}(x_{i+1}, i)$.
+
+\subsection{Step 2: Propose fresh stochastic draws}
+
+Given $x_i^{\mathrm{noisy}}$ from step 1, draw independent samples
+\[
+  \varepsilon_i' \sim \mathcal{N}(0, v_i I), \qquad
+  R_i' \sim \mu_{\mathrm{Haar}}, \qquad
+  \tau_i' \sim \mathcal{N}(0, s_{\mathrm{trans}}^2 I).
+\]
+These fresh draws are \emph{independent} of the draws that produced $x_{i+1}$
+in the forward pass.
+
+\subsection{Step 3: Construct the proposed earlier frame}
+
+Using the SE(3) inversion
+$x_i = R_i'{}^\top(\tilde{x}_i - \tau_i') + \bar{x}_{\mathrm{ref}}$
+with $\tilde{x}_i = x_i^{\mathrm{noisy}} - \varepsilon_i'$, we obtain the
+proposed coordinate $x_i$.  The reference centroid
+$\bar{x}_{\mathrm{ref}}$ is taken from the input (the original $\bar{x}_i$
+stored during the forward pass, if available, or set to zero).
+
+\subsection{Backward proposal density}
+
+Since $x_i^{\mathrm{noisy}}$ is a \emph{deterministic} function of
+$x_{i+1}$ (via the fixed-point inversion), the only randomness in the backward
+step is $(\varepsilon_i', R_i', \tau_i')$.  The backward proposal density is
+therefore
+\begin{equation}
+  q_{\mathrm{bwd}}(x_i \mid x_{i+1})
+  = \mathcal{N}(\varepsilon_i';\, 0, v_i I)\;
+    \mu_{\mathrm{Haar}}(R_i')\;
+    \mathcal{N}(\tau_i';\, 0, s_{\mathrm{trans}}^2 I)\;
+    |\det J_{\mathrm{bwd}}^{-1}|,
+  \label{eq:qbwd}
+\end{equation}
+where $J_{\mathrm{bwd}}^{-1}$ is the Jacobian of the map
+$(\varepsilon_i', R_i', \tau_i') \mapsto x_i$ with $x_i^{\mathrm{noisy}}$
+fixed.  Differentiating step 3 with respect to $\varepsilon_i'$ at fixed
+$R_i', \tau_i'$ gives $\partial x_i/\partial\varepsilon_i' = -R_i'{}^\top$,
+so $|\det(\partial x_i/\partial\varepsilon_i')| = |\det R_i'| = 1$.  The
+Haar and translation Jacobians are also unit-modulus.  Hence
+$|\det J_{\mathrm{bwd}}^{-1}| = 1$ and the backward proposal density is simply
+the product of the noise Gaussian densities:
+\begin{equation}
+  \log q_{\mathrm{bwd}}(x_i \mid x_{i+1})
+  = -\frac{\|\varepsilon_i'\|^2}{2 v_i}
+    -\frac{\|\tau_i'\|^2}{2 s_{\mathrm{trans}}^2}
+    + \text{const},
+  \label{eq:logqbwd}
+\end{equation}
+where the Haar term is constant and the translation Gaussian cancels in
+acceptance ratios (since old and new backward draws are drawn from the same
+prior).  The \emph{effective} log density used in the MH ratio reduces to
+\[
+  \log q_{\mathrm{bwd}}^{\mathrm{eff}}(x_i \mid x_{i+1})
+  = -\frac{\|\varepsilon_i'\|^2}{2 v_i}.
+\]
+
+\subsection{Why forward and backward densities differ}
+
+The forward density of the transition $x_i \to x_{i+1}$ is
+\[
+  \log p_{\mathrm{fwd}}(x_{i+1} \mid x_i)
+  = -\frac{\|\varepsilon_i\|^2}{2 v_i} + \log|\det J_{\mathrm{fwd}}|,
+\]
+where $\varepsilon_i = x_i^{\mathrm{noisy}} - \tilde{x}_i$ is the specific noise
+draw that was used, and the Jacobian $|\det J_{\mathrm{fwd}}| = |1+\alpha|^{3M}$.
+
+The backward proposal density at the same transition (Eq.~\ref{eq:logqbwd}) uses
+a \emph{fresh independent draw} $\varepsilon_i'$ from the same prior, not the
+``inverse'' of the denoising kernel. Because
+$p_{\mathrm{fwd}}(x_{i+1} \mid x_i) \neq q_{\mathrm{bwd}}(x_i \mid x_{i+1})$
+in general, the MH ratio for backward shooting is non-trivial and requires the
+explicit Hastings correction derived in Section~\ref{sec:shooting}.
+
+\subsection{Full Metropolis--Hastings ratio for backward shooting}
+
+For a backward shooting move at frame $k$ (suffix $k,\ldots,L$ shared), the
+prefix $0,\ldots,k$ is re-proposed by applying
+$q_{\mathrm{bwd}}(\cdot \mid \cdot)$ sequentially from $x_k$ backwards to $x_0$.
+Let $X = (x_0,\ldots,x_L)$ be the current path and
+$X' = (x_0',\ldots,x_k', x_{k+1},\ldots,x_L)$ the trial path ($x_j' = x_j$
+for $j \geq k$).  Writing $\pi_{\mathrm{fwd}}(X_{0:k}) = \rho(x_0)
+\prod_{i=0}^{k-1} p_{\mathrm{fwd}}(x_{i+1} \mid x_i)$ and similarly for $X'$,
+and $Q_{\mathrm{bwd}}(X_{0:k}) = \prod_{i=0}^{k-1}
+q_{\mathrm{bwd}}(x_i \mid x_{i+1})$, the acceptance ratio is
+
+\begin{align}
+  \log r
+  &= \underbrace{\bigl[\log\pi_{\mathrm{fwd}}(X'_{0:k})
+                       - \log\pi_{\mathrm{fwd}}(X_{0:k})\bigr]}_{\text{forward path-weight ratio}}
+  \notag\\
+  &\quad
+  + \underbrace{\bigl[\log Q_{\mathrm{bwd}}(X_{0:k})
+                      - \log Q_{\mathrm{bwd}}(X'_{0:k})\bigr]}_{\text{Hastings correction}}
+  \notag\\
+  &\quad
+  + \underbrace{\bigl[\log\rho(x_0') - \log\rho(x_0)\bigr]}_{\text{initial-prior ratio}}.
+  \label{eq:logr-full}
+\end{align}
+
+Expanding with Eq.~\ref{eq:logqbwd}, the Hastings correction evaluates to the
+\emph{difference of Gaussian log-densities} for the re-noising draws
+$(\varepsilon_i')$ versus those implied by the reverse trajectory:
+\[
+  \log Q_{\mathrm{bwd}}(X_{0:k}) - \log Q_{\mathrm{bwd}}(X'_{0:k})
+  = \sum_{i=0}^{k-1} \left[
+      -\frac{\|\varepsilon_i^{\mathrm{old}}\|^2}{2 v_i}
+      + \frac{\|\varepsilon_i^{\mathrm{new}}\|^2}{2 v_i}
+    \right],
+\]
+where $\varepsilon_i^{\mathrm{old}}$ is the backward-step noise stored on
+frame $x_i$ (old path) and $\varepsilon_i^{\mathrm{new}}$ is the noise stored on
+$x_i'$ (new path).
+
+\section{Ergodicity of the full move set}
+\label{sec:ergodicity}
+
+Define the \emph{reactive path ensemble} $\mathcal{R}$ as the set of all
+fixed-length paths $X = (x_0,\ldots,x_L)$ with $x_0 \in A$ and $x_L \in B$,
+weighted by $\pi(X) \propto P(\mathcal{X})\,\mathbf{1}[X \in \mathcal{R}]$.
+
+\paragraph{Forward-only chain.}
+Forward shooting at index $i^*$ leaves the prefix $x_0,\ldots,x_{i^*}$ unchanged.
+The chain is ergodic over the sub-ensemble with fixed $x_0$ but is not ergodic
+over $\mathcal{R}$: paths with different starting noise configurations $x_0$
+are never reached.
+
+\paragraph{Backward-only chain.}
+Backward shooting at index $i^*$ leaves the suffix $x_{i^*},\ldots,x_L$
+unchanged.  Choosing $i^* = 1$ regenerates the entire prefix except $x_0$
+itself; choosing $i^* = L - 1$ keeps only $x_L$ fixed.  However, the chain
+is not ergodic over $\mathcal{R}$ in general because $x_L$ (the terminal
+structure) is never resampled.
+
+\paragraph{Forward + backward chain (two-way shooting).}
+Using forward and backward shooting together breaks both limitations:
+backward moves can change $x_0$ (by choosing $i^* = 1$) while forward moves
+can change $x_L$ (by choosing $i^* = L-1$).
+
+\begin{theorem}[Ergodicity of two-way shooting]
+\label{thm:ergodicity}
+Suppose the reactive path space is connected under the move set, i.e.\ for
+any two reactive paths $X, X'$ there exists a finite sequence of forward and
+backward shooting moves (with any shooting indices in $\{1,\ldots,L-1\}$) of
+positive probability that transforms $X$ into $X'$.  Then the Markov chain on
+$\mathcal{R}$ defined by the forward + backward shooting moves with the
+acceptance rules in Eqs.~\ref{eq:logr-full} and Section~\ref{sec:shooting}
+is ergodic and has stationary distribution $\pi$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+Standard Metropolis--Hastings theory~\cite{bolhuis2002tps}: each move satisfies
+detailed balance with respect to $\pi$ by construction of the acceptance ratio.
+Irreducibility follows from the assumed connectivity of path space.
+\end{proof}
+
+\paragraph{Global reshuffle move.}
+For additional robustness, a \emph{global reshuffle} move may be included:
+draw $x_0' \sim \rho(\cdot)$ and all $(\varepsilon_i', R_i', \tau_i')$ fresh,
+then forward-integrate the full path.  The acceptance ratio is
+
+\[
+  \frac{\pi(X')}{\pi(X)} \cdot \frac{q_{\mathrm{reshuffle}}(X \to X)}
+       {q_{\mathrm{reshuffle}}(X \to X')}
+  = \frac{\rho(x_0') \prod_i \pi_i(\xi_i')}{\rho(x_0) \prod_i \pi_i(\xi_i)}
+    \cdot \frac{\rho(x_0) \prod_i \pi_i(\xi_i)}{\rho(x_0') \prod_i \pi_i(\xi_i')}
+  = 1,
+\]
+so the reshuffle always accepts (when the trial path is reactive).  It reaches
+any path in a single step, guaranteeing irreducibility on its own.  In
+practice it is used at $\sim\!10\%$ of MC steps to complement the local
+shooting moves.
+
+\paragraph{Complete move scheme.}
+The recommended scheme uses:
+\begin{itemize}
+  \item 45\% forward shooting (uniform selector in $\{1,\ldots,L-1\}$, always accepts);
+  \item 45\% backward shooting (uniform selector, explicit MH correction via Eq.~\ref{eq:logr-full});
+  \item 10\% global reshuffle (always accepts).
+\end{itemize}
+This is ergodic on $\mathcal{R}$ without any assumption about connectivity.
+
 \section{Collective variables}
 
 Useful CVs: RMSD to a reference, radius of gyration, contact maps, predicted
@@ -261,12 +481,26 @@ pLDDT from the denoised structure, attention entropy, and the diffusion step
 index.
 
 \begin{thebibliography}{9}
-\bibitem{mora2012} T. Mora, A. M. Walczak, and F. Zamponi,
-  \emph{Transition path sampling for discrete time Markov dynamics},
-  arXiv:1202.0622.
-\bibitem{falkner2024} S. Falkner \emph{et al.},
-  \emph{Transition path sampling for generative models},
-  arXiv:2408.03054.
+\bibitem{mora2012} T.~Mora, A.~M.~Walczak, and F.~Zamponi,
+  Transition path sampling for discrete time Markov dynamics,
+  \textit{arXiv}:1202.0622 (2012).
+\bibitem{falkner2024} S.~Falkner, A.~Coretti, B.~G.~Peters, P.~G.~Bolhuis,
+  and C.~Dellago,
+  Revisiting shooting point Monte Carlo methods for transition path sampling,
+  \textit{J.~Chem.~Phys.}, arXiv:2408.03054 (2024).
+\bibitem{bolhuis2002tps} P.~G.~Bolhuis, D.~Chandler, C.~Dellago, and P.~L.~Geissler,
+  Transition path sampling: throwing ropes over rough mountain passes, in the dark,
+  \textit{Annu.~Rev.~Phys.~Chem.} \textbf{53}, 291 (2002).
+\bibitem{buijsman2020} P.~Buijsman and P.~G.~Bolhuis,
+  Transition path sampling for non-equilibrium dynamics without predefined
+  reaction coordinates,
+  \textit{J.~Chem.~Phys.} \textbf{152}, 044107 (2020).
+\bibitem{singlimmer2025} A.~N.~Singh and D.~T.~Limmer,
+  Reactive path ensembles within nonequilibrium steady states,
+  \textit{arXiv}:2501.19233 (2025).
+\bibitem{brotzakis2016} Z.~F.~Brotzakis and P.~G.~Bolhuis,
+  A one-way shooting algorithm for transition path sampling of asymmetric barriers,
+  \textit{J.~Chem.~Phys.} \textbf{145}, 164112 (2016).
 \end{thebibliography}
 
 \end{document}

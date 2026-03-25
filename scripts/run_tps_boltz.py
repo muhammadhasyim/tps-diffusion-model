@@ -87,6 +87,16 @@ def main() -> None:
             "a guaranteed-correct baseline for validating TPS ensemble wiring."
         ),
     )
+    parser.add_argument(
+        "--reshuffle-probability",
+        type=float,
+        default=0.1,
+        metavar="P",
+        help=(
+            "Fraction of MC steps devoted to global reshuffle moves (draw a fresh "
+            "path from the prior; always accepts when reactive). Default: 0.1."
+        ),
+    )
     parser.add_argument("--out", type=Path, default=Path("genai_tps_boltz_run.log"))
     args = parser.parse_args()
 
@@ -123,6 +133,7 @@ def main() -> None:
         log_path,
         progress_every=args.progress_every,
         forward_only=args.forward_only,
+        reshuffle_probability=float(args.reshuffle_probability),
     )
 
     meta = {

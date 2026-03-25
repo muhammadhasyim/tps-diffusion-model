@@ -143,12 +143,20 @@ def test_se3_haar_omitted_from_path_probability(core_and_engine):
 
 
 def test_recover_forward_noise_round_trip(core_and_engine):
-    """Forward epsilon matches :meth:`BoltzSamplerCore.recover_forward_noise` (Mock identity net)."""
+    """Forward epsilon matches :meth:`BoltzSamplerCore.recover_forward_noise` (Mock identity net).
+
+    For a forward-generated frame, the centroid subtracted during the forward step
+    is ``x0.mean()``.  ``recover_forward_noise`` must receive that centroid explicitly
+    via ``center_mean_before``; using the default (zeros) would give the wrong answer
+    because the forward step centers with the actual per-frame mean.
+    """
     core, _ = core_and_engine
     torch.manual_seed(20250323)
     x0 = core.sample_initial_noise()
     x1, eps, rr, tr, _meta = core.single_forward_step(x0, 0)
-    eps_rec, _ = core.recover_forward_noise(x0, x1, 0, rr, tr)
+    # The forward step internally uses x0.mean() as the centering reference.
+    center_mean = x0.mean(dim=-2, keepdim=True)
+    eps_rec, _ = core.recover_forward_noise(x0, x1, 0, rr, tr, center_mean_before=center_mean)
     torch.testing.assert_close(eps_rec, eps, rtol=1e-4, atol=1e-4)
 
 
@@ -685,8 +693,10 @@ def test_forward_only_shooting_mode(core_and_engine):
     ), "forward_only=True must only contain ForwardShootMover"
     assert len(mover_fwd_only.movers) == 1
 
-    # Both: should contain exactly one forward and one backward
+    # Both: should contain exactly one forward and one backward (and optionally reshuffle)
     types_both = [type(m) for m in mover_both.movers]
     assert BoltzDiffusionForwardShootMover in types_both
     assert BoltzDiffusionBackwardShootMover in types_both
-    assert len(mover_both.movers) == 2
+    # With default reshuffle_probability=0.1 there are 3 movers; without engine
+    # the reshuffle mover is skipped.  Either way fwd+bwd must be present.
+    assert len(mover_both.movers) >= 2

@@ -193,6 +193,102 @@ class BoltzDiffusionBackwardShootMover(_NaNRejectingShootMixin, BackwardShootMov
         return trial, trial_details
 
 
+class GlobalReshuffleMover(paths.PathMover):
+    """Full-path resample: draw fresh ``x_0`` and all noise variables, then forward-integrate.
+
+    This move complements forward and backward shooting to ensure full ergodicity on
+    the reactive path ensemble.  The acceptance ratio is identically 1 for any
+    reactive trial path because old and new paths are drawn i.i.d. from the same
+    Gaussian prior:
+
+    .. math::
+
+        \\frac{\\pi(X^{\\mathrm{new}})}{\\pi(X^{\\mathrm{old}})}
+        \\cdot \\frac{q(X^{\\mathrm{old}})}{q(X^{\\mathrm{new}})}
+        = \\frac{\\rho(x_0^{\\mathrm{new}}) \\prod_i \\pi_i(\\xi_i^{\\mathrm{new}})}
+               {\\rho(x_0^{\\mathrm{old}}) \\prod_i \\pi_i(\\xi_i^{\\mathrm{old}})}
+        \\cdot \\frac{\\rho(x_0^{\\mathrm{old}}) \\prod_i \\pi_i(\\xi_i^{\\mathrm{old}})}
+               {\\rho(x_0^{\\mathrm{new}}) \\prod_i \\pi_i(\\xi_i^{\\mathrm{new}})}
+        = 1.
+
+    Non-reactive trial paths (those that do not end in state B) are rejected.
+
+    Parameters
+    ----------
+    ensemble
+        The TPS ensemble (fixed-length A→B).
+    engine
+        A :class:`~genai_tps.backends.boltz.engine.BoltzDiffusionEngine` with a
+        ``generate_n_frames`` method.  The engine is used to forward-integrate a
+        full new path from a fresh initial noise draw.
+    """
+
+    def __init__(self, ensemble, engine: "BoltzDiffusionEngine"):
+        super().__init__()
+        self.ensemble = ensemble
+        self.engine = engine
+
+    def move(self, sample_set: paths.SampleSet) -> paths.PathMoveChange:
+        """Propose a globally resampled reactive path."""
+        rep0 = [s for s in sample_set.samples if s.replica == 0]
+        if not rep0:
+            rep0 = list(sample_set.samples)
+        input_sample = rep0[0]
+        old_traj = input_sample.trajectory
+        n_frames = len(old_traj)
+
+        try:
+            # Reset engine to a fresh initial noise configuration before generating
+            x0 = self.engine.core.sample_initial_noise()
+            snap0 = BoltzSnapshot.from_gpu_batch(
+                x0,
+                step_index=0,
+                sigma=float(self.engine.core.schedule[0].sigma_tm),
+            )
+            self.engine.current_snapshot = snap0
+            new_traj = self.engine.generate_n_frames(n_frames - 1)
+        except Exception as exc:  # noqa: BLE001
+            _tps_logger.warning("GlobalReshuffleMover: engine error (%s); rejecting.", exc)
+            trial = paths.Sample(
+                replica=input_sample.replica,
+                trajectory=old_traj,
+                ensemble=self.ensemble,
+                bias=0.0,
+            )
+            return paths.RejectedSampleMoveChange(
+                [trial],
+                mover=self,
+                input_samples=[input_sample],
+            )
+
+        reactive = bool(self.ensemble(new_traj, candidate=True))
+        has_finite = trajectory_has_finite_coords(new_traj)
+        bias = 1.0 if (reactive and has_finite) else 0.0
+
+        if not reactive or not has_finite:
+            _tps_logger.debug(
+                "GlobalReshuffleMover: trial not reactive or has NaN; rejecting."
+            )
+
+        trial = paths.Sample(
+            replica=input_sample.replica,
+            trajectory=new_traj,
+            ensemble=self.ensemble,
+            bias=bias,
+        )
+        if bias > 0.0:
+            return paths.AcceptedSampleMoveChange(
+                [trial],
+                mover=self,
+                input_samples=[input_sample],
+            )
+        return paths.RejectedSampleMoveChange(
+            [trial],
+            mover=self,
+            input_samples=[input_sample],
+        )
+
+
 class BoltzDiffusionOneWayShootingMover(OneWayShootingMover):
     """50/50 forward / Boltz-corrected backward shooting, or forward-only when requested.
 
@@ -202,16 +298,37 @@ class BoltzDiffusionOneWayShootingMover(OneWayShootingMover):
         When ``True``, only forward shooting moves are used (no backward re-noising).
         Forward shooting always accepts reactive paths (uniform selector, path weight
         ratio = 1 for identical suffix), making it a guaranteed-correct baseline.
+    reshuffle_probability
+        Fraction of MC steps that use a global reshuffle move (resample ``x_0`` and
+        all noise draws fresh, then forward-integrate the full path).  The reshuffle
+        always accepts when the trial path is reactive (path-weight ratio = 1 under
+        i.i.d. Gaussian prior).  Default ``0.1`` (10 %).  Set to ``0`` to disable.
     """
 
-    def __init__(self, ensemble, selector, engine=None, forward_only: bool = False):
+    def __init__(
+        self,
+        ensemble,
+        selector,
+        engine=None,
+        forward_only: bool = False,
+        reshuffle_probability: float = 0.1,
+    ):
         fwd = BoltzDiffusionForwardShootMover(ensemble=ensemble, selector=selector, engine=engine)
-        if forward_only:
-            movers = [fwd]
+        reshuffle_prob = 0.0 if forward_only else max(0.0, min(1.0, float(reshuffle_probability)))
+
+        if reshuffle_prob > 0.0 and engine is not None:
+            bwd = BoltzDiffusionBackwardShootMover(ensemble=ensemble, selector=selector, engine=engine)
+            rsh = GlobalReshuffleMover(ensemble=ensemble, engine=engine)
+            # forward + backward + reshuffle
+            shooting_weight = (1.0 - reshuffle_prob) / 2.0
+            movers = [fwd, bwd, rsh]
+            weights = [shooting_weight, shooting_weight, reshuffle_prob]
+            SpecializedRandomChoiceMover.__init__(self, movers=movers, weights=weights)
+        elif forward_only:
+            SpecializedRandomChoiceMover.__init__(self, movers=[fwd])
         else:
             bwd = BoltzDiffusionBackwardShootMover(ensemble=ensemble, selector=selector, engine=engine)
-            movers = [fwd, bwd]
-        SpecializedRandomChoiceMover.__init__(self, movers=movers)
+            SpecializedRandomChoiceMover.__init__(self, movers=[fwd, bwd])
 
 
 class BoltzDiffusionOneWayShootingStrategy(move_strategy.OneWayShootingStrategy):
@@ -220,10 +337,12 @@ class BoltzDiffusionOneWayShootingStrategy(move_strategy.OneWayShootingStrategy)
     MoverClass = BoltzDiffusionOneWayShootingMover
 
     def __init__(self, selector=None, ensembles=None, engine=None,
-                 group="shooting", replace=True, forward_only: bool = False):
+                 group="shooting", replace=True, forward_only: bool = False,
+                 reshuffle_probability: float = 0.1):
         super().__init__(selector=selector, ensembles=ensembles, engine=engine,
                          group=group, replace=replace)
         self.forward_only = forward_only
+        self.reshuffle_probability = float(reshuffle_probability)
 
     def make_movers(self, scheme):
         parameters = self.get_parameters(scheme=scheme,
@@ -235,6 +354,7 @@ class BoltzDiffusionOneWayShootingStrategy(move_strategy.OneWayShootingStrategy)
                 selector=sel,
                 engine=eng,
                 forward_only=self.forward_only,
+                reshuffle_probability=self.reshuffle_probability,
             ).named(self.MoverClass.__name__ + " " + ens.name)
             for (ens, sel, eng) in parameters
         ]
@@ -248,10 +368,14 @@ class BoltzDiffusionOneWayShootingMoveScheme(paths.MoveScheme):
     forward_only
         When ``True``, only forward shooting moves are generated.  See
         :class:`BoltzDiffusionOneWayShootingMover`.
+    reshuffle_probability
+        Fraction of MC steps devoted to global reshuffle moves.  A reshuffle draws
+        a completely fresh path from the prior (always accepts when reactive).
+        Default ``0.1``.  Set to ``0`` to disable.
     """
 
     def __init__(self, network, selector=None, ensembles=None, engine=None,
-                 forward_only: bool = False):
+                 forward_only: bool = False, reshuffle_probability: float = 0.1):
         super().__init__(network)
         self.append(
             BoltzDiffusionOneWayShootingStrategy(
@@ -259,6 +383,7 @@ class BoltzDiffusionOneWayShootingMoveScheme(paths.MoveScheme):
                 ensembles=ensembles,
                 engine=engine,
                 forward_only=forward_only,
+                reshuffle_probability=reshuffle_probability,
             )
         )
         self.append(move_strategy.OrganizeByMoveGroupStrategy())
@@ -269,6 +394,7 @@ def build_one_way_shooting_scheme(
     engine: "BoltzDiffusionEngine",
     *,
     forward_only: bool = False,
+    reshuffle_probability: float = 0.1,
 ) -> paths.MoveScheme:
     """TPS move scheme: one-way shooting with Boltz backward dynamics and bias.
 
@@ -277,8 +403,14 @@ def build_one_way_shooting_scheme(
     forward_only
         When ``True``, only forward shooting moves are generated—useful as a
         guaranteed-correct baseline because forward shooting always accepts reactive paths.
+    reshuffle_probability
+        Fraction of MC steps that use a global reshuffle move (always accepts when reactive).
+        Default ``0.1``.  Set to ``0`` to disable global reshuffles.
     """
-    return BoltzDiffusionOneWayShootingMoveScheme(network, engine=engine, forward_only=forward_only)
+    return BoltzDiffusionOneWayShootingMoveScheme(
+        network, engine=engine, forward_only=forward_only,
+        reshuffle_probability=reshuffle_probability,
+    )
 
 
 def assert_trajectory_in_ensemble(traj: Trajectory, ensemble: Any, *, label: str = "") -> None:
@@ -315,6 +447,7 @@ def run_tps_path_sampling(
     | None = None,
     log_path_prob_every: int = 1,
     forward_only: bool = False,
+    reshuffle_probability: float = 0.1,
 ) -> tuple[Trajectory, list[dict[str, Any]]]:
     """Run OPS :class:`PathSampling` with one-way shooting; return final trajectory and step log.
 
@@ -349,6 +482,10 @@ def run_tps_path_sampling(
         Forward shooting always accepts reactive paths (acceptance = 1) so this is a
         guaranteed-correct baseline useful for validating that the TPS ensemble and engine
         are correctly wired before enabling the full Metropolis-Hastings correction.
+    reshuffle_probability
+        Fraction of MC steps that use a global reshuffle move (draw a completely fresh
+        path from the prior; always accepts when reactive).  Default ``0.1``.
+        Set to ``0`` to disable.
     """
     core = engine.core
     state_a, state_b = sigma_tps_state_volumes(core)
@@ -357,7 +494,10 @@ def run_tps_path_sampling(
     ensemble = tps_ensemble(network)
     assert_trajectory_in_ensemble(init_traj, ensemble, label="initial path")
 
-    scheme = build_one_way_shooting_scheme(network, engine, forward_only=forward_only)
+    scheme = build_one_way_shooting_scheme(
+        network, engine, forward_only=forward_only,
+        reshuffle_probability=reshuffle_probability,
+    )
     scheme.move_decision_tree()
 
     sample = sample_from_trajectory(init_traj, ensemble)

@@ -216,6 +216,7 @@ class BoltzSamplerCore:
         step_idx: int,
         random_r: torch.Tensor,
         random_tr: torch.Tensor,
+        center_mean_before: torch.Tensor | None = None,
         *,
         n_fixed_point: int = 4,
     ) -> tuple[torch.Tensor, dict[str, Any]]:
@@ -234,7 +235,16 @@ class BoltzSamplerCore:
             (same ``step_idx`` as in :meth:`single_forward_step`).
         random_r, random_tr
             SE(3) augmentation used when scoring this transition (stored on the
-            later-frame snapshot).
+            lower, backward-generated frame ``s0`` when recovering noise for a
+            backward-shot prefix).
+        center_mean_before
+            The centroid that was subtracted from ``x_prev`` before augmentation
+            during the step that produced ``x_next``.  Must be the same value that
+            was passed as ``center_mean_before`` to :meth:`single_backward_step`
+            when ``x_prev`` was generated.  For backward-generated frames this is
+            the zeros tensor stored on the snapshot as ``center_mean_before_step``.
+            If ``None``, zeros are used (consistent with ``single_backward_step``
+            default).
         n_fixed_point
             Fixed-point iterations for the implicit :math:`x^{\\mathrm{noisy}}` solve.
         """
@@ -243,9 +253,11 @@ class BoltzSamplerCore:
         if self._schedule is None:
             self.build_schedule()
         sch = self.schedule[step_idx]
-        b = x_prev.shape[0]
-        center_mean = x_prev.mean(dim=-2, keepdim=True)
-        x_aug = torch.einsum("bmd,bds->bms", x_prev - center_mean, random_r) + random_tr
+        if center_mean_before is None:
+            cm = torch.zeros((x_prev.shape[0], 1, 3), device=x_prev.device, dtype=x_prev.dtype)
+        else:
+            cm = center_mean_before.to(device=x_prev.device, dtype=x_prev.dtype)
+        x_aug = torch.einsum("bmd,bds->bms", x_prev - cm, random_r) + random_tr
 
         x_noisy = self._solve_x_noisy_from_output(x_next, step_idx, n_fixed_point)
 

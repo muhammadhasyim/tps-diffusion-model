@@ -222,6 +222,7 @@ def prefix_forward_transitions_log_prob_tensor(
                 step_idx,
                 s0.rotation_R,
                 s0.translation_t,
+                getattr(s0, "center_mean_before_step", None),
             )
         else:
             if s1.eps_used is None:
