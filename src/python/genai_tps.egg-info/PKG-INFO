@@ -24,6 +24,10 @@ Requires-Dist: pytest>=7; extra == "dev"
 Requires-Dist: hypothesis>=6; extra == "dev"
 Provides-Extra: viz
 Requires-Dist: pymol-open-source>=3.2.0a0; extra == "viz"
+Provides-Extra: analysis
+Requires-Dist: prody>=2.0; extra == "analysis"
+Provides-Extra: enhanced-sampling
+Requires-Dist: pymbar>=4.0; extra == "enhanced-sampling"
 
 # genai-tps
 

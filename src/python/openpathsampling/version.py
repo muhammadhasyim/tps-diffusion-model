@@ -101,6 +101,8 @@ def get_setup_cfg(directory, filename="setup.cfg"):
     """
     if isinstance(directory, int):
         rel_path = _find_rel_path_for_file(directory, filename)
+        if rel_path is None:
+            return None
         start_dir = os.path.abspath(os.path.dirname(__file__))
         setup_cfg = os.path.normpath(os.path.join(start_dir, rel_path))
     else:

@@ -1,0 +1,20 @@
+Checking input data.
+All inputs are already processed.
+Processing 0 inputs with 0 threads.
+0it [00:00, ?it/s]0it [00:00, ?it/s]
+/usr/local/lib/python3.12/dist-packages/pytorch_lightning/utilities/migration/utils.py:56: The loaded checkpoint was produced with Lightning v2.5.0.post0, which is newer than your current Lightning version: v2.5.0
+[TPS-OPES] barrier=5.00 biasfactor=10.00 pace=1 epsilon=6.74e-03 mode=convergence
+[TPS] starting 5000 MC steps (log: /workspace/tps-diffusion-model/opes_tps_out/shooting_log.txt)
+[TPS-OPES] checkpoint MC step 10 -> tps_mc_step_00000010.npz
+[TPS-OPES] checkpoint MC step 20 -> tps_mc_step_00000020.npz
+[TPS-OPES] checkpoint MC step 30 -> tps_mc_step_00000030.npz
+[TPS-OPES] checkpoint MC step 40 -> tps_mc_step_00000040.npz
+[TPS] 50/5000 steps  0.23 steps/s  ~366.3 min remaining
+[TPS-OPES] checkpoint MC step 50 -> tps_mc_step_00000050.npz
+[TPS-OPES] checkpoint MC step 60 -> tps_mc_step_00000060.npz
+[TPS-OPES] checkpoint MC step 70 -> tps_mc_step_00000070.npz
+[TPS-OPES] checkpoint MC step 80 -> tps_mc_step_00000080.npz
+[TPS-OPES] checkpoint MC step 90 -> tps_mc_step_00000090.npz
+[TPS] 100/5000 steps  0.26 steps/s  ~314.2 min remaining
+[TPS-OPES] checkpoint MC step 100 -> tps_mc_step_00000100.npz
+[TPS-OPES] OPES state checkpoint MC step 100 (5 kernels, 100 depositions)

@@ -12,12 +12,18 @@ dill
 sqlalchemy>=1.4.1
 mdtraj
 
+[analysis]
+prody>=2.0
+
 [boltz]
 torch>=2.2
 
 [dev]
 pytest>=7
 hypothesis>=6
+
+[enhanced_sampling]
+pymbar>=4.0
 
 [viz]
 pymol-open-source>=3.2.0a0
