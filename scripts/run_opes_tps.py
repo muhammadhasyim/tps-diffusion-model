@@ -46,6 +46,7 @@ from genai_tps.backends.boltz.collective_variables import (
     rmsd_to_reference,
 )
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
+from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.snapshot import (
     BoltzSnapshot,
@@ -64,8 +65,23 @@ def _make_cv_function(
     cv_type: str,
     reference_coords: torch.Tensor | None = None,
     atom_mask: torch.Tensor | None = None,
+    topo_npz: Path | None = None,
+    openmm_platform: str = "CUDA",
+    openmm_max_iter: int = 500,
 ) -> Callable[[Trajectory], float]:
-    """Build a CV function that operates on the last frame of a trajectory."""
+    """Build a CV function that operates on the last frame of a trajectory.
+
+    Parameters
+    ----------
+    cv_type:
+        ``"rmsd"``   -- fast RMSD to the initial structure's last frame (proxy CV).
+        ``"rg"``     -- fast radius of gyration (proxy CV).
+        ``"openmm"`` -- AMBER14/GBn2 Cα-RMSD to local energy minimum; identical
+                        to the CV used by ``watch_rmsd_live.py`` and required for
+                        a meaningful comparison against the vanilla TPS baseline.
+                        Requires *topo_npz* and has ~1--10 s per-call cost
+                        (mitigated by coordinate-hash caching).
+    """
 
     def _cv_rmsd(traj: Trajectory) -> float:
         snap = traj[-1]
@@ -81,8 +97,20 @@ def _make_cv_function(
         return _cv_rmsd
     elif cv_type == "rg":
         return _cv_rg
+    elif cv_type == "openmm":
+        if topo_npz is None:
+            raise ValueError(
+                "--bias-cv openmm requires --topo-npz pointing to the Boltz "
+                "processed/structures/*.npz file."
+            )
+        openmm_cv = OpenMMLocalMinRMSD(
+            topo_npz=topo_npz,
+            platform=openmm_platform,
+            max_iter=openmm_max_iter,
+        )
+        return openmm_cv
     else:
-        raise ValueError(f"Unknown CV type: {cv_type!r}. Use 'rmsd' or 'rg'.")
+        raise ValueError(f"Unknown CV type: {cv_type!r}. Use 'rmsd', 'rg', or 'openmm'.")
 
 
 def _write_tps_checkpoint_npz(traj: Trajectory, out_npz: Path, *, mc_step: int) -> bool:
@@ -232,8 +260,30 @@ def main() -> None:
         help="Path to saved OPES state JSON for restart.",
     )
     opes_group.add_argument(
-        "--bias-cv", type=str, default="rmsd", choices=["rmsd", "rg"],
-        help="Collective variable to bias. (default: rmsd)",
+        "--bias-cv", type=str, default="openmm", choices=["rmsd", "rg", "openmm"],
+        help=(
+            "Collective variable for bias. "
+            "'openmm' (default): AMBER14/GBn2 Cα-RMSD to local energy minimum -- "
+            "identical to watch_rmsd_live.py; requires --topo-npz. "
+            "'rmsd': fast RMSD to initial structure (proxy; no OpenMM needed). "
+            "'rg': fast radius of gyration (proxy)."
+        ),
+    )
+    opes_group.add_argument(
+        "--topo-npz", type=Path, default=None,
+        help=(
+            "Path to Boltz processed/structures/*.npz for PDB conversion. "
+            "Required when --bias-cv openmm is used."
+        ),
+    )
+    opes_group.add_argument(
+        "--openmm-platform", type=str, default="CUDA",
+        choices=["CUDA", "OpenCL", "CPU"],
+        help="OpenMM platform for minimization (default: CUDA).",
+    )
+    opes_group.add_argument(
+        "--openmm-max-iter", type=int, default=500,
+        help="Max L-BFGS iterations per minimization (default: 500).",
     )
     opes_group.add_argument(
         "--save-opes-state-every", type=int, default=100,
@@ -359,7 +409,33 @@ def main() -> None:
     if isinstance(last_snap, BoltzSnapshot) and last_snap.tensor_coords is not None:
         ref_coords = last_snap.tensor_coords[0].clone()
 
-    cv_function = _make_cv_function(args.bias_cv, reference_coords=ref_coords)
+    # Auto-detect topo_npz from the processed structures directory if not set.
+    topo_npz = args.topo_npz
+    if topo_npz is None and args.bias_cv == "openmm":
+        struct_candidates = sorted((processed_dir / "structures").glob("*.npz"))
+        if struct_candidates:
+            topo_npz = struct_candidates[0]
+            if len(struct_candidates) > 1:
+                print(
+                    f"[TPS-OPES] Multiple structure npz files; using {topo_npz}",
+                    file=sys.stderr, flush=True,
+                )
+            print(f"[TPS-OPES] Auto-detected topo_npz: {topo_npz}", flush=True)
+        else:
+            print(
+                "[TPS-OPES] ERROR: --bias-cv openmm requires --topo-npz but no "
+                "processed/structures/*.npz found.",
+                file=sys.stderr, flush=True,
+            )
+            sys.exit(1)
+
+    cv_function = _make_cv_function(
+        args.bias_cv,
+        reference_coords=ref_coords,
+        topo_npz=topo_npz,
+        openmm_platform=args.openmm_platform,
+        openmm_max_iter=args.openmm_max_iter,
+    )
 
     if args.opes_restart is not None:
         print(f"[TPS-OPES] Restarting from {args.opes_restart}", flush=True)
@@ -442,6 +518,17 @@ def main() -> None:
     }
     Path(cv_data_path).write_text(json.dumps(cv_data, indent=2))
 
+    cv_stats = {}
+    from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+    if isinstance(cv_function, OpenMMLocalMinRMSD):
+        cv_stats = cv_function.stats()
+        print(
+            f"[TPS-OPES] OpenMM CV stats: {cv_stats['n_calls']} calls, "
+            f"{cv_stats['cache_hit_rate']:.1%} cache hit rate, "
+            f"{cv_stats['n_failures']} failures",
+            flush=True,
+        )
+
     summary = {
         "bias_type": "opes_adaptive",
         "opes_barrier": bias.barrier,
@@ -457,6 +544,7 @@ def main() -> None:
         "rct_final": bias.rct,
         "opes_state_path": str(final_state_path),
         "cv_values_path": str(cv_data_path),
+        "cv_stats": cv_stats,
         "tps_steps": tps_step_log,
     }
     summary_path = work_root / "opes_tps_summary.json"

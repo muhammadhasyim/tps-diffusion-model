@@ -63,6 +63,7 @@ from genai_tps.backends.boltz.snapshot import (
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.enhanced_sampling import ExponentialTiltingBias
 from genai_tps.enhanced_sampling.mbar_analysis import MBARDistributionEstimator
+from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
 
 
 def _repo_root() -> Path:
@@ -85,8 +86,21 @@ def _make_cv_function(
     cv_type: str,
     reference_coords: torch.Tensor | None = None,
     atom_mask: torch.Tensor | None = None,
+    topo_npz: Path | None = None,
+    openmm_platform: str = "CUDA",
+    openmm_max_iter: int = 500,
 ) -> Callable[[Trajectory], float]:
-    """Build a CV function that operates on the last frame of a trajectory."""
+    """Build a CV function that operates on the last frame of a trajectory.
+
+    Parameters
+    ----------
+    cv_type:
+        ``"openmm"`` -- AMBER14/GBn2 Cα-RMSD to local energy minimum;
+                        identical to the CV used by ``watch_rmsd_live.py``.
+                        Requires *topo_npz*.
+        ``"rmsd"``   -- fast RMSD to the initial structure (proxy CV).
+        ``"rg"``     -- fast radius of gyration (proxy CV).
+    """
 
     def _cv_rmsd(traj: Trajectory) -> float:
         snap = traj[-1]
@@ -102,8 +116,19 @@ def _make_cv_function(
         return _cv_rmsd
     elif cv_type == "rg":
         return _cv_rg
+    elif cv_type == "openmm":
+        if topo_npz is None:
+            raise ValueError(
+                "--bias-cv openmm requires --topo-npz pointing to the Boltz "
+                "processed/structures/*.npz file."
+            )
+        return OpenMMLocalMinRMSD(
+            topo_npz=topo_npz,
+            platform=openmm_platform,
+            max_iter=openmm_max_iter,
+        )
     else:
-        raise ValueError(f"Unknown CV type: {cv_type!r}. Use 'rmsd' or 'rg'.")
+        raise ValueError(f"Unknown CV type: {cv_type!r}. Use 'rmsd', 'rg', or 'openmm'.")
 
 
 def _write_tps_checkpoint_npz(traj: Trajectory, out_npz: Path, *, mc_step: int) -> bool:
@@ -197,8 +222,30 @@ def main() -> None:
         help="Tilting strength lambda. Positive biases toward lower CV; negative toward higher. (default: 0.0 = unbiased)",
     )
     tilting_group.add_argument(
-        "--bias-cv", type=str, default="rmsd", choices=["rmsd", "rg"],
-        help="Collective variable to bias. 'rmsd' uses RMSD to the initial structure's last frame; 'rg' uses radius of gyration.",
+        "--bias-cv", type=str, default="openmm", choices=["rmsd", "rg", "openmm"],
+        help=(
+            "Collective variable to bias. "
+            "'openmm' (default): AMBER14/GBn2 Cα-RMSD to local energy minimum -- "
+            "identical to watch_rmsd_live.py; requires --topo-npz. "
+            "'rmsd': fast RMSD to initial structure (proxy; no OpenMM needed). "
+            "'rg': fast radius of gyration (proxy)."
+        ),
+    )
+    tilting_group.add_argument(
+        "--topo-npz", type=Path, default=None,
+        help=(
+            "Path to Boltz processed/structures/*.npz for PDB conversion. "
+            "Required when --bias-cv openmm."
+        ),
+    )
+    tilting_group.add_argument(
+        "--openmm-platform", type=str, default="CUDA",
+        choices=["CUDA", "OpenCL", "CPU"],
+        help="OpenMM platform for minimization (default: CUDA).",
+    )
+    tilting_group.add_argument(
+        "--openmm-max-iter", type=int, default=500,
+        help="Max L-BFGS iterations per minimization (default: 500).",
     )
     tilting_group.add_argument(
         "--annealing-schedule", type=str, default=None,
@@ -328,7 +375,33 @@ def main() -> None:
     if isinstance(last_snap, BoltzSnapshot) and last_snap.tensor_coords is not None:
         ref_coords = last_snap.tensor_coords[0].clone()
 
-    cv_function = _make_cv_function(args.bias_cv, reference_coords=ref_coords)
+    # Auto-detect topo_npz from the processed structures directory if not set.
+    topo_npz = args.topo_npz
+    if topo_npz is None and args.bias_cv == "openmm":
+        struct_candidates = sorted((processed_dir / "structures").glob("*.npz"))
+        if struct_candidates:
+            topo_npz = struct_candidates[0]
+            if len(struct_candidates) > 1:
+                print(
+                    f"[TPS-TILTED] Multiple structure npz files; using {topo_npz}",
+                    file=sys.stderr, flush=True,
+                )
+            print(f"[TPS-TILTED] Auto-detected topo_npz: {topo_npz}", flush=True)
+        else:
+            print(
+                "[TPS-TILTED] ERROR: --bias-cv openmm requires --topo-npz but no "
+                "processed/structures/*.npz found.",
+                file=sys.stderr, flush=True,
+            )
+            sys.exit(1)
+
+    cv_function = _make_cv_function(
+        args.bias_cv,
+        reference_coords=ref_coords,
+        topo_npz=topo_npz,
+        openmm_platform=args.openmm_platform,
+        openmm_max_iter=args.openmm_max_iter,
+    )
 
     descriptor = boltz_snapshot_descriptor(n_atoms=n_atoms)
     engine = BoltzDiffusionEngine(
