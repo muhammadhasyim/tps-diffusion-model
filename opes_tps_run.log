@@ -18,3 +18,7 @@ Processing 0 inputs with 0 threads.
 [TPS] 100/5000 steps  0.26 steps/s  ~314.2 min remaining
 [TPS-OPES] checkpoint MC step 100 -> tps_mc_step_00000100.npz
 [TPS-OPES] OPES state checkpoint MC step 100 (5 kernels, 100 depositions)
+[TPS-OPES] checkpoint MC step 110 -> tps_mc_step_00000110.npz
+[TPS-OPES] checkpoint MC step 120 -> tps_mc_step_00000120.npz
+[TPS-OPES] checkpoint MC step 130 -> tps_mc_step_00000130.npz
+[TPS-OPES] checkpoint MC step 140 -> tps_mc_step_00000140.npz
