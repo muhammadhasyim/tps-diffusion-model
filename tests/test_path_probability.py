@@ -59,3 +59,47 @@ def test_acceptance_ratio():
 def test_min_metropolis_no_exp_overflow():
     """Large log-density improvement: min(1, exp(d)) is 1 without calling exp(d)."""
     assert min_metropolis_acceptance_path(-1e9, 0.0, reactive=True) == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Consistency: compute_log_path_prob reconstructed from stored noise sums
+# ---------------------------------------------------------------------------
+
+def test_path_prob_consistency_with_manual_sum():
+    """compute_log_path_prob returns the same value as manual eps log-density sum."""
+    import math
+    torch.manual_seed(99)
+    eps_list = [
+        torch.randn(1, 4, 3, dtype=torch.float64) * math.sqrt(2.5),
+        torch.randn(1, 4, 3, dtype=torch.float64) * math.sqrt(1.2),
+        torch.randn(1, 4, 3, dtype=torch.float64) * math.sqrt(3.0),
+    ]
+    meta_list = [
+        {"noise_var": 2.5, "t_hat": 20.0, "sigma_t": 15.0, "step_scale": 1.5},
+        {"noise_var": 1.2, "t_hat": 15.0, "sigma_t": 10.0, "step_scale": 1.5},
+        {"noise_var": 3.0, "t_hat": 10.0, "sigma_t": 5.0, "step_scale": 1.5},
+    ]
+    computed = compute_log_path_prob(eps_list, meta_list, include_jacobian=False)
+
+    # Manual sum: log N(eps; 0, v I) = -||eps||^2/(2v) - (d/2)*log(2*pi*v)
+    expected = 0.0
+    for eps, meta in zip(eps_list, meta_list):
+        v = meta["noise_var"]
+        flat = eps.reshape(1, -1)
+        d = flat.shape[1]
+        expected += float((-0.5 * (flat**2).sum(dim=-1) / v - 0.5 * d * math.log(2 * math.pi * v)).sum())
+
+    assert abs(float(computed) - expected) < 1e-6, (
+        f"Expected {expected:.6f}, got {float(computed):.6f}"
+    )
+
+
+def test_path_prob_with_jacobian_increases_for_positive_alpha():
+    """For alpha > 0, scalar Jacobian term is positive, increasing log path prob."""
+    eps = [torch.ones(1, 2, 3) * 0.1]
+    meta = [{"noise_var": 1.0, "t_hat": 2.0, "sigma_t": 3.0, "step_scale": 1.5}]
+    lp_no_jac = compute_log_path_prob(eps, meta, include_jacobian=False, n_atoms=2)
+    lp_with_jac = compute_log_path_prob(eps, meta, include_jacobian=True, n_atoms=2)
+    # alpha = 1.5 * (3.0 - 2.0) / 2.0 = 0.75 > 0 => log|1+0.75| > 0
+    assert float(lp_with_jac) > float(lp_no_jac)
+

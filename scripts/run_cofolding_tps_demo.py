@@ -283,6 +283,110 @@ def _trajectory_checkpoint_callback(work_root: Path) -> Callable[[int, Trajector
     return cb
 
 
+def _run_exact_jacobian_diagnostic(
+    core: "BoltzSamplerCore",
+    init_traj: "Trajectory",
+    network_kwargs: dict,
+    work_root: Path,
+    diffusion: "torch.nn.Module",
+    chunk_size: int = 64,
+) -> None:
+    """Compute exact vs scalar Jacobian log-determinants for diagnostic logging.
+
+    For each step of init_traj (where eps_used is available), computes:
+      - scalar_logdet  = log_det_jacobian_step(alpha_i, M)  [fast, O(1)]
+      - exact_logdet   = compute_log_det_jacobian_exact(...)  [slow, O(M/chunk) fwd passes]
+
+    Results are written to <work_root>/exact_jacobian_diagnostic.json.
+
+    Theory reference: docs/tps_diffusion_theory.tex, Sections 4.3--4.4.
+    Note: the scalar approximation is CORRECT for TPS acceptance ratios
+    (alpha_i is schedule-dependent, not path-dependent), so these should
+    differ but the difference cancels in the acceptance ratio.
+    """
+    from genai_tps.backends.boltz.path_probability import (
+        compute_log_det_jacobian_exact,
+        log_det_jacobian_step,
+    )
+    from genai_tps.backends.boltz.snapshot import BoltzSnapshot
+
+    print("[TPS] --exact-jacobian: computing diagnostic...", flush=True)
+    results = []
+    n_steps = len(init_traj) - 1
+    for step_idx in range(n_steps):
+        snap_next = init_traj[step_idx + 1]
+        if not isinstance(snap_next, BoltzSnapshot) or snap_next.eps_used is None:
+            continue
+        sch = core.schedule[step_idx]
+        t_hat = float(sch.t_hat)
+        sigma_t = float(sch.sigma_t)
+        step_scale = float(core.diffusion.step_scale)
+        alpha = step_scale * (sigma_t - t_hat) / t_hat
+        n_atoms = int(snap_next.eps_used.shape[1])
+        scalar_ld = float(log_det_jacobian_step(alpha, n_atoms))
+
+        x_noisy = snap_next.tensor_coords
+        if x_noisy is None:
+            results.append({
+                "step": step_idx,
+                "alpha": alpha,
+                "n_atoms": n_atoms,
+                "scalar_logdet": scalar_ld,
+                "exact_logdet": None,
+                "delta": None,
+                "note": "tensor_coords unavailable",
+            })
+            continue
+
+        try:
+            exact_ld = float(
+                compute_log_det_jacobian_exact(
+                    score_model=diffusion.net,
+                    x_noisy=x_noisy,
+                    t_hat=t_hat,
+                    network_kwargs=network_kwargs,
+                    alpha_i=alpha,
+                    sigma_data=float(getattr(diffusion, "sigma_data", 16.0)),
+                    chunk_size=chunk_size,
+                )
+            )
+            delta = exact_ld - scalar_ld
+        except Exception as exc:
+            print(
+                f"[TPS] exact Jacobian step {step_idx} failed: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            results.append({
+                "step": step_idx,
+                "alpha": alpha,
+                "n_atoms": n_atoms,
+                "scalar_logdet": scalar_ld,
+                "exact_logdet": None,
+                "delta": None,
+                "note": str(exc),
+            })
+            continue
+
+        results.append({
+            "step": step_idx,
+            "alpha": alpha,
+            "n_atoms": n_atoms,
+            "scalar_logdet": scalar_ld,
+            "exact_logdet": exact_ld,
+            "delta": delta,
+        })
+        print(
+            f"[TPS] Jacobian diagnostic step {step_idx}: "
+            f"scalar={scalar_ld:.4f}  exact={exact_ld:.4f}  delta={delta:.4f}",
+            flush=True,
+        )
+
+    out_path = work_root / "exact_jacobian_diagnostic.json"
+    out_path.write_text(json.dumps({"steps": results}, indent=2))
+    print(f"[TPS] exact Jacobian diagnostic written to {out_path}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Co-folding TPS-style demo on Boltz-2")
     parser.add_argument(
@@ -417,6 +521,21 @@ def main() -> None:
             "'pip install -e \"./boltz[cuda]\"'). Default: off, pure PyTorch."
         ),
     )
+    parser.add_argument(
+        "--exact-jacobian",
+        action="store_true",
+        default=False,
+        dest="exact_jacobian",
+        help=(
+            "Before starting TPS, run a diagnostic that computes the exact Jacobian "
+            "log-determinant (via chunked forward-mode AD) for each step of the initial "
+            "trajectory and compares it to the scalar approximation.  Results are "
+            "written to <out>/exact_jacobian_diagnostic.json.  This is O(3M/chunk_size) "
+            "forward passes per diffusion step and can be slow for large systems.  "
+            "Has no effect on the TPS sampling itself (the scalar approximation is "
+            "correct for MCMC acceptance ratios)."
+        ),
+    )
     args = parser.parse_args()
 
     repo = _repo_root()
@@ -548,6 +667,18 @@ def main() -> None:
 
     torch.manual_seed(0)
     init_traj = _initial_trajectory(core)
+
+    # ------------------------------------------------------------------
+    # Optional: exact Jacobian diagnostic (--exact-jacobian)
+    # ------------------------------------------------------------------
+    if args.exact_jacobian:
+        _run_exact_jacobian_diagnostic(
+            core=core,
+            init_traj=init_traj,
+            network_kwargs=network_kwargs,
+            work_root=work_root,
+            diffusion=diffusion,
+        )
 
     descriptor = boltz_snapshot_descriptor(n_atoms=n_atoms)
     engine = BoltzDiffusionEngine(

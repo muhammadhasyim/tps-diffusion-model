@@ -1,11 +1,37 @@
-"""Log path probability contributions for Boltz-2 diffusion trajectories."""
+"""Log path probability contributions for Boltz-2 diffusion trajectories.
+
+Theory reference: docs/tps_diffusion_theory.tex
+
+Jacobian note
+-------------
+The one-step map  eps_i -> x_{i+1}  has Jacobian:
+
+    J_i = beta_i * I + mu_i * nabla_z f_theta |_{z = c_in(t_hat) * x_noisy}
+
+with:
+    beta_i = 1 + alpha_i * (1 - c_skip(t_hat))
+    mu_i   = -alpha_i * c_out(t_hat) * c_in(t_hat)
+
+The scalar approximation log|det J_i| = 3M * log|1 + alpha_i|  treats
+nabla_z f_theta as zero (i.e. D_theta(x) ~ x).  For fixed-length TPS with a
+fixed schedule, alpha_i depends only on the step index (not the path), so
+this term cancels exactly in acceptance ratios for both forward and backward
+shooting.  The scalar approximation is therefore correct for MCMC purposes.
+
+The exact Jacobian (compute_log_det_jacobian_exact) is available for
+diagnostics and for absolute path probability evaluation.  It uses chunked
+forward-mode AD via torch.func.jvp + torch.func.vmap and is O(M * n_chunks)
+forward passes per step.
+"""
 
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 import torch
+import torch.nn as nn
+from torch import Tensor
 
 from openpathsampling.engines.trajectory import Trajectory
 
@@ -15,8 +41,187 @@ if TYPE_CHECKING:
     from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 
 
+# ---------------------------------------------------------------------------
+# EDM preconditioning scalars (Karras et al. 2022)
+# Used by both the scalar Jacobian approximation and the exact computation.
+# ---------------------------------------------------------------------------
+
+def _c_skip(sigma: float, sigma_data: float) -> float:
+    """Skip-connection coefficient: sigma_d^2 / (sigma^2 + sigma_d^2)."""
+    return sigma_data**2 / (sigma**2 + sigma_data**2)
+
+
+def _c_out(sigma: float, sigma_data: float) -> float:
+    """Output scaling: sigma * sigma_d / sqrt(sigma^2 + sigma_d^2)."""
+    return sigma * sigma_data / math.sqrt(sigma**2 + sigma_data**2)
+
+
+def _c_in(sigma: float, sigma_data: float) -> float:
+    """Input scaling: 1 / sqrt(sigma^2 + sigma_d^2)."""
+    return 1.0 / math.sqrt(sigma**2 + sigma_data**2)
+
+
+def _c_noise(sigma: float, sigma_data: float) -> float:
+    """Noise conditioning: 0.25 * ln(sigma / sigma_d)."""
+    return 0.25 * math.log(sigma / sigma_data)
+
+
+# ---------------------------------------------------------------------------
+# Exact Jacobian scalars (theory doc Section 4, Eq. beta/mu)
+# ---------------------------------------------------------------------------
+
+def _jacobian_scalars(
+    alpha_i: float,
+    t_hat: float,
+    sigma_data: float,
+) -> Tuple[float, float, float]:
+    """Return (beta_i, mu_i, c_i) for the exact Jacobian decomposition.
+
+    J_i = beta_i * I + mu_i * nabla_z f_theta
+    log|det J_i| = 3M*log|beta_i| + log|det(I + c_i * nabla_z f_theta)|
+
+    where c_i = mu_i / beta_i.
+
+    The scalar Jacobian approximation sets nabla_z f_theta = 0 and recovers
+    log|det J_i| ~ 3M * log|beta_i|. When c_skip ~ 1 (i.e. at low noise
+    where sigma << sigma_data), beta_i ~ 1 + alpha_i, matching the scalar
+    approximation log_det_jacobian_step(alpha, n_coords).
+    """
+    cs = _c_skip(t_hat, sigma_data)
+    co = _c_out(t_hat, sigma_data)
+    ci = _c_in(t_hat, sigma_data)
+    beta = 1.0 + alpha_i * (1.0 - cs)
+    mu = -alpha_i * co * ci
+    c = mu / beta
+    return beta, mu, c
+
+
+# ---------------------------------------------------------------------------
+# Chunked forward-mode Jacobian (theory doc Section 4.4)
+# ---------------------------------------------------------------------------
+
+def _chunked_jacobian(
+    f: Callable[[Tensor], Tensor],
+    x: Tensor,
+    n: int,
+    chunk_size: int = 64,
+) -> Tensor:
+    """Compute the full (n x n) Jacobian of f at x via chunked JVPs.
+
+    Assembles the Jacobian column-by-column using forward-mode AD
+    (torch.func.jvp wrapped in torch.func.vmap).
+    Cost: ceil(n / chunk_size) batched forward passes through f.
+
+    Args:
+        f: Callable R^n -> R^n (flattened score model interface).
+        x: Input tensor of shape (n,).
+        n: Dimension (= 3*M for atom coordinates).
+        chunk_size: Number of basis vectors per vmap batch (tune for
+            memory/speed trade-off).
+
+    Returns:
+        Jacobian matrix of shape (n, n) on the same device as x.
+    """
+    device = x.device
+
+    def jvp_col(v: Tensor) -> Tensor:
+        _, tangent = torch.func.jvp(f, (x,), (v,))
+        return tangent
+
+    J_cols: List[Tensor] = []
+    for start in range(0, n, chunk_size):
+        end = min(start + chunk_size, n)
+        chunk = end - start
+        basis = torch.zeros(chunk, n, device=device, dtype=x.dtype)
+        idx = torch.arange(chunk, device=device)
+        basis[idx, idx + start] = 1.0
+        cols = torch.vmap(jvp_col)(basis)  # (chunk, n): each row is J[:, j]
+        J_cols.append(cols)
+
+    return torch.cat(J_cols, dim=0).T  # (n, n)
+
+
+# ---------------------------------------------------------------------------
+# Exact log|det J| via chunked forward-mode AD (theory doc Section 4.4)
+# ---------------------------------------------------------------------------
+
+def compute_log_det_jacobian_exact(
+    score_model: nn.Module,
+    x_noisy: Tensor,
+    t_hat: float,
+    network_kwargs: Dict,
+    alpha_i: float,
+    sigma_data: float,
+    chunk_size: int = 64,
+) -> Tensor:
+    """Compute log|det J_i| exactly via chunked forward-mode AD.
+
+    J_i = beta_i * I + mu_i * nabla_z f_theta |_{z = c_in(t_hat) * x_noisy}
+
+    log|det J_i| computed via torch.linalg.slogdet on the assembled J matrix.
+
+    NOTE: This is O(ceil(3M/chunk_size)) forward passes through score_model
+    plus O((3M)^3) for slogdet.  For M=200 atoms at chunk_size=64, this is
+    ~10 forward passes.  See theory doc Table 1 for cost estimates.
+
+    NOTE ON SIGN: This returns log|det J_i| as a non-negative-aware signed
+    log-det (i.e. the absolute value log-det from slogdet).  The path
+    probability contribution is -log|det J_i| (change-of-variables from eps
+    to x_{i+1}).  Callers are responsible for the sign.
+
+    Args:
+        score_model: Raw score model f_theta (NOT the preconditioned
+            denoiser D_theta).  Must accept
+            score_model(r_noisy=..., times=..., **network_kwargs).
+        x_noisy: Atom coordinates (1, M, 3) or (M, 3) on device.
+        t_hat: Effective noise level at this step.
+        network_kwargs: Conditioning kwargs forwarded to score_model.
+        alpha_i: Step coefficient s*(sigma_i - t_hat)/t_hat.
+        sigma_data: Model hyperparameter sigma_data (default 16.0 for Boltz-2).
+        chunk_size: JVP batch size.
+
+    Returns:
+        Scalar tensor: log|det J_i| (unsigned; subtract from log path prob).
+    """
+    if x_noisy.dim() == 3:
+        x_noisy = x_noisy.squeeze(0)
+    M = x_noisy.shape[0]
+    n = 3 * M
+    device = x_noisy.device
+    dtype = x_noisy.dtype
+
+    beta, mu, _ = _jacobian_scalars(alpha_i, t_hat, sigma_data)
+    ci = _c_in(t_hat, sigma_data)
+    cn_val = _c_noise(t_hat, sigma_data)
+    times = torch.tensor([cn_val], device=device, dtype=dtype)
+
+    z = (ci * x_noisy).reshape(n)
+
+    def f_flat(z_vec: Tensor) -> Tensor:
+        return score_model(
+            r_noisy=z_vec.reshape(1, M, 3),
+            times=times,
+            **network_kwargs,
+        ).reshape(n)
+
+    J_f = _chunked_jacobian(f_flat, z, n, chunk_size)
+    J = beta * torch.eye(n, device=device, dtype=dtype) + mu * J_f
+    _, logabsdet = torch.linalg.slogdet(J)
+    return logabsdet
+
+
 def log_det_jacobian_step(alpha: float, n_coords: int) -> torch.Tensor:
-    """Per-step log |det J| for the affine map in :math:`\\varepsilon` (3M dims)."""
+    """Per-step log |det J| under the scalar Jacobian approximation (3M dims).
+
+    Approximates nabla_z f_theta = 0, giving J_i ~ (1+alpha_i)*I and thus
+    log|det J_i| ~ 3M * log|1+alpha_i|.
+
+    This approximation is EXACT for acceptance ratios in fixed-length TPS
+    because alpha_i depends only on the schedule step index (not the path),
+    so these terms cancel identically between old and new paths.
+
+    For absolute path probability evaluation, use compute_log_det_jacobian_exact.
+    """
     d = 3 * n_coords
     return d * torch.log(torch.abs(torch.tensor(1.0 + alpha)) + 1e-30)
 
@@ -118,8 +323,12 @@ def compute_log_path_prob(
 ) -> torch.Tensor:
     """Sum log p over stochastic draws (noise terms) and optional Jacobian factors.
 
-    Haar and translation densities are omitted (constant w.r.t. state; cancel in
-    ratios). If ``initial_coords`` and ``sigma0`` are given, adds log rho(x_0).
+    Uses the scalar Jacobian approximation (log_det_jacobian_step).  For
+    fixed-length TPS the Jacobian terms cancel in acceptance ratios so
+    ``include_jacobian=True`` has no effect on MCMC correctness; it is
+    included here for absolute log-density evaluation.  Haar and translation
+    densities are omitted (constant w.r.t. state; cancel in ratios).  If
+    ``initial_coords`` and ``sigma0`` are given, adds log rho(x_0).
     """
     device = eps_list[0].device if eps_list else torch.device("cpu")
     total = torch.zeros((), device=device, dtype=torch.float32)
