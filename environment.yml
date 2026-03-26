@@ -1,6 +1,41 @@
-# Development environment: `conda env create -f environment.yml` from repo root.
-# OpenPathSampling is vendored under src/python/openpathsampling; Boltz stays a submodule.
-# Activate: `conda activate genai-tps`
+# Development environment for genai-tps.
+#
+# ══ SETUP INSTRUCTIONS ════════════════════════════════════════════════════════
+#
+# Step 1 — Create the environment (do this ONCE):
+#
+#   conda env create -f environment.yml
+#   conda activate genai-tps
+#
+# Step 2 — Install PyTorch with the right CUDA wheel for YOUR driver:
+#
+#   Run `nvidia-smi` and check the "CUDA Version" line (top-right corner).
+#   Then run ONE of the following:
+#
+#     Driver CUDA 12.x where x < 8  (driver < 550):
+#       bash scripts/install_torch_cuda.sh cu121
+#
+#     Driver CUDA 12.8+ (driver >= 550):
+#       bash scripts/install_torch_cuda.sh cu128
+#
+#     CPU-only machine (no GPU):
+#       bash scripts/install_torch_cuda.sh cpu
+#
+# Step 3 — Re-activate so the LD_LIBRARY_PATH hook fires:
+#
+#   conda deactivate && conda activate genai-tps
+#
+# ── Why not put torch in this file? ──────────────────────────────────────────
+# PyTorch CUDA wheels are driver-specific.  Baking one wheel index into the
+# yml means it breaks on machines with a different driver.  The install script
+# handles driver detection, CUDA library pinning, and the nvJitLink
+# LD_LIBRARY_PATH hook automatically.
+#
+# ── DO NOT run `conda env update -f environment.yml` on an existing env ──────
+# Conda will re-run the pip section, triggering partial torch reinstalls that
+# leave compiled .so files from the old version mixed with Python files from
+# the new one (corrupted env).  Use pip directly to fix individual packages.
+# ══════════════════════════════════════════════════════════════════════════════
 name: genai-tps
 channels:
   - conda-forge
@@ -12,8 +47,21 @@ dependencies:
   # openmm from conda-forge bundles CUDA/OpenCL plugins and the force-field XML
   # files; pdbfixer from conda-forge handles missing-residue repair used by the
   # RMSD-to-local-minimum CV (scripts/compute_cv_rmsd.py, OpenMMLocalMinRMSD).
-  - openmm>=8.0
+  #
+  # numpy must be pinned here (in the conda section) so the solver selects
+  # openmm builds from the conda-forge numpy 2.x migration era.
+  # conda-forge openmm builds before that migration were compiled against
+  # numpy 1.x (PyArrayDescr = 96 bytes).  Running those against numpy 2.x
+  # (PyArrayDescr = 88 bytes) causes:
+  #   ValueError: numpy.dtype size changed, Expected 96 from C header, got 88
+  # Listing numpy here forces conda to pick only numpy-2.x-compatible openmm.
+  - numpy>=2.0,<2.3
+  - openmm>=8.5
   - pdbfixer>=1.9
+  # NOTE: cuda-version is intentionally NOT pinned here.
+  # Pinning cuda-version=12.2 selects pre-migration openmm builds (numpy 1.x
+  # ABI).  OpenMM's CUDA platform falls back to OpenCL automatically via the
+  # smoke test in compute_cv_rmsd.py if the driver's PTX version is too old.
 
   # ── Additional force-field parameters (AMBER14, GBn2 implicit solvent) ──────
   # openmmforcefields provides AMBER14 + GAFF2 + SMIRNOFF templates used by
@@ -21,12 +69,33 @@ dependencies:
   - openmmforcefields>=0.14
 
   - pip:
-    # Pin numpy 2.x before editable installs (aligned with boltz + numba>=0.61.2).
+    # ── Version anchors pinned BEFORE editable installs ──────────────────────
+    # numpy: pinned in the conda section above so the solver picks openmm builds
+    #        with numpy 2.x ABI.  Repeated here so pip also enforces the cap and
+    #        prevents jax or other packages from upgrading to 2.4.x.
     - "numpy>=2.0,<2.3"
+    - "scipy==1.13.1"
+
+    # ── torch is NOT listed here — it is driver-specific ─────────────────────
+    # Run `bash scripts/install_torch_cuda.sh` after env creation (see above).
+    # Reason: jax[cuda12] pulls in nvidia CUDA 12.9 packages (nvjitlink 12.9,
+    # nccl 2.29, cublas 12.9, etc.) that conflict with torch cu121's CUDA 12.1
+    # packages, causing cascading undefined-symbol ImportErrors.  Using
+    # jax[cpu] keeps the nvidia package set solely under torch's control.
     - -e ./boltz
     - -e .[boltz,dev,enhanced_sampling]
-    # JAX for GPU-accelerated MBAR (pymbar auto-detects jax if installed).
-    # jax[cuda12] requires a CUDA 12 driver; use jax[cpu] for CPU-only machines.
-    - "jax[cuda12]>=0.4"
+
+    # ── torchmetrics: required by pytorch-lightning==2.5.0 ───────────────────
+    # Listed explicitly so it survives cleanup operations that rm -rf torch*
+    # (the precise glob in install_torch_cuda.sh spares torchmetrics dist-info,
+    # but belt-and-suspenders here ensures it is always present).
+    - "torchmetrics>=1.0"
+
+    # ── JAX for GPU-accelerated MBAR (pymbar auto-detects jax) ───────────────
+    # Use jax[cpu] — pymbar MBAR computation does not require a GPU.
+    # jax[cuda12] would install nvidia CUDA 12.9 packages that fight with
+    # torch cu121 (nvjitlink version cascade).  Upgrade to jax[cuda12] only
+    # on a machine where torch and jax use matching CUDA versions.
+    - "jax[cpu]>=0.4"
     # Optional: cartoon PNGs from scripts/visualize_cofolding_trajectory.py --render-cartoon
     # - -e .[boltz,dev,viz,enhanced_sampling]

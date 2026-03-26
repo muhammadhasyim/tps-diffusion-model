@@ -68,6 +68,7 @@ def _make_cv_function(
     topo_npz: Path | None = None,
     openmm_platform: str = "CUDA",
     openmm_max_iter: int = 500,
+    mol_dir: Path | None = None,
 ) -> Callable[[Trajectory], float]:
     """Build a CV function that operates on the last frame of a trajectory.
 
@@ -81,6 +82,11 @@ def _make_cv_function(
                         a meaningful comparison against the vanilla TPS baseline.
                         Requires *topo_npz* and has ~1--10 s per-call cost
                         (mitigated by coordinate-hash caching).
+    mol_dir:
+        Path to the Boltz CCD molecule directory (``~/.boltz/mols``).  When
+        provided, SMILES for non-protein (NONPOLYMER) chains are read from
+        the pkl files and passed to OpenMM for GAFF2 parameterisation.
+        Required for inputs that contain ligands (e.g. FZC, ATP, MG).
     """
 
     def _cv_rmsd(traj: Trajectory) -> float:
@@ -107,6 +113,7 @@ def _make_cv_function(
             topo_npz=topo_npz,
             platform=openmm_platform,
             max_iter=openmm_max_iter,
+            mol_dir=mol_dir,
         )
         return openmm_cv
     else:
@@ -435,6 +442,7 @@ def main() -> None:
         topo_npz=topo_npz,
         openmm_platform=args.openmm_platform,
         openmm_max_iter=args.openmm_max_iter,
+        mol_dir=mol_dir,
     )
 
     if args.opes_restart is not None:

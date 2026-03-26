@@ -24,8 +24,10 @@ src/python/genai_tps/backends/boltz/utils.py
 src/python/genai_tps/enhanced_sampling/__init__.py
 src/python/genai_tps/enhanced_sampling/exponential_tilting.py
 src/python/genai_tps/enhanced_sampling/mbar_analysis.py
+src/python/genai_tps/enhanced_sampling/openmm_cv.py
 src/python/genai_tps/enhanced_sampling/opes_bias.py
 src/python/openpathsampling/__init__.py
+src/python/openpathsampling/_installed_version.py
 src/python/openpathsampling/bias_function.py
 src/python/openpathsampling/collectivevariable.py
 src/python/openpathsampling/deprecations.py
@@ -321,6 +323,7 @@ tests/test_cv_rmsd.py
 tests/test_exact_jacobian.py
 tests/test_exponential_tilting.py
 tests/test_gpu_core_device_propagation.py
+tests/test_openpathsampling_version.py
 tests/test_opes_bias.py
 tests/test_path_probability.py
 tests/test_prody_terminal_ensemble.py

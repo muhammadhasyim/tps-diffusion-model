@@ -79,6 +79,12 @@ class OpenMMLocalMinRMSD:
     fallback_value:
         Value returned when minimization fails (default: ``float('nan')``).
         Use a large value (e.g. 999.0) to bias away from failed structures.
+    mol_dir:
+        Path to the Boltz CCD molecule directory (``~/.boltz/mols``).  When
+        provided, SMILES for each NONPOLYMER chain are read from
+        ``{mol_dir}/{ccd}.pkl`` and passed to ``minimize_pdb`` as
+        ``ligand_smiles``, enabling GAFF2 parameterisation of ligands.
+        If ``None``, ligand chains are not parameterised (AMBER14-only mode).
     """
 
     def __init__(
@@ -88,12 +94,14 @@ class OpenMMLocalMinRMSD:
         max_iter: int = 500,
         cache_size: int = 256,
         fallback_value: float = float("nan"),
+        mol_dir: Path | str | None = None,
     ):
         self.topo_npz = Path(topo_npz)
         self.platform = platform
         self.max_iter = max_iter
         self.cache_size = cache_size
         self.fallback_value = fallback_value
+        self.mol_dir = Path(mol_dir) if mol_dir is not None else None
 
         self._topo = None
         self._n_struct: int = 0
@@ -111,6 +119,80 @@ class OpenMMLocalMinRMSD:
                 "OpenMMLocalMinRMSD: loaded topology from %s (%d atoms)",
                 self.topo_npz, self._n_struct,
             )
+
+    def _extract_ligand_smiles(self) -> dict[str, str]:
+        """Return a chain-ID → SMILES mapping for all NONPOLYMER chains.
+
+        Iterates the Boltz ``StructureV2`` topology, finds every chain whose
+        ``mol_type`` equals ``const.chain_type_ids["NONPOLYMER"]``, reads the
+        first residue name (the CCD code, e.g. ``"FZC"``, ``"ATP"``, ``"MG"``)
+        and loads the corresponding RDKit Mol from ``{mol_dir}/{ccd}.pkl``.
+
+        Returns
+        -------
+        dict[str, str]
+            Maps PDB chain letter to SMILES string.  Returns an empty dict when
+            ``mol_dir`` is ``None``, the topology is not yet loaded, or no
+            NONPOLYMER chains are found.
+
+        Notes
+        -----
+        Chains whose pkl file is missing or cannot be read are silently skipped
+        (a WARNING is logged).  The caller should pass the result directly to
+        ``minimize_pdb(ligand_smiles=...)``, which also handles missing entries
+        gracefully.
+        """
+        if self.mol_dir is None or self._topo is None:
+            return {}
+
+        import pickle  # noqa: PLC0415
+
+        try:
+            from boltz.data import const  # noqa: PLC0415
+        except ImportError:
+            logger.warning(
+                "_extract_ligand_smiles: boltz not importable; "
+                "cannot resolve ligand SMILES."
+            )
+            return {}
+
+        nonpolymer_id = const.chain_type_ids["NONPOLYMER"]
+        result: dict[str, str] = {}
+
+        for chain in self._topo.chains:
+            if int(chain["mol_type"]) != nonpolymer_id:
+                continue
+            chain_name = str(chain["name"]).strip()
+            res_idx = int(chain["res_idx"])
+            ccd_code = str(self._topo.residues[res_idx]["name"]).strip()
+
+            pkl_path = self.mol_dir / f"{ccd_code}.pkl"
+            if not pkl_path.is_file():
+                logger.warning(
+                    "_extract_ligand_smiles: pkl for CCD '%s' not found at %s; "
+                    "chain '%s' will use protein-only fallback.",
+                    ccd_code, pkl_path, chain_name,
+                )
+                continue
+
+            try:
+                with pkl_path.open("rb") as fh:
+                    mol = pickle.load(fh)  # noqa: S301 — trusted local file
+                from rdkit.Chem import MolToSmiles  # noqa: PLC0415
+                smiles = MolToSmiles(mol)
+                result[chain_name] = smiles
+                logger.info(
+                    "_extract_ligand_smiles: chain '%s' CCD='%s' SMILES='%.40s'",
+                    chain_name, ccd_code, smiles,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "_extract_ligand_smiles: failed to get SMILES for chain '%s' "
+                    "CCD='%s': %s",
+                    chain_name, ccd_code, exc,
+                )
+
+        return result
 
     def _coords_to_pdb_string(self, coords_angstrom: np.ndarray) -> str:
         """Convert a (n_atoms, 3) Å coordinate array to a PDB string.
@@ -174,11 +256,14 @@ class OpenMMLocalMinRMSD:
             f.write(pdb_str)
             tmp_path = Path(f.name)
 
+        ligand_smiles = self._extract_ligand_smiles() or None
+
         try:
             result = minimize_pdb(
                 tmp_path,
                 max_iter=self.max_iter,
                 platform_name=self.platform,
+                ligand_smiles=ligand_smiles,
             )
             if result["converged"] and result["ca_rmsd_angstrom"] is not None:
                 return float(result["ca_rmsd_angstrom"])

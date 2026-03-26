@@ -14,7 +14,9 @@ dependencies = [
   "psutil",
   # Aligned with boltz submodule (numpy 2.x) and numba>=0.61.2.
   "numpy>=2.0,<2.3",
-  "scipy",
+  # boltz/pyproject.toml pins scipy==1.13.1 exactly; conda-forge can float to
+  # 1.17.x causing ABI mismatches with openmm's compiled xtc_utils extension.
+  "scipy>=1.13,<1.14",
   "pandas",
   "netcdf4",
   "svgwrite",
@@ -29,6 +31,9 @@ dependencies = [
 [project.optional-dependencies]
 boltz = [
   "torch>=2.2",
+  # pytorch-lightning==2.5.0 (pinned by boltz) requires torchmetrics; listed
+  # here so it is tracked as a direct dep and survives environment cleanup.
+  "torchmetrics>=1.0",
 ]
 dev = [
   "pytest>=7",

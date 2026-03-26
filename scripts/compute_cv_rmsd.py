@@ -11,6 +11,27 @@ For each PDB in ``--pdb-dir``:
 5. Write per-structure results to ``--out-dir/rmsd_results.json``.
 6. Plot the distribution as ``--out-dir/rmsd_distribution.png``.
 
+Ligand support::
+
+    Boltz writes non-polymer ligands as ``HETATM`` records with ``resName = LIG``.
+    AMBER14 has no template for ``LIG``.  Providing a SMILES string for each
+    ligand chain activates ``GAFFTemplateGenerator`` (from ``openmmforcefields``),
+    which registers GAFF2 parameters on-the-fly.
+
+    Via CLI::
+
+        python scripts/compute_cv_rmsd.py \\
+            --pdb-dir  ... \\
+            --out-dir  ... \\
+            --ligand-smiles-json '{"B": "CC(=O)Oc1ccccc1C(=O)O", "C": "[Mg+2]"}'
+
+    Via Python API::
+
+        result = minimize_pdb(
+            pdb_path,
+            ligand_smiles={"B": "CC(=O)Oc1ccccc1C(=O)O"},
+        )
+
 Usage::
 
     python scripts/compute_cv_rmsd.py \\
@@ -91,8 +112,40 @@ def get_ca_coords_angstrom(positions, ca_indices: list[int]) -> np.ndarray:
 _PLATFORM_PREFERENCE = ("CUDA", "OpenCL", "CPU")
 
 
+def _platform_runtime_smoke_test(platform) -> tuple[bool, str | None]:
+    """Return whether *platform* can run a minimal Context (energy evaluation).
+
+    ``Platform.getPlatformByName('CUDA')`` can succeed while the first real
+    kernel fails with ``CUDA_ERROR_UNSUPPORTED_PTX_VERSION`` (driver/toolkit
+    mismatch).  PDBFixer and ``Modeller.addHydrogens`` then break before our
+    main :class:`Simulation` is built.  This test catches that case so we fall
+    back to OpenCL or CPU.
+    """
+    import openmm as mm
+    from openmm import unit as u
+
+    try:
+        system = mm.System()
+        system.addParticle(12.0)
+        system.addParticle(12.0)
+        bond = mm.HarmonicBondForce()
+        bond.addBond(0, 1, 0.15, 100000.0)
+        system.addForce(bond)
+        integrator = mm.VerletIntegrator(1.0 * u.femtoseconds)
+        ctx = mm.Context(system, integrator, platform)
+        ctx.setPositions([[0, 0, 0], [0.15, 0, 0]] * u.nanometers)
+        ctx.getState(getEnergy=True)
+        del ctx
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
 def _get_platform(requested: str):
     """Return the best available OpenMM Platform, falling back gracefully.
+
+    CUDA is accepted only if a minimal Context runs on it; otherwise the next
+    candidate (OpenCL, then CPU) is used.
 
     Parameters
     ----------
@@ -114,6 +167,15 @@ def _get_platform(requested: str):
             platform = openmm.Platform.getPlatformByName(name)
             if name == "CUDA":
                 platform.setPropertyDefaultValue("CudaPrecision", "mixed")
+                ok, err = _platform_runtime_smoke_test(platform)
+                if not ok:
+                    warnings.warn(
+                        f"OpenMM CUDA failed runtime check ({err}); "
+                        "trying another platform.",
+                        RuntimeWarning,
+                        stacklevel=3,
+                    )
+                    continue
             if name != requested:
                 warnings.warn(
                     f"Platform '{requested}' not available; using '{name}'.",
@@ -127,6 +189,88 @@ def _get_platform(requested: str):
 
 
 # ---------------------------------------------------------------------------
+# Ligand force-field helpers (GAFF2 via openmmforcefields)
+# ---------------------------------------------------------------------------
+
+def _register_ligand_params(
+    ff,  # openmm.app.ForceField
+    topology,  # openmm.app.Topology
+    ligand_smiles: dict[str, str],
+) -> None:
+    """Register GAFF2 parameters for ``LIG`` residues in *topology*.
+
+    For each chain in *topology* that contains a residue named ``LIG`` the
+    function looks up the chain ID in *ligand_smiles*, converts the SMILES to
+    an OpenFF ``Molecule``, and registers a ``GAFFTemplateGenerator`` on *ff*.
+    A warning is emitted (not an exception) for any ``LIG`` chain that has no
+    SMILES entry; those chains will cause ``ff.createSystem()`` to fail with
+    ``"No template found"`` unless they have been stripped beforehand.
+
+    Parameters
+    ----------
+    ff:
+        ``openmm.app.ForceField`` instance to extend.
+    topology:
+        OpenMM topology whose residues may include ``LIG`` records.
+    ligand_smiles:
+        Maps PDB chain ID (e.g. ``"B"``, ``"C"``) to SMILES string.
+        Single-atom ions should use standard SMILES (e.g. ``"[Mg+2]"``).
+
+    Raises
+    ------
+    ImportError
+        When ``openff-toolkit`` or ``openmmforcefields`` is not installed.
+    """
+    try:
+        from openff.toolkit.topology import Molecule as OpenFFMolecule  # noqa: PLC0415
+        from openmmforcefields.generators import GAFFTemplateGenerator  # noqa: PLC0415
+    except ImportError as exc:
+        raise ImportError(
+            "openff-toolkit and openmmforcefields are required for ligand "
+            "parameterisation.  Install with:\n"
+            "  conda install -c conda-forge openmmforcefields\n"
+            f"Original error: {exc}"
+        ) from exc
+
+    lig_chains: dict[str, list] = {}
+    for chain in topology.chains():
+        for residue in chain.residues():
+            if residue.name == "LIG":
+                lig_chains.setdefault(chain.id, [])
+                break
+
+    molecules: list = []
+    for chain_id in sorted(lig_chains):
+        smiles = ligand_smiles.get(chain_id)
+        if smiles is None:
+            logger.warning(
+                "_register_ligand_params: chain '%s' contains LIG residue(s) "
+                "but no SMILES was provided; ff.createSystem() will fail for "
+                "this chain unless it is removed from the topology.",
+                chain_id,
+            )
+            continue
+        try:
+            mol = OpenFFMolecule.from_smiles(smiles, allow_undefined_stereo=True)
+            molecules.append(mol)
+            logger.info(
+                "_register_ligand_params: registered GAFF2 for chain '%s' "
+                "SMILES='%.40s'",
+                chain_id, smiles,
+            )
+        except Exception as exc:
+            logger.warning(
+                "_register_ligand_params: could not build OpenFF Molecule for "
+                "chain '%s' SMILES='%s': %s",
+                chain_id, smiles, exc,
+            )
+
+    if molecules:
+        gaff = GAFFTemplateGenerator(molecules=molecules)
+        ff.registerTemplateGenerator(gaff.generator)
+
+
+# ---------------------------------------------------------------------------
 # Core minimisation function
 # ---------------------------------------------------------------------------
 
@@ -136,6 +280,7 @@ def minimize_pdb(
     max_iter: int = 1000,
     platform_name: str = "CUDA",
     temperature_k: float = 300.0,
+    ligand_smiles: Optional[dict[str, str]] = None,
 ) -> dict:
     """Load a PDB, add hydrogens, minimise on GPU, return Cα-RMSD and energy.
 
@@ -144,12 +289,19 @@ def minimize_pdb(
     1. Loads *pdb_path* with ``openmm.app.PDBFile``.
     2. Selects Cα atoms from the **original** (heavy-atom) topology and records
        their coordinates.
-    3. Adds hydrogens via ``Modeller.addHydrogens(amber14-all.xml)``.
+    3. Prepares the structure for simulation (adds H via PDBFixer or Modeller).
     4. Re-selects Cα atoms from the hydrogen-added topology (atom indices shift
        after ``addHydrogens``).
     5. Builds an AMBER14 / implicit-GBSA-OBC2 system and minimises.
     6. Returns Kabsch-aligned Cα-RMSD (Å) between pre- and post-minimisation
        coordinates, plus the final potential energy.
+
+    Ligand handling
+    ---------------
+    When *ligand_smiles* is provided, AMBER14 is extended with ``GAFFTemplateGenerator``
+    (GAFF2) for each chain ID in the mapping.  PDBFixer is **not** used for
+    ligand-containing structures (it cannot add atoms for unknown ``LIG``
+    residues and may strip HETATM records); Modeller is used directly.
 
     Parameters
     ----------
@@ -162,6 +314,10 @@ def minimize_pdb(
         unavailable.
     temperature_k:
         Temperature used for the Langevin integrator (K).
+    ligand_smiles:
+        Optional mapping of PDB chain ID (``"B"``, ``"C"``, …) to SMILES.
+        Required for structures with ``HETATM LIG`` residues; omitting it for
+        such structures will result in ``"No template found"`` failure.
 
     Returns
     -------
@@ -186,6 +342,13 @@ def minimize_pdb(
         from openmm import unit
         from genai_tps.backends.boltz.collective_variables import kabsch_rmsd_aligned
 
+        # Resolve platform before PDBFixer / Modeller: both accept ``platform=``.
+        # Without it, OpenMM picks the fastest platform (often CUDA), which can
+        # fail at runtime with PTX/driver mismatch while ``getPlatformByName``
+        # still "succeeds".
+        platform, actual_platform = _get_platform(platform_name)
+        result["platform_used"] = actual_platform
+
         # 1. Load original heavy-atom structure to record Cα positions before
         #    any atom addition (PDBFixer changes atom count).
         pdb_orig = openmm.app.PDBFile(str(pdb_path))
@@ -200,18 +363,33 @@ def minimize_pdb(
             raise ValueError("No Cα atoms found in the original topology.")
         ca_orig_coords = get_ca_coords_angstrom(orig_positions, ca_orig_idx)
 
-        # 2. Prepare the structure (add terminal caps + hydrogens).
+        # 2. Build the shared ForceField (with GAFF2 extension if ligands present).
         #
-        #    Strategy A — PDBFixer (preferred):
+        #    A single ForceField instance is used for both addHydrogens and
+        #    createSystem so that the GAFF2 template generator is registered once
+        #    and available at both stages.
+        ff = openmm.app.ForceField("amber14-all.xml", "implicit/gbn2.xml")
+        has_ligand = bool(ligand_smiles)
+        if has_ligand:
+            _register_ligand_params(ff, orig_topology, ligand_smiles)
+
+        # 3. Prepare the structure (add terminal caps + hydrogens).
+        #
+        #    Strategy A — PDBFixer (preferred, protein-only structures):
         #      Boltz outputs heavy atoms only; AMBER14 expects terminal residue
         #      templates (NMET, CALA …).  PDBFixer handles all of that via
         #      findMissingAtoms / addMissingHydrogens.
+        #      NOTE: PDBFixer must NOT be given the GPU platform — it creates its
+        #      own OpenMM Context internally, which collides with the Boltz GPU
+        #      model and causes clCreateContext (-6).  CPU is always sufficient
+        #      for hydrogen addition.
+        #      Skipped when ligand_smiles is provided because PDBFixer does not
+        #      know the LIG residue template and may strip HETATM atoms.
         #
-        #    Strategy B — Modeller.addHydrogens (fallback):
-        #      Used when PDBFixer's star-import of `from openmm import *`
-        #      triggers a CUDA plugin load error on the current machine
-        #      (e.g. CUDA_ERROR_UNSUPPORTED_PTX_VERSION).  Works for well-
-        #      formed dipeptides; may warn/fail for large proteins.
+        #    Strategy B — Modeller.addHydrogens (ligand structures or fallback):
+        #      Used when PDBFixer is skipped (has_ligand=True) or when PDBFixer
+        #      fails.  May warn/fail for uncapped chains (terminal residues
+        #      missing backbone atoms).
         #
         #    Strategy C — heavy-atoms-only (last resort):
         #      Sufficient for a Cα-RMSD comparison even if the absolute energy
@@ -220,30 +398,35 @@ def minimize_pdb(
         h_positions: object
 
         _pdbfixer_ok = False
-        try:
-            from pdbfixer import PDBFixer  # noqa: PLC0415
-            fixer = PDBFixer(filename=str(pdb_path))
-            fixer.findMissingResidues()
-            fixer.findMissingAtoms()
-            fixer.addMissingAtoms()
-            fixer.addMissingHydrogens(pH=7.0)
-            h_topology = fixer.topology
-            h_positions = fixer.positions
-            _pdbfixer_ok = True
-        except Exception as pdbfixer_exc:
-            warnings.warn(
-                f"{pdb_path.name}: PDBFixer failed ({pdbfixer_exc}); "
-                "falling back to Modeller.addHydrogens.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
+        if not has_ligand:
+            try:
+                from pdbfixer import PDBFixer  # noqa: PLC0415
+                # Do NOT pass the GPU platform to PDBFixer — it only adds hydrogens
+                # and terminal caps (CPU work), but internally creates an OpenMM
+                # Context.  Passing OpenCL here causes clCreateContext (-6) because
+                # the GPU is already occupied by the Boltz diffusion model.
+                fixer = PDBFixer(filename=str(pdb_path))
+                fixer.findMissingResidues()
+                fixer.findMissingAtoms()
+                fixer.addMissingAtoms()
+                fixer.addMissingHydrogens(pH=7.0)
+                h_topology = fixer.topology
+                h_positions = fixer.positions
+                _pdbfixer_ok = True
+            except Exception as pdbfixer_exc:
+                warnings.warn(
+                    f"{pdb_path.name}: PDBFixer failed ({pdbfixer_exc}); "
+                    "falling back to Modeller.addHydrogens.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
         if not _pdbfixer_ok:
-            # Strategy B: Modeller fallback
-            ff_h = openmm.app.ForceField("amber14-all.xml", "implicit/gbn2.xml")
+            # Strategy B: Modeller fallback (or primary path for ligands).
+            # Use the same ff instance that has GAFF2 registered (if applicable).
             modeller = openmm.app.Modeller(orig_topology, orig_positions)
             try:
-                modeller.addHydrogens(forcefield=ff_h)
+                modeller.addHydrogens(forcefield=ff, platform=platform)
             except Exception as h_exc:
                 warnings.warn(
                     f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
@@ -254,18 +437,18 @@ def minimize_pdb(
             h_topology = modeller.topology
             h_positions = modeller.positions
 
-        # 3. Cα indices in the fully protonated topology.
+        # 4. Cα indices in the fully protonated topology.
         ca_h_idx = select_ca_indices(h_topology)
         result["n_ca_atoms"] = len(ca_h_idx)
 
-        # 4. Build AMBER14 + GBn2 implicit solvent system (NoCutoff, no periodic box).
+        # 5. Build AMBER14 + GBn2 implicit solvent system (NoCutoff, no periodic box).
         #    Force field: amber14-all.xml + implicit/gbn2.xml (GBn2, igb=8).
         #    GBn2 is the highest-accuracy GB model in OpenMM and the one recommended
         #    in the OpenMM user guide for AMBER14 force fields.
         #    Ref: docs.openmm.org §3.2 Implicit Solvent.
         #    NOTE: do NOT pass implicitSolvent= to createSystem() — that kwarg is
         #    only for AMBER prmtop files.  The GB parameters come from the XML.
-        ff = openmm.app.ForceField("amber14-all.xml", "implicit/gbn2.xml")
+        #    NOTE: ff already has GAFF2 registered if has_ligand=True.
         system = ff.createSystem(
             h_topology,
             nonbondedMethod=openmm.app.NoCutoff,
@@ -278,20 +461,17 @@ def minimize_pdb(
             2.0 * unit.femtoseconds,
         )
 
-        platform, actual_platform = _get_platform(platform_name)
-        result["platform_used"] = actual_platform
-
         sim = openmm.app.Simulation(h_topology, system, integrator, platform)
         sim.context.setPositions(h_positions)
 
-        # 5. Minimise
+        # 6. Minimise
         sim.minimizeEnergy(maxIterations=max_iter)
 
         state = sim.context.getState(getEnergy=True, getPositions=True)
         energy = state.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)
         min_positions = state.getPositions(asNumpy=True)  # nm
 
-        # 6. Kabsch-aligned Cα-RMSD
+        # 7. Kabsch-aligned Cα-RMSD
         ca_min_coords = get_ca_coords_angstrom(min_positions, ca_h_idx)
         rmsd = kabsch_rmsd_aligned(ca_orig_coords, ca_min_coords)
 
@@ -427,6 +607,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="PATTERN",
         help="Glob pattern to select PDB files inside --pdb-dir (default: '*.pdb').",
     )
+    p.add_argument(
+        "--ligand-smiles-json",
+        type=str,
+        default=None,
+        metavar="JSON",
+        help=(
+            'JSON string (or path to a JSON file) mapping PDB chain ID to SMILES. '
+            'Required for structures that contain HETATM LIG residues.  '
+            'Example: \'{"B": "CC(=O)Oc1ccccc1C(=O)O", "C": "[Mg+2]"}\''
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -436,6 +627,17 @@ def main(argv: list[str] | None = None) -> None:
         format="%(levelname)s  %(name)s  %(message)s",
     )
     args = parse_args(argv)
+
+    ligand_smiles: Optional[dict[str, str]] = None
+    if args.ligand_smiles_json is not None:
+        raw = args.ligand_smiles_json.strip()
+        if raw.startswith("{"):
+            import json as _json
+            ligand_smiles = _json.loads(raw)
+        else:
+            import json as _json
+            ligand_smiles = _json.loads(Path(raw).read_text())
+        logger.info("Ligand SMILES: %s", ligand_smiles)
 
     pdb_files = sorted(args.pdb_dir.glob(args.glob))
     if not pdb_files:
@@ -460,6 +662,7 @@ def main(argv: list[str] | None = None) -> None:
             max_iter=args.max_iter,
             platform_name=args.platform,
             temperature_k=args.temperature,
+            ligand_smiles=ligand_smiles,
         )
         results.append(res)
         status = (

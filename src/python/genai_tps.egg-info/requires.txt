@@ -1,7 +1,7 @@
 future
 psutil
 numpy<2.3,>=2.0
-scipy
+scipy<1.14,>=1.13
 pandas
 netcdf4
 svgwrite
@@ -17,6 +17,7 @@ prody>=2.0
 
 [boltz]
 torch>=2.2
+torchmetrics>=1.0
 
 [dev]
 pytest>=7
@@ -24,6 +25,8 @@ hypothesis>=6
 
 [enhanced_sampling]
 pymbar>=4.0
+openmm>=8.0
+pdbfixer>=1.9
 
 [viz]
 pymol-open-source>=3.2.0a0

@@ -219,3 +219,149 @@ class TestMinimizePDB:
         # Positions in the PDB are in Angstroms (1–10 Å range); OpenMM
         # PDBFile stores them in nanometres → after * 10 they should be > 1 Å
         assert np.all(np.abs(ca_coords) < 100.0), "Coordinates look unexpectedly large"
+
+    def test_platform_runtime_smoke_cpu(self):
+        """Minimal Context on CPU must succeed (guards broken CUDA selection)."""
+        import openmm
+
+        from compute_cv_rmsd import _platform_runtime_smoke_test  # type: ignore[import]
+
+        plat = openmm.Platform.getPlatformByName("CPU")
+        ok, err = _platform_runtime_smoke_test(plat)
+        assert ok, err
+
+
+# ---------------------------------------------------------------------------
+# openmmforcefields availability guard
+# ---------------------------------------------------------------------------
+
+_OPENMMFF_AVAILABLE = True
+try:
+    from openff.toolkit.topology import Molecule as _OpenFFMolecule  # noqa: F401
+    from openmmforcefields.generators import GAFFTemplateGenerator as _GAFF  # noqa: F401
+except (ImportError, Exception):
+    _OPENMMFF_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# Minimal aspirin PDB (13 heavy atoms, chain B)
+# ---------------------------------------------------------------------------
+# Benzene ring centred at (20, 0, 0) Å, well clear of the ALA-ALA chain.
+# Coordinates computed analytically; bond lengths: C-C 1.40 Å (ring),
+# C-O 1.37 Å (ester), C-O 1.34 Å (C=O), C-O 1.36 Å (phenyl-O), etc.
+# CONECT records encode the heavy-atom graph so OpenMM builds the correct
+# bond topology for GAFF2 template matching.
+#
+# Aspirin SMILES: CC(=O)Oc1ccccc1C(=O)O
+#
+# Atom serial mapping (ALA-ALA = 1..11, TER = 12, aspirin = 13..25):
+#  13 C1  methyl carbon
+#  14 C2  ester carbonyl carbon  (C1-C2-O3=, C2-O4-ring)
+#  15 O3  ester C=O oxygen
+#  16 O4  ester O (ring side)
+#  17 C5  ring C1 (bonded to O4)
+#  18 C6  ring C2
+#  19 C7  ring C3
+#  20 C8  ring C4
+#  21 C9  ring C5
+#  22 C10 ring C6 (ortho, bonded to carboxyl)
+#  23 C11 carboxyl carbon
+#  24 O12 carboxyl C=O
+#  25 O13 carboxyl OH
+
+_ASPIRIN_SMILES = "CC(=O)Oc1ccccc1C(=O)O"
+
+_ALA_ALA_ASPIRIN_PDB = textwrap.dedent("""\
+    ATOM      1  N   ALA A   1       1.201   0.847   0.100  1.00  0.00           N
+    ATOM      2  CA  ALA A   1       2.285  -0.103   0.000  1.00  0.00           C
+    ATOM      3  C   ALA A   1       3.669   0.538   0.000  1.00  0.00           C
+    ATOM      4  O   ALA A   1       4.008   1.650  -0.400  1.00  0.00           O
+    ATOM      5  CB  ALA A   1       2.166  -0.999  -1.231  1.00  0.00           C
+    ATOM      6  N   ALA A   2       4.592  -0.277   0.400  1.00  0.00           N
+    ATOM      7  CA  ALA A   2       5.961   0.223   0.400  1.00  0.00           C
+    ATOM      8  C   ALA A   2       6.940  -0.921   0.000  1.00  0.00           C
+    ATOM      9  O   ALA A   2       7.100  -1.920   0.800  1.00  0.00           O
+    ATOM     10  CB  ALA A   2       6.343   1.332   1.381  1.00  0.00           C
+    ATOM     11  OXT ALA A   2       7.643  -0.870  -1.000  1.00  0.00           O
+    TER      12      ALA A   2
+    HETATM   13  C1  LIG B   1      21.160   4.950   0.000  1.00  0.00           C
+    HETATM   14  C2  LIG B   1      21.160   3.440   0.000  1.00  0.00           C
+    HETATM   15  O3  LIG B   1      22.217   2.830   0.000  1.00  0.00           O
+    HETATM   16  O4  LIG B   1      20.000   2.770   0.000  1.00  0.00           O
+    HETATM   17  C5  LIG B   1      20.000   1.400   0.000  1.00  0.00           C
+    HETATM   18  C6  LIG B   1      21.210   0.700   0.000  1.00  0.00           C
+    HETATM   19  C7  LIG B   1      21.210  -0.700   0.000  1.00  0.00           C
+    HETATM   20  C8  LIG B   1      20.000  -1.400   0.000  1.00  0.00           C
+    HETATM   21  C9  LIG B   1      18.790  -0.700   0.000  1.00  0.00           C
+    HETATM   22  C10 LIG B   1      18.790   0.700   0.000  1.00  0.00           C
+    HETATM   23  C11 LIG B   1      17.485   1.455   0.000  1.00  0.00           C
+    HETATM   24  O12 LIG B   1      17.485   2.675   0.000  1.00  0.00           O
+    HETATM   25  O13 LIG B   1      16.309   0.778   0.000  1.00  0.00           O
+    CONECT   13   14
+    CONECT   14   13   15   16
+    CONECT   15   14
+    CONECT   16   14   17
+    CONECT   17   16   18   22
+    CONECT   18   17   19
+    CONECT   19   18   20
+    CONECT   20   19   21
+    CONECT   21   20   22
+    CONECT   22   21   17   23
+    CONECT   23   22   24   25
+    CONECT   24   23
+    CONECT   25   23
+    END
+""")
+
+
+class TestMinimizePDBWithLigand:
+    """Integration tests for GAFF2-extended OpenMM minimisation (protein + LIG)."""
+
+    def _write_pdb(self, tmp_path: Path) -> Path:
+        pdb_path = tmp_path / "ala_ala_aspirin.pdb"
+        pdb_path.write_text(_ALA_ALA_ASPIRIN_PDB)
+        return pdb_path
+
+    def test_minimize_protein_ligand_smoke(self, tmp_path):
+        """ALA-ALA + aspirin LIG: minimisation must converge with GAFF2."""
+        pytest.importorskip("openmm", reason="openmm not installed")
+        pytest.importorskip("openff.toolkit", reason="openff-toolkit not installed")
+        pytest.importorskip("openmmforcefields", reason="openmmforcefields not installed")
+        from compute_cv_rmsd import minimize_pdb  # type: ignore[import]
+
+        pdb_path = self._write_pdb(tmp_path)
+        result = minimize_pdb(
+            pdb_path,
+            max_iter=500,
+            platform_name="CPU",
+            ligand_smiles={"B": _ASPIRIN_SMILES},
+        )
+
+        assert result["converged"], (
+            f"Minimisation with ligand failed: {result['error']}"
+        )
+        assert result["ca_rmsd_angstrom"] is not None
+        assert result["ca_rmsd_angstrom"] >= 0.0, "Cα-RMSD must be non-negative"
+        assert result["energy_kj_mol"] is not None
+        assert result["energy_kj_mol"] < 0.0, (
+            f"Expected negative potential energy, got {result['energy_kj_mol']}"
+        )
+        assert result["n_ca_atoms"] == 2, "ALA-ALA has 2 Cα atoms"
+        assert result["platform_used"] == "CPU"
+        assert result["error"] is None
+
+    def test_minimize_lig_no_smiles_warns(self, tmp_path):
+        """Without ligand_smiles, LIG residue causes graceful failure (no crash)."""
+        pytest.importorskip("openmm", reason="openmm not installed")
+        from compute_cv_rmsd import minimize_pdb  # type: ignore[import]
+
+        pdb_path = self._write_pdb(tmp_path)
+        result = minimize_pdb(
+            pdb_path,
+            max_iter=100,
+            platform_name="CPU",
+            ligand_smiles=None,
+        )
+        assert not result["converged"] or result["error"] is not None, (
+            "Expected failure or error when no SMILES is provided for LIG residue"
+        )
