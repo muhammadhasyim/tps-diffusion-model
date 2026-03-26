@@ -1,0 +1,35 @@
+{
+  "kbt": 1.0,
+  "barrier": 5.0,
+  "biasfactor": 10.0,
+  "epsilon": 0.006737946999085467,
+  "kernel_cutoff": 3.605551275463989,
+  "compression_threshold": 1.0,
+  "pace": 1,
+  "sigma_min": 0.0,
+  "fixed_sigma": null,
+  "explore": false,
+  "bias_prefactor": 0.9,
+  "sigma_0": 3.1622776601683795,
+  "sum_weights": 1.0142320547350045e+304,
+  "sum_weights2": Infinity,
+  "counter": 2,
+  "zed": NaN,
+  "kde_norm": 1.0142320547350045e+304,
+  "welford_n": 300,
+  "welford_mean": NaN,
+  "welford_m2": NaN,
+  "n_merges": 0,
+  "kernels": [
+    {
+      "center": NaN,
+      "sigma": 3.1622776601683795,
+      "height": 1.0
+    },
+    {
+      "center": NaN,
+      "sigma": NaN,
+      "height": 1.0142320547350045e+304
+    }
+  ]
+}

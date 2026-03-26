@@ -301,7 +301,16 @@ def minimize_pdb(
     When *ligand_smiles* is provided, AMBER14 is extended with ``GAFFTemplateGenerator``
     (GAFF2) for each chain ID in the mapping.  PDBFixer is **not** used for
     ligand-containing structures (it cannot add atoms for unknown ``LIG``
-    residues and may strip HETATM records); Modeller is used directly.
+    residues and may strip HETATM records).
+
+    ``GAFFTemplateGenerator`` matches residues to OpenFF molecules by graph
+    isomorphism on **all** atoms.  A heavy-atom-only ``LIG`` in the PDB therefore
+    does not match a protonated SMILES molecule.  The implementation strips
+    ``LIG`` heavy atoms, runs ``Modeller.addHydrogens`` on the protein-only
+    structure, then re-inserts each ligand as an OpenFF-generated 3D conformer
+    (with hydrogens).  Ligand heavy-atom coordinates from the PDB are **not**
+    preserved in that step; Cα-RMSD is still computed from the original protein
+    coordinates vs the minimised protein Cα positions.
 
     Parameters
     ----------
@@ -388,8 +397,9 @@ def minimize_pdb(
         #
         #    Strategy B — Modeller.addHydrogens (ligand structures or fallback):
         #      Used when PDBFixer is skipped (has_ligand=True) or when PDBFixer
-        #      fails.  May warn/fail for uncapped chains (terminal residues
-        #      missing backbone atoms).
+        #      fails.  For has_ligand=True, LIG heavy atoms are removed first so
+        #      AMBER can protonate the protein; ligands are re-added from OpenFF
+        #      conformers (see docstring).  May warn/fail for uncapped chains.
         #
         #    Strategy C — heavy-atoms-only (last resort):
         #      Sufficient for a Cα-RMSD comparison even if the absolute energy
@@ -425,15 +435,75 @@ def minimize_pdb(
             # Strategy B: Modeller fallback (or primary path for ligands).
             # Use the same ff instance that has GAFF2 registered (if applicable).
             modeller = openmm.app.Modeller(orig_topology, orig_positions)
-            try:
-                modeller.addHydrogens(forcefield=ff, platform=platform)
-            except Exception as h_exc:
-                warnings.warn(
-                    f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
-                    "proceeding with heavy atoms only.",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
+            if has_ligand:
+                # GAFF matches OpenFF templates on full protonated graphs; a
+                # heavy-atom-only LIG residue cannot match Molecule.from_smiles().
+                # Strip LIG, protonate protein with AMBER, then append each ligand
+                # as an OpenFF conformer (residue name UNK; GAFF matches by graph).
+                lig_heavy = [
+                    atom
+                    for atom in modeller.topology.atoms()
+                    if atom.residue.name == "LIG"
+                ]
+                if lig_heavy:
+                    modeller.delete(lig_heavy)
+                try:
+                    modeller.addHydrogens(forcefield=ff, platform=platform)
+                except Exception as h_exc:
+                    warnings.warn(
+                        f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
+                        "proceeding with heavy atoms only.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                try:
+                    from openff.toolkit.topology import (  # noqa: PLC0415
+                        Molecule as OpenFFMolecule,
+                    )
+                except ImportError as exc:
+                    raise ImportError(
+                        "openff-toolkit is required for ligand protonation after "
+                        "LIG strip. Install with:\n"
+                        "  conda install -c conda-forge openmmforcefields\n"
+                        f"Original error: {exc}"
+                    ) from exc
+                lig_chain_ids: list[str] = []
+                for chain in orig_topology.chains():
+                    for residue in chain.residues():
+                        if residue.name == "LIG":
+                            lig_chain_ids.append(chain.id)
+                            break
+                for chain_id in sorted(set(lig_chain_ids)):
+                    smiles = ligand_smiles.get(chain_id) if ligand_smiles else None
+                    if not smiles:
+                        continue
+                    mol = OpenFFMolecule.from_smiles(
+                        smiles, allow_undefined_stereo=True
+                    )
+                    mol.generate_conformers(n_conformers=1, rms_cutoff=None)
+                    lig_topo = mol.to_topology().to_openmm()
+                    conf_ang = mol.conformers[0].magnitude
+                    conf_nm = conf_ang / 10.0
+                    lig_pos = [
+                        openmm.Vec3(
+                            float(conf_nm[i, 0]),
+                            float(conf_nm[i, 1]),
+                            float(conf_nm[i, 2]),
+                        )
+                        * unit.nanometer
+                        for i in range(int(conf_nm.shape[0]))
+                    ]
+                    modeller.add(lig_topo, lig_pos)
+            else:
+                try:
+                    modeller.addHydrogens(forcefield=ff, platform=platform)
+                except Exception as h_exc:
+                    warnings.warn(
+                        f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
+                        "proceeding with heavy atoms only.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
             h_topology = modeller.topology
             h_positions = modeller.positions
 
