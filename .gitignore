@@ -4,6 +4,8 @@ __pycache__/
 *$py.class
 *.pyo
 
+opes*case2/
+
 # ── Python packaging / build artifacts ────────────────────────────────────────
 *.egg-info/
 *.egg
