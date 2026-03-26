@@ -272,6 +272,21 @@ class TestBiasOnGrid:
         assert np.all(np.isfinite(bias_grid))
 
 
+class TestKdeProbability:
+    """Normalized kernel mixture density used for OPES plots."""
+
+    def test_positive_and_matches_raw_kde_norm(self):
+        bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1,
+                        fixed_sigma=1.0, explore=True)
+        for i in range(15):
+            bias.update(cv_accepted=float(i), mc_step=i + 1)
+        assert bias.kde_norm > 0
+        mid = 7.0
+        p = bias.kde_probability(mid)
+        assert p > 0
+        assert p == pytest.approx(bias._raw_kde(mid) / bias.kde_norm)
+
+
 class TestReweighting:
     """Tests for reweight_samples."""
 

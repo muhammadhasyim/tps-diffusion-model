@@ -165,6 +165,17 @@ class OPESBias:
             total += self._evaluate_single_kernel(k, cv)
         return total
 
+    def kde_probability(self, cv: float) -> float:
+        """Normalized OPES kernel mixture density P(s) = raw_kde(s) / kde_norm.
+
+        This is the KDE estimate used inside :meth:`evaluate` (before division
+        by ``zed`` and addition of ``epsilon``).  Useful for plotting the
+        deposited kernel density.
+        """
+        if not self.kernels or self.kde_norm <= 0:
+            return 0.0
+        return self._raw_kde(cv) / self.kde_norm
+
     def evaluate(self, cv: float) -> float:
         """Compute the bias potential V(cv).
 
