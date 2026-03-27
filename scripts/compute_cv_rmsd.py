@@ -25,6 +25,9 @@ Ligand support::
             --out-dir  ... \\
             --ligand-smiles-json '{"B": "CC(=O)Oc1ccccc1C(=O)O", "C": "[Mg+2]"}'
 
+    ``[Mg+2]`` and similar single-atom SMILES use ``amber14/tip3p.xml`` ion
+    templates instead of GAFF2.
+
     Via Python API::
 
         result = minimize_pdb(
@@ -200,6 +203,156 @@ def _get_platform(requested: str):
 
 
 # ---------------------------------------------------------------------------
+# Monoatomic ions: AMBER14 tip3p.xml (Joung–Cheatham–like), not GAFF2
+# ---------------------------------------------------------------------------
+# GAFFTemplateGenerator always runs AM1-BCC unless partial charges are preset,
+# and antechamber cannot charge/type single-atom species reliably.  OpenMM's
+# ``amber14/tip3p.xml`` ships one-residue ion templates (MG, NA, CL, …) with
+# Lennard-Jones and charges consistent with the TIP3P ion parameter set.
+#
+# Keys: (atomic_number, formal_charge) → (OpenMM residue name, PDB atom name).
+_TIP3P_MONOATOMIC_BY_ELEMENT_CHARGE: dict[tuple[int, int], tuple[str, str]] = {
+    (3, 1): ("LI", "LI"),
+    (4, 2): ("Be", "Be"),
+    (9, -1): ("F", "F"),
+    (11, 1): ("NA", "NA"),
+    (12, 2): ("MG", "MG"),
+    (13, 3): ("AL", "AL"),
+    (17, -1): ("CL", "CL"),
+    (19, 1): ("K", "K"),
+    (20, 2): ("CA", "CA"),
+    (23, 2): ("V2+", "V2+"),
+    (24, 2): ("Cr", "Cr"),
+    (24, 3): ("CR", "CR"),
+    (25, 2): ("MN", "MN"),
+    (26, 2): ("FE2", "FE2"),
+    (26, 3): ("FE", "FE"),
+    (27, 2): ("CO", "CO"),
+    (28, 2): ("NI", "NI"),
+    (29, 2): ("CU", "CU"),
+    (30, 2): ("ZN", "ZN"),
+    (35, -1): ("BR", "BR"),
+    (37, 1): ("RB", "RB"),
+    (38, 2): ("SR", "SR"),
+    (39, 3): ("Y", "Y"),
+    (40, 4): ("Zr", "Zr"),
+    (46, 2): ("PD", "PD"),
+    (47, 2): ("Ag", "Ag"),
+    (48, 2): ("CD", "CD"),
+    (49, 3): ("IN", "IN"),
+    (50, 2): ("Sn", "Sn"),
+    (53, -1): ("IOD", "I"),
+    (55, 1): ("CS", "CS"),
+    (56, 2): ("BA", "BA"),
+    (57, 3): ("LA", "LA"),
+    (58, 3): ("CE", "CE"),
+    (58, 4): ("Ce", "Ce"),
+    (59, 3): ("PR", "PR"),
+    (60, 3): ("Nd", "Nd"),
+    (62, 2): ("Sm", "Sm"),
+    (62, 3): ("SM", "SM"),
+    (63, 2): ("EU", "EU"),
+    (63, 3): ("EU3", "EU3"),
+    (64, 3): ("GD3", "GD"),
+    (65, 3): ("TB", "TB"),
+    (66, 3): ("Dy", "Dy"),
+    (68, 3): ("Er", "Er"),
+    (69, 3): ("Tm", "Tm"),
+    (70, 2): ("YB2", "YB2"),
+    (71, 3): ("LU", "LU"),
+    (72, 4): ("Hf", "Hf"),
+    (78, 2): ("PT", "PT"),
+    (80, 2): ("HG", "HG"),
+    (81, 3): ("Tl", "Tl"),
+    (82, 2): ("PB", "PB"),
+    (88, 2): ("Ra", "Ra"),
+    (90, 4): ("Th", "Th"),
+    (92, 4): ("U4+", "U"),
+    (94, 4): ("Pu", "Pu"),
+}
+
+
+def tip3p_monoatomic_template(
+    smiles: str,
+) -> tuple[str, str, int] | None:
+    """If *smiles* is a single atom with a tip3p.xml entry, return template info.
+
+    Returns
+    -------
+    tuple[str, str, int] | None
+        ``(residue_name, atom_name, atomic_number)`` for OpenMM's
+        ``amber14/tip3p.xml`` ion residue, or ``None`` if the species should use
+        GAFF2 instead (multi-atom ligand or ion not in the bundled tip3p set).
+
+    Notes
+    -----
+    Uses RDKit when available (lightweight); falls back to OpenFF ``Molecule``
+    so environments without RDKit still classify ions if the toolkit imports.
+    """
+    if not smiles or not smiles.strip():
+        return None
+    s = smiles.strip()
+    z: int | None = None
+    fc: int | None = None
+    try:
+        from rdkit import Chem  # noqa: PLC0415
+
+        rdm = Chem.MolFromSmiles(s)
+        if rdm is None or rdm.GetNumAtoms() != 1:
+            return None
+        ra = rdm.GetAtomWithIdx(0)
+        z = int(ra.GetAtomicNum())
+        fc = int(ra.GetFormalCharge())
+    except ImportError:
+        try:
+            from openff.toolkit.topology import (  # noqa: PLC0415
+                Molecule as OpenFFMolecule,
+            )
+
+            mol = OpenFFMolecule.from_smiles(s, allow_undefined_stereo=True)
+        except ImportError:
+            return None
+        except Exception:
+            return None
+        if len(mol.atoms) != 1:
+            return None
+        atom = mol.atoms[0]
+        z = int(atom.atomic_number)
+        fc = int(atom.formal_charge)
+    hit = _TIP3P_MONOATOMIC_BY_ELEMENT_CHARGE.get((z, fc))
+    if hit is None:
+        return None
+    res_name, atom_name = hit
+    return (res_name, atom_name, z)
+
+
+def _ligand_smiles_needs_tip3p_xml(ligand_smiles: dict[str, str]) -> bool:
+    """True if any SMILES should be parameterised via ``amber14/tip3p.xml``."""
+    for smi in ligand_smiles.values():
+        if smi and tip3p_monoatomic_template(smi):
+            return True
+    return False
+
+
+def _ligand_positions_by_chain(
+    topology,
+    positions,
+    ligand_smiles: dict[str, str],
+) -> dict[str, list]:
+    """Map chain ID → list of ``Quantity`` positions for atoms in that chain."""
+    out: dict[str, list] = {}
+    for chain in topology.chains():
+        chain_id = chain.id.strip()
+        if chain_id not in ligand_smiles:
+            continue
+        atoms = list(chain.atoms())
+        if not atoms:
+            continue
+        out[chain_id] = [positions[a.index] for a in atoms]
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Ligand force-field helpers (GAFF2 via openmmforcefields)
 # ---------------------------------------------------------------------------
 
@@ -228,9 +381,27 @@ def _register_ligand_params(
     Raises
     ------
     ImportError
-        When ``openff-toolkit`` or ``openmmforcefields`` is not installed.
+        When ``openff-toolkit`` or ``openmmforcefields`` is not installed and at
+        least one ligand chain requires GAFF2 (non–tip3p monoatomic species).
     """
     del topology  # reserved for future chain-existence checks
+    gaff_targets: dict[str, str] = {}
+    for chain_id, smiles in ligand_smiles.items():
+        if not smiles:
+            continue
+        if tip3p_monoatomic_template(smiles):
+            logger.info(
+                "_register_ligand_params: chain '%s' is a tip3p monoatomic ion "
+                "(skip GAFF2); SMILES='%.40s'",
+                chain_id,
+                smiles,
+            )
+            continue
+        gaff_targets[chain_id] = smiles
+
+    if not gaff_targets:
+        return
+
     try:
         from openff.toolkit.topology import Molecule as OpenFFMolecule  # noqa: PLC0415
         from openmmforcefields.generators import GAFFTemplateGenerator  # noqa: PLC0415
@@ -243,10 +414,8 @@ def _register_ligand_params(
         ) from exc
 
     molecules: list = []
-    for chain_id in sorted(ligand_smiles):
-        smiles = ligand_smiles[chain_id]
-        if not smiles:
-            continue
+    for chain_id in sorted(gaff_targets):
+        smiles = gaff_targets[chain_id]
         try:
             mol = OpenFFMolecule.from_smiles(smiles, allow_undefined_stereo=True)
             molecules.append(mol)
@@ -295,19 +464,21 @@ def minimize_pdb(
 
     Ligand handling
     ---------------
-    When *ligand_smiles* is provided, AMBER14 is extended with ``GAFFTemplateGenerator``
-    (GAFF2) for each chain ID in the mapping.  PDBFixer is **not** used for
-    ligand-containing structures (it cannot add atoms for unknown ``LIG``
-    residues and may strip HETATM records).
+    When *ligand_smiles* is provided, AMBER14 is extended with
+    ``GAFFTemplateGenerator`` (GAFF2) for multi-atom cofactors, and with
+    ``amber14/tip3p.xml`` for monoatomic ions recognised from SMILES (e.g.
+    ``[Mg+2]`` → TIP3P-compatible Mg²⁺ parameters, no AM1-BCC).  PDBFixer is
+    **not** used for ligand-containing structures (it cannot add atoms for
+    unknown ``LIG`` residues and may strip HETATM records).
 
     ``GAFFTemplateGenerator`` matches residues to OpenFF molecules by graph
-    isomorphism on **all** atoms.  A heavy-atom-only ``LIG`` in the PDB therefore
-    does not match a protonated SMILES molecule.  The implementation strips
-    ``LIG`` heavy atoms, runs ``Modeller.addHydrogens`` on the protein-only
-    structure, then re-inserts each ligand as an OpenFF-generated 3D conformer
-    (with hydrogens).  Ligand heavy-atom coordinates from the PDB are **not**
-    preserved in that step; Cα-RMSD is still computed from the original protein
-    coordinates vs the minimised protein Cα positions.
+    isomorphism on **all** atoms.  A heavy-atom-only cofactor in the PDB
+    therefore does not match a protonated SMILES molecule.  The implementation
+    strips non–protein residues, runs PDBFixer on the protein-only structure,
+    then re-inserts each ligand.  Multi-atom ligands use an OpenFF conformer
+    (coordinates not taken from the PDB).  Monoatomic tip3p ions use the
+    original PDB position of that chain.  Cα-RMSD compares original vs
+    minimised **protein** Cα only.
 
     Parameters
     ----------
@@ -369,14 +540,26 @@ def minimize_pdb(
             raise ValueError("No Cα atoms found in the original topology.")
         ca_orig_coords = get_ca_coords_angstrom(orig_positions, ca_orig_idx)
 
-        # 2. Build the shared ForceField (with GAFF2 extension if ligands present).
+        has_ligand = bool(ligand_smiles)
+        ligand_chain_positions: dict[str, list] = {}
+        if has_ligand and ligand_smiles is not None:
+            ligand_chain_positions = _ligand_positions_by_chain(
+                orig_topology, orig_positions, ligand_smiles
+            )
+
+        # 2. Build the shared ForceField (GAFF2 and/or tip3p ion XML if ligands).
         #
         #    A single ForceField instance is used for both addHydrogens and
         #    createSystem so that the GAFF2 template generator is registered once
-        #    and available at both stages.
-        ff = openmm.app.ForceField("amber14-all.xml", "implicit/gbn2.xml")
-        has_ligand = bool(ligand_smiles)
-        if has_ligand:
+        #    and available at both stages.  Monoatomic ions (e.g. ``[Mg+2]``) use
+        #    ``amber14/tip3p.xml`` templates, not GAFF2 / AM1-BCC.
+        ff_paths = ["amber14-all.xml", "implicit/gbn2.xml"]
+        if has_ligand and ligand_smiles and _ligand_smiles_needs_tip3p_xml(
+            ligand_smiles
+        ):
+            ff_paths.append("amber14/tip3p.xml")
+        ff = openmm.app.ForceField(*ff_paths)
+        if has_ligand and ligand_smiles is not None:
             _register_ligand_params(ff, orig_topology, ligand_smiles)
 
         # 3. Prepare the structure (add terminal caps + hydrogens).
@@ -494,21 +677,51 @@ def minimize_pdb(
                             RuntimeWarning,
                             stacklevel=2,
                         )
-                try:
-                    from openff.toolkit.topology import (  # noqa: PLC0415
-                        Molecule as OpenFFMolecule,
-                    )
-                except ImportError as exc:
-                    raise ImportError(
-                        "openff-toolkit is required for ligand protonation after "
-                        "LIG strip. Install with:\n"
-                        "  conda install -c conda-forge openmmforcefields\n"
-                        f"Original error: {exc}"
-                    ) from exc
+                needs_openff_conformer = False
+                if ligand_smiles:
+                    for _cid, _smi in ligand_smiles.items():
+                        if _smi and tip3p_monoatomic_template(_smi) is None:
+                            needs_openff_conformer = True
+                            break
+                OpenFFMolecule = None
+                if needs_openff_conformer:
+                    try:
+                        from openff.toolkit.topology import (  # noqa: PLC0415
+                            Molecule as OpenFFMolecule,
+                        )
+                    except ImportError as exc:
+                        raise ImportError(
+                            "openff-toolkit is required for ligand protonation after "
+                            "cofactor strip. Install with:\n"
+                            "  conda install -c conda-forge openmmforcefields\n"
+                            f"Original error: {exc}"
+                        ) from exc
                 for chain_id in sorted(ligand_smiles):
                     smiles = ligand_smiles.get(chain_id) if ligand_smiles else None
                     if not smiles:
                         continue
+                    ion_tpl = tip3p_monoatomic_template(smiles)
+                    if ion_tpl is not None:
+                        res_name, atom_name, atomic_number = ion_tpl
+                        saved = ligand_chain_positions.get(chain_id)
+                        if not saved:
+                            warnings.warn(
+                                f"{pdb_path.name}: no PDB positions for tip3p ion "
+                                f"chain '{chain_id}'; placing ion at origin.",
+                                RuntimeWarning,
+                                stacklevel=2,
+                            )
+                            lig_pos = [openmm.Vec3(0.0, 0.0, 0.0) * unit.nanometer]
+                        else:
+                            lig_pos = [saved[0]]
+                        ion_topo = openmm.app.Topology()
+                        ion_chain = ion_topo.addChain()
+                        ion_res = ion_topo.addResidue(res_name, ion_chain)
+                        ion_el = openmm.app.Element.getByAtomicNumber(atomic_number)
+                        ion_topo.addAtom(atom_name, ion_el, ion_res)
+                        modeller.add(ion_topo, lig_pos)
+                        continue
+                    assert OpenFFMolecule is not None
                     mol = OpenFFMolecule.from_smiles(
                         smiles, allow_undefined_stereo=True
                     )
@@ -550,7 +763,7 @@ def minimize_pdb(
         #    Ref: docs.openmm.org §3.2 Implicit Solvent.
         #    NOTE: do NOT pass implicitSolvent= to createSystem() — that kwarg is
         #    only for AMBER prmtop files.  The GB parameters come from the XML.
-        #    NOTE: ff already has GAFF2 registered if has_ligand=True.
+        #    NOTE: ff may include GAFF2 (multi-atom ligands) and tip3p ion XML.
         system = ff.createSystem(
             h_topology,
             nonbondedMethod=openmm.app.NoCutoff,

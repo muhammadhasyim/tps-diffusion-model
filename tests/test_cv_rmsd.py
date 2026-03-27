@@ -393,3 +393,53 @@ class TestMinimizePDBWithLigand:
         assert not result["converged"] or result["error"] is not None, (
             "Expected failure or error when no SMILES is provided for LIG residue"
         )
+
+
+_ALA_ALA_MG_PDB = textwrap.dedent("""\
+    ATOM      1  N   ALA A   1       1.201   0.847   0.100  1.00  0.00           N
+    ATOM      2  CA  ALA A   1       2.285  -0.103   0.000  1.00  0.00           C
+    ATOM      3  C   ALA A   1       3.669   0.538   0.000  1.00  0.00           C
+    ATOM      4  O   ALA A   1       4.008   1.650  -0.400  1.00  0.00           O
+    ATOM      5  CB  ALA A   1       2.166  -0.999  -1.231  1.00  0.00           C
+    ATOM      6  N   ALA A   2       4.592  -0.277   0.400  1.00  0.00           N
+    ATOM      7  CA  ALA A   2       5.961   0.223   0.400  1.00  0.00           C
+    ATOM      8  C   ALA A   2       6.940  -0.921   0.000  1.00  0.00           C
+    ATOM      9  O   ALA A   2       7.100  -1.920   0.800  1.00  0.00           O
+    ATOM     10  CB  ALA A   2       6.343   1.332   1.381  1.00  0.00           C
+    ATOM     11  OXT ALA A   2       7.643  -0.870  -1.000  1.00  0.00           O
+    TER      12      ALA A   2
+    HETATM   13  MG  MG  C   1      15.000   0.000   0.000  1.00  0.00          MG
+    END
+""")
+
+
+class TestMinimizePDBWithMonoatomicIon:
+    """tip3p.xml ions avoid GAFF2 / AM1-BCC on single-atom species."""
+
+    def test_tip3p_template_mg_smiles(self):
+        pytest.importorskip("rdkit.Chem", reason="RDKit required to map ion SMILES")
+        from compute_cv_rmsd import tip3p_monoatomic_template  # type: ignore[import]
+
+        tpl = tip3p_monoatomic_template("[Mg+2]")
+        assert tpl is not None
+        res_name, atom_name, z = tpl
+        assert res_name == "MG" and atom_name == "MG" and z == 12
+
+    def test_minimize_protein_mg_no_gaff(self, tmp_path):
+        """Mg²⁺ via tip3p: minimisation succeeds without GAFFTemplateGenerator."""
+        pytest.importorskip("openmm", reason="openmm not installed")
+        pytest.importorskip("rdkit.Chem", reason="RDKit required to classify [Mg+2]")
+        from compute_cv_rmsd import minimize_pdb  # type: ignore[import]
+
+        pdb_path = tmp_path / "ala_ala_mg.pdb"
+        pdb_path.write_text(_ALA_ALA_MG_PDB)
+        result = minimize_pdb(
+            pdb_path,
+            max_iter=500,
+            platform_name="CPU",
+            ligand_smiles={"C": "[Mg+2]"},
+        )
+        assert result["converged"], result.get("error")
+        assert result["n_ca_atoms"] == 2
+        assert result["error"] is None
+        assert result["energy_kj_mol"] is not None
