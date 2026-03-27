@@ -125,6 +125,20 @@ class TestBiasPotential:
         bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0)
         assert bias.evaluate(3.0) == 0.0
 
+    def test_evaluate_non_finite_returns_zero(self):
+        bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1,
+                        fixed_sigma=1.0, explore=True)
+        bias.update(cv_accepted=2.0, mc_step=1)
+        assert bias.evaluate(float("nan")) == 0.0
+        assert bias.evaluate(float("inf")) == 0.0
+
+    def test_compute_acceptance_factor_non_finite_is_identity(self):
+        bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1,
+                        fixed_sigma=1.0, explore=True)
+        bias.update(cv_accepted=1.0, mc_step=1)
+        assert bias.compute_acceptance_factor(float("nan"), 2.0) == 1.0
+        assert bias.compute_acceptance_factor(1.0, float("nan")) == 1.0
+
     def test_bias_nonzero_after_kernels(self):
         bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1,
                         fixed_sigma=1.0, explore=True)

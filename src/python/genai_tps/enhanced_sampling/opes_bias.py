@@ -186,6 +186,8 @@ class OPESBias:
             where P = raw_kde / kde_norm.  Returns 0.0 before any kernels
             are deposited.
         """
+        if not math.isfinite(cv):
+            return 0.0
         if not self.kernels or self.kde_norm == 0:
             return 0.0
         prob = self._raw_kde(cv) / self.kde_norm
@@ -194,6 +196,8 @@ class OPESBias:
     def compute_acceptance_factor(self, cv_old: float, cv_new: float) -> float:
         """Return exp(-(V(cv_new) - V(cv_old)) / kT) for the Metropolis criterion."""
         if not self.kernels:
+            return 1.0
+        if not math.isfinite(cv_old) or not math.isfinite(cv_new):
             return 1.0
         v_old = self.evaluate(cv_old)
         v_new = self.evaluate(cv_new)
@@ -235,6 +239,8 @@ class OPESBias:
         if self.explore:
             return 1.0
         if not self.kernels:
+            return 1.0
+        if not math.isfinite(cv):
             return 1.0
         current_bias = self.evaluate(cv)
         log_weight = current_bias / self.kbt

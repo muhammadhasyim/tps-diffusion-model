@@ -61,6 +61,15 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Boltz/OpenMM PDB: protein uses standard 3-letter codes; cofactors are HETATM
+# with CCD names (ATP, MG, …), not necessarily ``LIG``.  Anything outside this
+# set is treated as non-polymer for the ligand+protein protonation pipeline.
+_CANONICAL_AMINO_ACIDS = frozenset({
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+    "MSE", "SEC", "PYL",  # occasional in deposited structures / Boltz
+})
+
 # ---------------------------------------------------------------------------
 # Coordinate helpers
 # ---------------------------------------------------------------------------
@@ -199,21 +208,19 @@ def _register_ligand_params(
     topology,  # openmm.app.Topology
     ligand_smiles: dict[str, str],
 ) -> None:
-    """Register GAFF2 parameters for ``LIG`` residues in *topology*.
+    """Register GAFF2 parameters for cofactor chains listed in *ligand_smiles*.
 
-    For each chain in *topology* that contains a residue named ``LIG`` the
-    function looks up the chain ID in *ligand_smiles*, converts the SMILES to
-    an OpenFF ``Molecule``, and registers a ``GAFFTemplateGenerator`` on *ff*.
-    A warning is emitted (not an exception) for any ``LIG`` chain that has no
-    SMILES entry; those chains will cause ``ff.createSystem()`` to fail with
-    ``"No template found"`` unless they have been stripped beforehand.
+    Registers one OpenFF ``Molecule`` per chain ID in *ligand_smiles* (Boltz
+    writes ATP/MG/… as HETATM with CCD residue names, not necessarily ``LIG``).
+    Chains present in the PDB but omitted from *ligand_smiles* are not covered
+    here — they should be stripped before ``createSystem`` if non-protein.
 
     Parameters
     ----------
     ff:
         ``openmm.app.ForceField`` instance to extend.
     topology:
-        OpenMM topology whose residues may include ``LIG`` records.
+        Unused except for future validation; kept for API compatibility.
     ligand_smiles:
         Maps PDB chain ID (e.g. ``"B"``, ``"C"``) to SMILES string.
         Single-atom ions should use standard SMILES (e.g. ``"[Mg+2]"``).
@@ -223,6 +230,7 @@ def _register_ligand_params(
     ImportError
         When ``openff-toolkit`` or ``openmmforcefields`` is not installed.
     """
+    del topology  # reserved for future chain-existence checks
     try:
         from openff.toolkit.topology import Molecule as OpenFFMolecule  # noqa: PLC0415
         from openmmforcefields.generators import GAFFTemplateGenerator  # noqa: PLC0415
@@ -234,23 +242,10 @@ def _register_ligand_params(
             f"Original error: {exc}"
         ) from exc
 
-    lig_chains: dict[str, list] = {}
-    for chain in topology.chains():
-        for residue in chain.residues():
-            if residue.name == "LIG":
-                lig_chains.setdefault(chain.id, [])
-                break
-
     molecules: list = []
-    for chain_id in sorted(lig_chains):
-        smiles = ligand_smiles.get(chain_id)
-        if smiles is None:
-            logger.warning(
-                "_register_ligand_params: chain '%s' contains LIG residue(s) "
-                "but no SMILES was provided; ff.createSystem() will fail for "
-                "this chain unless it is removed from the topology.",
-                chain_id,
-            )
+    for chain_id in sorted(ligand_smiles):
+        smiles = ligand_smiles[chain_id]
+        if not smiles:
             continue
         try:
             mol = OpenFFMolecule.from_smiles(smiles, allow_undefined_stereo=True)
@@ -441,18 +436,19 @@ def minimize_pdb(
             modeller = openmm.app.Modeller(orig_topology, orig_positions)
             if has_ligand:
                 # GAFF matches OpenFF templates on full protonated graphs; a
-                # heavy-atom-only LIG residue cannot match Molecule.from_smiles().
-                # Strip LIG, protonate protein with AMBER, then append each ligand
-                # as an OpenFF conformer (residue name UNK; GAFF matches by graph).
-                lig_heavy = [
+                # heavy-atom-only cofactor cannot match Molecule.from_smiles().
+                # Strip every non–canonical-amino residue (ATP, MG, LIG, HOH, …),
+                # run PDBFixer on protein-only (terminal caps + H), then append
+                # each chain from ligand_smiles as an OpenFF conformer.
+                non_protein = [
                     atom
                     for atom in modeller.topology.atoms()
-                    if atom.residue.name == "LIG"
+                    if atom.residue.name.strip() not in _CANONICAL_AMINO_ACIDS
                 ]
-                if lig_heavy:
-                    modeller.delete(lig_heavy)
+                if non_protein:
+                    modeller.delete(non_protein)
                 _protein_h_ok = False
-                if lig_heavy:
+                if non_protein:
                     prot_pdb: Path | None = None
                     try:
                         fd, prot_name = tempfile.mkstemp(
@@ -509,13 +505,7 @@ def minimize_pdb(
                         "  conda install -c conda-forge openmmforcefields\n"
                         f"Original error: {exc}"
                     ) from exc
-                lig_chain_ids: list[str] = []
-                for chain in orig_topology.chains():
-                    for residue in chain.residues():
-                        if residue.name == "LIG":
-                            lig_chain_ids.append(chain.id)
-                            break
-                for chain_id in sorted(set(lig_chain_ids)):
+                for chain_id in sorted(ligand_smiles):
                     smiles = ligand_smiles.get(chain_id) if ligand_smiles else None
                     if not smiles:
                         continue
