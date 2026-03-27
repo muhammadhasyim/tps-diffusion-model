@@ -52,9 +52,35 @@ _ensure_genai_tps_path()
 from genai_tps.enhanced_sampling.opes_bias import OPESBias  # noqa: E402
 
 
+def _load_cv_samples_jsonl(jsonl_path: Path) -> np.ndarray:
+    """Load CVs from ``tps_steps.jsonl`` (one JSON object per line, ``cv_value`` field)."""
+    raw: list[float] = []
+    text = jsonl_path.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        obj = json.loads(line)
+        v = obj.get("cv_value")
+        if v is None:
+            continue
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(x):
+            raw.append(x)
+    arr = np.asarray(raw, dtype=np.float64)
+    if arr.size == 0:
+        raise ValueError(f"{jsonl_path}: no finite cv_value lines")
+    return arr
+
+
 def _load_cv_samples(cv_path: Path) -> np.ndarray:
-    """Load CV trajectory from ``cv_values.json`` or ``opes_tps_summary.json``."""
-    data = json.loads(cv_path.read_text())
+    """Load CV trajectory from JSON summary, ``cv_values.json``, or ``tps_steps.jsonl``."""
+    if cv_path.suffix == ".jsonl" or cv_path.name == "tps_steps.jsonl":
+        return _load_cv_samples_jsonl(cv_path)
+    data = json.loads(cv_path.read_text(encoding="utf-8"))
     if "cv_values" in data:
         arr = np.asarray(data["cv_values"], dtype=np.float64)
     elif "tps_steps" in data:
@@ -69,8 +95,7 @@ def _load_cv_samples(cv_path: Path) -> np.ndarray:
         arr = np.asarray(raw, dtype=np.float64)
     else:
         raise ValueError(
-            f"{cv_path}: need 'cv_values' (cv_values.json) or "
-            "'tps_steps' (opes_tps_summary.json)"
+            f"{cv_path}: need 'cv_values', 'tps_steps', or use a .jsonl step log"
         )
     if arr.size == 0:
         raise ValueError(f"{cv_path}: no finite CV samples")
@@ -88,7 +113,7 @@ def _resolve_state_path(run_dir: Path) -> Path | None:
 
 
 def _resolve_cv_path(run_dir: Path) -> Path | None:
-    for name in ("cv_values.json", "opes_tps_summary.json"):
+    for name in ("cv_values.json", "tps_steps.jsonl", "opes_tps_summary.json"):
         p = run_dir / name
         if p.is_file():
             return p
@@ -304,10 +329,10 @@ def main() -> None:
     if cv_path is None:
         print(
             "No CV trajectory file found.\n"
-            "  • cv_values.json is only written when run_opes_tps.py exits normally.\n"
-            "  • If you have opes_tps_summary.json in the same folder, place it there "
-            "or pass --cv-json.\n"
-            "  • Otherwise re-run TPS to completion or use --cv-json from another run.",
+            "  • cv_values.json and tps_steps.jsonl are updated during run_opes_tps.py "
+            "(incremental); tps_steps.jsonl is written every MC step.\n"
+            "  • You can also use opes_tps_summary.json or pass --cv-json.\n"
+            "  • Otherwise use --cv-json from another run.",
             file=sys.stderr,
         )
         if run_dir is not None:

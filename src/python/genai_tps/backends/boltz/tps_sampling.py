@@ -481,6 +481,10 @@ def run_tps_path_sampling(
     periodic_every: int = 0,
     periodic_callbacks: Sequence[tuple[Callable[[int, Trajectory], None], int]]
     | None = None,
+    periodic_step_callbacks: Sequence[
+        tuple[Callable[[int, dict[str, Any]], None], int]
+    ]
+    | None = None,
     log_path_prob_every: int = 1,
     forward_only: bool = False,
     reshuffle_probability: float = 0.1,
@@ -511,6 +515,11 @@ def run_tps_path_sampling(
         Additional ``(callback, every_n_steps)`` pairs; each ``callback(mc_step, trajectory)``
         runs when ``mc_step`` is a multiple of ``every_n_steps``. Use for checkpoints without
         coupling to ``periodic_every`` (e.g. save NPZ every 500 steps while cartoons run every 100).
+    periodic_step_callbacks
+        ``(callback, every_n_steps)`` pairs; ``callback(mc_step, step_entry)`` runs after the
+        step is appended to the internal log, before the shooting log line is written.
+        ``step_entry`` is the same dict as in the returned ``step_log`` (includes ``cv_value``
+        when enhanced sampling is active).  Keep callbacks lightweight or use ``every_n_steps > 1``.
     log_path_prob_every
         If ``> 0``, compute ``trajectory_log_path_prob`` (expensive on long paths) only
         every this many MC steps for diagnostics. If ``0``, skip path log-probabilities
@@ -636,6 +645,12 @@ def run_tps_path_sampling(
                 entry["cv_value"] = cv_val
 
             step_log.append(entry)
+
+            if periodic_step_callbacks:
+                step_1 = i + 1
+                for cb, every in periodic_step_callbacks:
+                    if every > 0 and step_1 % every == 0:
+                        cb(step_1, entry)
 
             # OPS does not always set metropolis_acceptance on nested MoveChange; then metro_p
             # is None (log as "na", not a blank field).

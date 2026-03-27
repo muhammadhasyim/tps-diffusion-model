@@ -158,3 +158,27 @@ def test_periodic_callbacks_second_interval(core_engine_and_traj):
         )
     assert seen_main == [2, 4, 6]
     assert seen_extra == [3, 6]
+
+
+def test_periodic_step_callbacks_receive_step_entry(core_engine_and_traj):
+    """periodic_step_callbacks get (mc_step, entry) matching step_log rows."""
+    _, engine, traj = core_engine_and_traj
+    captured: list[tuple[int, dict]] = []
+
+    def cb_step(mc_step: int, entry: dict) -> None:
+        captured.append((mc_step, dict(entry)))
+
+    with tempfile.TemporaryDirectory() as td:
+        log = Path(td) / "s.log"
+        _, log_entries = run_tps_path_sampling(
+            engine,
+            traj,
+            n_rounds=5,
+            log_path=log,
+            periodic_step_callbacks=[(cb_step, 2)],
+        )
+    assert len(captured) == 2
+    assert captured[0][0] == 2 and captured[1][0] == 4
+    for mc_step, entry in captured:
+        assert entry == log_entries[mc_step - 1]
+        assert entry["step"] == mc_step

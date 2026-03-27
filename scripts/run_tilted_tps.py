@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from collections.abc import Callable
@@ -64,6 +65,30 @@ from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.enhanced_sampling import ExponentialTiltingBias
 from genai_tps.enhanced_sampling.mbar_analysis import MBARDistributionEstimator
 from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+
+
+def _write_mbar_samples_latest(work_root: Path, bias: ExponentialTiltingBias) -> None:
+    """Snapshot current tilt samples to mbar_samples_latest.json (atomic replace)."""
+    est = MBARDistributionEstimator()
+    est.add_samples_from_bias(bias, burn_in_fraction=0.0)
+    tmp = work_root / "mbar_samples_latest.json.tmp"
+    final = work_root / "mbar_samples_latest.json"
+    est.save_samples(tmp)
+    os.replace(tmp, final)
+
+
+def _mbar_latest_step_callback(work_root: Path, bias: ExponentialTiltingBias):
+    def cb(mc_step: int, entry: dict) -> None:
+        try:
+            _write_mbar_samples_latest(work_root, bias)
+        except Exception as exc:
+            print(
+                f"[TPS-TILTED] mbar_samples_latest flush failed at step {mc_step}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+    return cb
 
 
 def _repo_root() -> Path:
@@ -262,6 +287,15 @@ def main() -> None:
         "--burn-in-fraction", type=float, default=0.1,
         help="Fraction of initial samples to discard as burn-in when saving MBAR data.",
     )
+    tilting_group.add_argument(
+        "--save-mbar-json-every",
+        type=int,
+        default=100,
+        help=(
+            "Write mbar_samples_latest.json every N MC steps (burn-in=0 snapshot; "
+            "0 disables). Default: 100."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -424,17 +458,28 @@ def main() -> None:
         periodic_extra.append((_trajectory_checkpoint_callback(work_root), save_traj_every))
 
     if args.annealing_schedule is not None:
-        schedule = _parse_annealing_schedule(args.annealing_schedule)
-        print(f"[TPS-TILTED] annealing schedule: {schedule}", flush=True)
+        anneal_schedule = _parse_annealing_schedule(args.annealing_schedule)
+        bias = ExponentialTiltingBias(lambda_value=anneal_schedule[0][0])
+    else:
+        anneal_schedule = None
+        bias = ExponentialTiltingBias(lambda_value=args.bias_lambda)
 
-        bias = ExponentialTiltingBias(lambda_value=schedule[0][0])
+    save_mbar_every = max(0, int(args.save_mbar_json_every))
+    periodic_step_mbar: list = []
+    if save_mbar_every > 0:
+        periodic_step_mbar.append(
+            (_mbar_latest_step_callback(work_root, bias), save_mbar_every)
+        )
+    step_cb_arg = periodic_step_mbar if periodic_step_mbar else None
+
+    if anneal_schedule is not None:
+        print(f"[TPS-TILTED] annealing schedule: {anneal_schedule}", flush=True)
         all_step_logs: list[dict] = []
-        cumulative_steps = 0
 
-        for seg_idx, (lam, n_steps) in enumerate(schedule):
+        for seg_idx, (lam, n_steps) in enumerate(anneal_schedule):
             bias.set_lambda(lam)
             print(
-                f"[TPS-TILTED] segment {seg_idx+1}/{len(schedule)}: "
+                f"[TPS-TILTED] segment {seg_idx+1}/{len(anneal_schedule)}: "
                 f"lambda={lam:.4g}, steps={n_steps}",
                 flush=True,
             )
@@ -442,6 +487,7 @@ def main() -> None:
                 engine, init_traj, n_steps, shoot_log,
                 progress_every=args.progress_every,
                 periodic_callbacks=periodic_extra if periodic_extra else None,
+                periodic_step_callbacks=step_cb_arg,
                 log_path_prob_every=args.log_path_prob_every,
                 forward_only=args.forward_only,
                 reshuffle_probability=args.reshuffle_probability,
@@ -449,10 +495,8 @@ def main() -> None:
                 cv_function=cv_function,
             )
             all_step_logs.extend(seg_log)
-            cumulative_steps += n_steps
             init_traj = final_traj
     else:
-        bias = ExponentialTiltingBias(lambda_value=args.bias_lambda)
         total_rounds = args.shoot_rounds
         print(
             f"[TPS-TILTED] lambda={args.bias_lambda:.4g}, rounds={total_rounds}",
@@ -463,12 +507,23 @@ def main() -> None:
             engine, init_traj, total_rounds, shoot_log,
             progress_every=args.progress_every,
             periodic_callbacks=periodic_extra if periodic_extra else None,
+            periodic_step_callbacks=step_cb_arg,
             log_path_prob_every=args.log_path_prob_every,
             forward_only=args.forward_only,
             reshuffle_probability=args.reshuffle_probability,
             enhanced_bias=bias,
             cv_function=cv_function,
         )
+
+    if save_mbar_every > 0:
+        try:
+            _write_mbar_samples_latest(work_root, bias)
+        except Exception as exc:
+            print(
+                f"[TPS-TILTED] final mbar_samples_latest flush failed: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
 
     mbar_est = MBARDistributionEstimator()
     mbar_est.add_samples_from_bias(bias, burn_in_fraction=args.burn_in_fraction)
@@ -484,6 +539,9 @@ def main() -> None:
         "total_steps": len(all_step_logs),
         "n_samples_recorded": len(bias.samples),
         "mbar_samples_path": str(mbar_path),
+        "mbar_samples_latest_path": str((work_root / "mbar_samples_latest.json").resolve())
+        if save_mbar_every > 0
+        else None,
         "tps_steps": all_step_logs,
     }
     summary_path = work_root / "tilted_tps_summary.json"

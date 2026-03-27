@@ -9,6 +9,9 @@ acceptance as:
     trial.bias *= exp(-(V(cv_new) - V(cv_old)) / kT)
 
 The OPES state is saved periodically for restarts and for post-hoc reweighting.
+During the run, ``cv_values.json`` is refreshed every ``--save-cv-json-every`` steps
+(default: same as ``--save-opes-state-every``, or 1), and ``tps_steps.jsonl`` receives
+one JSON line per MC step for crash-safe postprocessing.
 
 Example::
 
@@ -29,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from collections.abc import Callable
@@ -55,6 +59,14 @@ from genai_tps.backends.boltz.snapshot import (
 )
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.enhanced_sampling import OPESBias
+
+
+def _atomic_write_json(path: Path, payload: dict) -> None:
+    """Write JSON atomically (tmp + replace) for crash-safe incremental outputs."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _repo_root() -> Path:
@@ -296,6 +308,16 @@ def main() -> None:
         "--save-opes-state-every", type=int, default=100,
         help="Save OPES state every N MC steps. (default: 100)",
     )
+    opes_group.add_argument(
+        "--save-cv-json-every",
+        type=int,
+        default=None,
+        help=(
+            "Write cv_values.json every N MC steps (default: same as "
+            "--save-opes-state-every if >0, else 1).  Uses the CV from the "
+            "TPS step log (no duplicate OpenMM evaluations)."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -488,21 +510,45 @@ def main() -> None:
             (_opes_state_checkpoint_callback(bias, work_root, save_opes_every), save_opes_every)
         )
 
+    if args.save_cv_json_every is not None:
+        save_cv_every = max(1, int(args.save_cv_json_every))
+    else:
+        save_cv_every = save_opes_every if save_opes_every > 0 else 1
+
     cv_values_log: list[dict] = []
+    cv_data_path = work_root / "cv_values.json"
+    jsonl_path = work_root / "tps_steps.jsonl"
+    jsonl_path.write_text("", encoding="utf-8")
 
-    def _cv_logging_callback(mc_step: int, traj: Trajectory) -> None:
-        try:
-            cv_val = cv_function(traj)
-            cv_values_log.append({"mc_step": mc_step, "cv": cv_val})
-        except Exception:
-            pass
+    def _opes_step_postprocess(mc_step: int, entry: dict) -> None:
+        cv_raw = entry.get("cv_value")
+        if cv_raw is not None:
+            try:
+                cv_values_log.append({"mc_step": mc_step, "cv": float(cv_raw)})
+            except (TypeError, ValueError):
+                pass
+        with jsonl_path.open("a", encoding="utf-8") as jf:
+            jf.write(json.dumps(entry, default=str) + "\n")
+            jf.flush()
+        if save_cv_every > 0 and mc_step % save_cv_every == 0 and cv_values_log:
+            _atomic_write_json(
+                cv_data_path,
+                {
+                    "cv_type": args.bias_cv,
+                    "cv_values": [x["cv"] for x in cv_values_log],
+                    "mc_steps": [x["mc_step"] for x in cv_values_log],
+                },
+            )
 
-    periodic_extra.append((_cv_logging_callback, 1))
+    periodic_step: list[tuple[Callable[[int, dict], None], int]] = [
+        (_opes_step_postprocess, 1),
+    ]
 
     final_traj, tps_step_log = run_tps_path_sampling(
         engine, init_traj, args.shoot_rounds, shoot_log,
         progress_every=args.progress_every,
         periodic_callbacks=periodic_extra if periodic_extra else None,
+        periodic_step_callbacks=periodic_step,
         log_path_prob_every=args.log_path_prob_every,
         forward_only=args.forward_only,
         reshuffle_probability=args.reshuffle_probability,
@@ -518,13 +564,12 @@ def main() -> None:
         flush=True,
     )
 
-    cv_data_path = work_root / "cv_values.json"
     cv_data = {
         "cv_type": args.bias_cv,
         "cv_values": [entry["cv"] for entry in cv_values_log],
         "mc_steps": [entry["mc_step"] for entry in cv_values_log],
     }
-    Path(cv_data_path).write_text(json.dumps(cv_data, indent=2))
+    _atomic_write_json(cv_data_path, cv_data)
 
     cv_stats = {}
     from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
