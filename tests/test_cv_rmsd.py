@@ -22,6 +22,7 @@ from __future__ import annotations
 import math
 import textwrap
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -314,6 +315,16 @@ _ALA_ALA_ASPIRIN_PDB = textwrap.dedent("""\
 """)
 
 
+def _skip_if_openmmff_broken() -> None:
+    """Skip when GAFF2 deps import but fail internally (e.g. openff.units mismatch)."""
+    pytest.importorskip("openmm", reason="openmm not installed")
+    try:
+        from openmmforcefields.generators import GAFFTemplateGenerator  # noqa: F401, PLC0415
+        from openff.toolkit.topology import Molecule as _OMol  # noqa: F401, PLC0415
+    except Exception as exc:
+        pytest.skip(f"openmmforcefields / openff-toolkit stack unavailable: {exc}")
+
+
 class TestMinimizePDBWithLigand:
     """Integration tests for GAFF2-extended OpenMM minimisation (protein + LIG)."""
 
@@ -324,9 +335,7 @@ class TestMinimizePDBWithLigand:
 
     def test_minimize_protein_ligand_smoke(self, tmp_path):
         """ALA-ALA + aspirin LIG: minimisation must converge with GAFF2."""
-        pytest.importorskip("openmm", reason="openmm not installed")
-        pytest.importorskip("openff.toolkit", reason="openff-toolkit not installed")
-        pytest.importorskip("openmmforcefields", reason="openmmforcefields not installed")
+        _skip_if_openmmff_broken()
         from compute_cv_rmsd import minimize_pdb  # type: ignore[import]
 
         pdb_path = self._write_pdb(tmp_path)
@@ -349,6 +358,25 @@ class TestMinimizePDBWithLigand:
         assert result["n_ca_atoms"] == 2, "ALA-ALA has 2 Cα atoms"
         assert result["platform_used"] == "CPU"
         assert result["error"] is None
+
+    def test_ligand_path_uses_pdbfixer_on_protein_strip(self, tmp_path):
+        """After LIG strip, protein-only temp PDB is passed through PDBFixer."""
+        _skip_if_openmmff_broken()
+        pytest.importorskip("pdbfixer", reason="pdbfixer not installed")
+        from pdbfixer import PDBFixer as RealPDBFixer  # noqa: PLC0415
+
+        from compute_cv_rmsd import minimize_pdb  # type: ignore[import]
+
+        pdb_path = self._write_pdb(tmp_path)
+        with patch("pdbfixer.PDBFixer", wraps=RealPDBFixer) as mock_pf:
+            result = minimize_pdb(
+                pdb_path,
+                max_iter=300,
+                platform_name="CPU",
+                ligand_smiles={"B": _ASPIRIN_SMILES},
+            )
+        assert mock_pf.call_count >= 1
+        assert result["converged"], result.get("error")
 
     def test_minimize_lig_no_smiles_warns(self, tmp_path):
         """Without ligand_smiles, LIG residue causes graceful failure (no crash)."""

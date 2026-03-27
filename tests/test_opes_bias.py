@@ -72,6 +72,18 @@ class TestKernelDepositionAndCompression:
         assert bias.n_kernels == 1
         assert bias.kernels[0].center == pytest.approx(3.0, abs=1e-6)
 
+    def test_update_non_finite_is_no_op(self):
+        """NaN/Inf CV must not corrupt Welford stats or deposit kernels."""
+        bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1)
+        bias.update(cv_accepted=float("nan"), mc_step=1)
+        assert bias.n_kernels == 0
+        assert bias.counter == 0
+        bias.update(cv_accepted=float("inf"), mc_step=1)
+        assert bias.n_kernels == 0
+        bias.update(cv_accepted=2.0, mc_step=1)
+        assert bias.n_kernels == 1
+        assert bias.kernels[0].center == pytest.approx(2.0, abs=1e-6)
+
     def test_distant_kernels_not_merged(self):
         bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1,
                         compression_threshold=1.0, fixed_sigma=1.0)

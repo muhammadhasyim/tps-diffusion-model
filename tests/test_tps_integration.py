@@ -182,3 +182,33 @@ def test_periodic_step_callbacks_receive_step_entry(core_engine_and_traj):
     for mc_step, entry in captured:
         assert entry == log_entries[mc_step - 1]
         assert entry["step"] == mc_step
+
+
+class _RecordingEnhancedBias:
+    """Minimal bias for TPS: records :meth:`update` calls."""
+
+    def __init__(self) -> None:
+        self.updates: list[tuple[float, int]] = []
+
+    def compute_acceptance_factor(self, cv_old: float, cv_new: float) -> float:
+        return 1.0
+
+    def update(self, cv_accepted: float, mc_step: int) -> None:
+        self.updates.append((cv_accepted, mc_step))
+
+
+def test_non_finite_cv_skips_enhanced_bias_update(core_engine_and_traj):
+    """NaN CV from cv_function must not call enhanced_bias.update (OPES safety)."""
+    _, engine, traj = core_engine_and_traj
+    bias = _RecordingEnhancedBias()
+    with tempfile.TemporaryDirectory() as td:
+        log = Path(td) / "s.log"
+        run_tps_path_sampling(
+            engine,
+            traj,
+            n_rounds=5,
+            log_path=log,
+            enhanced_bias=bias,
+            cv_function=lambda _t: float("nan"),
+        )
+    assert bias.updates == []

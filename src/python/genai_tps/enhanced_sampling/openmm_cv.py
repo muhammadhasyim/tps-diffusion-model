@@ -77,8 +77,9 @@ class OpenMMLocalMinRMSD:
         Number of coordinate hash → RMSD pairs to retain in the LRU cache.
         With the TPS accept/reject pattern, 64--256 is typically sufficient.
     fallback_value:
-        Value returned when minimization fails (default: ``float('nan')``).
-        Use a large value (e.g. 999.0) to bias away from failed structures.
+        Value returned when minimization fails (default: ``999.0`` Å).
+        Large finite values bias OPES away from failed structures without
+        poisoning numerical updates; avoid ``nan`` for enhanced sampling.
     mol_dir:
         Path to the Boltz CCD molecule directory (``~/.boltz/mols``).  When
         provided, SMILES for each NONPOLYMER chain are read from
@@ -93,7 +94,7 @@ class OpenMMLocalMinRMSD:
         platform: str = "CUDA",
         max_iter: int = 500,
         cache_size: int = 256,
-        fallback_value: float = float("nan"),
+        fallback_value: float = 999.0,
         mol_dir: Path | str | None = None,
     ):
         self.topo_npz = Path(topo_npz)

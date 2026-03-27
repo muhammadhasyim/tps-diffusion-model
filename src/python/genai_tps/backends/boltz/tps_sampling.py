@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import sys
 import time
 from pathlib import Path
@@ -637,7 +638,14 @@ def run_tps_path_sampling(
                 if cur_traj is not None:
                     try:
                         cv_val = cv_function(cur_traj)
-                        enhanced_bias.update(cv_val, i + 1)
+                        if cv_val is not None and math.isfinite(cv_val):
+                            enhanced_bias.update(cv_val, i + 1)
+                        elif cv_val is not None:
+                            _tps_logger.warning(
+                                "CV returned non-finite value at step %d; "
+                                "skipping enhanced bias update.",
+                                i + 1,
+                            )
                     except Exception as exc:
                         _tps_logger.warning(
                             "Enhanced bias update failed at step %d: %s", i + 1, exc

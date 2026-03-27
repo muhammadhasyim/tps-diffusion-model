@@ -50,7 +50,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
+import tempfile
 import warnings
 from pathlib import Path
 from typing import Optional
@@ -395,11 +397,13 @@ def minimize_pdb(
         #      Skipped when ligand_smiles is provided because PDBFixer does not
         #      know the LIG residue template and may strip HETATM atoms.
         #
-        #    Strategy B — Modeller.addHydrogens (ligand structures or fallback):
-        #      Used when PDBFixer is skipped (has_ligand=True) or when PDBFixer
-        #      fails.  For has_ligand=True, LIG heavy atoms are removed first so
-        #      AMBER can protonate the protein; ligands are re-added from OpenFF
-        #      conformers (see docstring).  May warn/fail for uncapped chains.
+        #    Strategy B — Protein protonation for ligand systems or fallback:
+        #      When has_ligand=True, LIG heavy atoms are removed first, the
+        #      protein-only structure is written to a temp PDB, and PDBFixer
+        #      adds terminal caps + hydrogens (same as Strategy A, but on protein
+        #      only so HETATM LIG does not confuse PDBFixer).  Ligands are then
+        #      re-appended from OpenFF conformers.  If PDBFixer fails, fall back
+        #      to Modeller.addHydrogens (may fail on uncapped Boltz termini).
         #
         #    Strategy C — heavy-atoms-only (last resort):
         #      Sufficient for a Cα-RMSD comparison even if the absolute energy
@@ -447,15 +451,53 @@ def minimize_pdb(
                 ]
                 if lig_heavy:
                     modeller.delete(lig_heavy)
-                try:
-                    modeller.addHydrogens(forcefield=ff, platform=platform)
-                except Exception as h_exc:
-                    warnings.warn(
-                        f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
-                        "proceeding with heavy atoms only.",
-                        RuntimeWarning,
-                        stacklevel=2,
-                    )
+                _protein_h_ok = False
+                if lig_heavy:
+                    prot_pdb: Path | None = None
+                    try:
+                        fd, prot_name = tempfile.mkstemp(
+                            suffix=".pdb", prefix="cv_rmsd_prot_"
+                        )
+                        prot_pdb = Path(prot_name)
+                        os.close(fd)
+                        with prot_pdb.open("w", encoding="utf-8") as tmp_f:
+                            openmm.app.PDBFile.writeFile(
+                                modeller.topology,
+                                modeller.positions,
+                                tmp_f,
+                            )
+                        from pdbfixer import PDBFixer  # noqa: PLC0415
+
+                        fixer_lig = PDBFixer(filename=str(prot_pdb))
+                        fixer_lig.findMissingResidues()
+                        fixer_lig.findMissingAtoms()
+                        fixer_lig.addMissingAtoms()
+                        fixer_lig.addMissingHydrogens(pH=7.0)
+                        modeller = openmm.app.Modeller(
+                            fixer_lig.topology, fixer_lig.positions
+                        )
+                        _protein_h_ok = True
+                    except Exception as fixer_lig_exc:
+                        warnings.warn(
+                            f"{pdb_path.name}: PDBFixer on protein-only structure "
+                            f"failed ({fixer_lig_exc}); falling back to "
+                            "Modeller.addHydrogens.",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
+                    finally:
+                        if prot_pdb is not None:
+                            prot_pdb.unlink(missing_ok=True)
+                if not _protein_h_ok:
+                    try:
+                        modeller.addHydrogens(forcefield=ff, platform=platform)
+                    except Exception as h_exc:
+                        warnings.warn(
+                            f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
+                            "proceeding with heavy atoms only.",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
                 try:
                     from openff.toolkit.topology import (  # noqa: PLC0415
                         Molecule as OpenFFMolecule,

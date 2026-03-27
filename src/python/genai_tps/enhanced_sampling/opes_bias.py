@@ -211,6 +211,8 @@ class OPESBias:
         mc_step
             Current MC step number (1-indexed).
         """
+        if not math.isfinite(cv_accepted):
+            return
         self._welford_update(cv_accepted)
 
         if mc_step % self.pace != 0:
