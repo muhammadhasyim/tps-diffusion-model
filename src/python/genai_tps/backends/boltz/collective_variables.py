@@ -45,7 +45,20 @@ def radius_of_gyration(snapshot, atom_mask: torch.Tensor | None = None) -> float
 
 
 def _masked_points(snapshot, atom_mask: torch.Tensor | None) -> torch.Tensor:
-    """Return ``(n, 3)`` coordinates after optional ``atom_mask`` (same convention as ``radius_of_gyration``)."""
+    """First-batch coordinates, optionally filtered by ``atom_mask``.
+
+    Parameters
+    ----------
+    snapshot:
+        Object with ``tensor_coords`` / ``coordinates`` (see :func:`_coords_torch`).
+    atom_mask:
+        Boolean mask ``(N,)`` or ``(1, N)``; same convention as :func:`radius_of_gyration`.
+
+    Returns
+    -------
+    torch.Tensor
+        Shape ``(n, 3)``, dtype and device from the snapshot.
+    """
     x = _coords_torch(snapshot)[0]
     if atom_mask is not None:
         m = atom_mask[0] if atom_mask.dim() > 1 else atom_mask
@@ -54,13 +67,22 @@ def _masked_points(snapshot, atom_mask: torch.Tensor | None) -> torch.Tensor:
 
 
 def end_to_end_distance(snapshot, atom_mask: torch.Tensor | None = None) -> float:
-    """Euclidean distance between first and last atom in the masked list (Å).
+    """Distance between the first and last points after masking (Å).
 
-    Intended for Cα traces: after masking, uses indices ``0`` and ``n-1``.
-    Returns ``0.0`` when ``n < 2`` (stable for OPES).
+    Parameters
+    ----------
+    snapshot:
+        Coordinate source; see :func:`_coords_torch`.
+    atom_mask:
+        Optional mask ``(N,)`` or ``(1, N)``; same as :func:`radius_of_gyration`.
+
+    Returns
+    -------
+    float
+        End-to-end distance, or ``0.0`` if fewer than two points remain.
     """
     pts = _masked_points(snapshot, atom_mask)
-    n = int(pts.shape[0])
+    n = pts.shape[0]
     if n < 2:
         return 0.0
     with torch.no_grad():
@@ -75,13 +97,25 @@ def ca_contact_count(
     dist_threshold: float = 8.0,
     atom_mask: torch.Tensor | None = None,
 ) -> float:
-    """Count long-range pairs with distance below ``dist_threshold`` (not normalized).
+    """Number of long-range contacts (unordered pairs).
 
-    Same eligibility rule as :func:`contact_order` (``|i-j| >= seq_sep``) but returns
-    the raw number of contacting pairs (each unordered pair once).
+    A pair ``(i, j)``, ``i < j``, counts if ``|i - j| >= seq_sep`` and
+    ``||x_i - x_j|| < dist_threshold``. Same separation rule as
+    :func:`contact_order`; this function returns a count, not a fraction.
+
+    Parameters
+    ----------
+    snapshot:
+        Coordinate source; see :func:`_coords_torch`.
+    seq_sep:
+        Minimum sequence index separation for an eligible pair.
+    dist_threshold:
+        Contact cutoff in Å.
+    atom_mask:
+        Optional mask ``(N,)`` or ``(1, N)``.
     """
     x = _masked_points(snapshot, atom_mask)
-    n = int(x.shape[0])
+    n = x.shape[0]
     if n < 2:
         return 0.0
     with torch.no_grad():
@@ -89,33 +123,54 @@ def ca_contact_count(
         idx = torch.arange(n, device=x.device)
         sep = (idx.unsqueeze(1) - idx.unsqueeze(0)).abs()
         upper = torch.triu(
-            (sep >= int(seq_sep)) & (dists < float(dist_threshold)), diagonal=1
+            (sep >= seq_sep) & (dists < dist_threshold), diagonal=1
         )
         return float(upper.sum().item())
 
 
 def _gyration_eigenvalues_descending(pts: torch.Tensor) -> torch.Tensor:
-    """Eigenvalues ``λ1 >= λ2 >= λ3`` of mass-weighted gyration tensor (Å²)."""
-    n = int(pts.shape[0])
+    r"""Eigenvalues of the unweighted centroid gyration tensor, largest first (Å²).
+
+    Uses :math:`\mathbf{S} = n^{-1} \sum_i (\mathbf{r}_i - \mathbf{r}_{\mathrm{cm}})
+    (\mathbf{r}_i - \mathbf{r}_{\mathrm{cm}})^{\mathsf T}` with eigenvalues
+    :math:`\lambda_1 \geq \lambda_2 \geq \lambda_3`.
+    """
+    n = pts.shape[0]
     if n < 1:
         return torch.zeros(3, device=pts.device, dtype=pts.dtype)
     r = pts - pts.mean(dim=0, keepdim=True)
-    # S = (1/n) sum_i r_i r_i^T  ->  (3,3)
-    s = (r.T @ r) / float(max(n, 1))
-    w = torch.linalg.eigvalsh(s)  # ascending
+    s = (r.T @ r) / float(n)
+    w = torch.linalg.eigvalsh(s)
     return w.flip(0)
 
 
 def shape_kappa2(snapshot, atom_mask: torch.Tensor | None = None) -> float:
-    r"""Relative shape anisotropy :math:`\kappa^2 \in [0,1]` from gyration eigenvalues.
+    r"""Relative shape anisotropy :math:`\kappa^2` from gyration eigenvalues (dimensionless).
 
-    :math:`\kappa^2 = 1 - 3(\lambda_1\lambda_2 + \lambda_2\lambda_3 + \lambda_3\lambda_1)
-    / (\lambda_1+\lambda_2+\lambda_3)^2`.
+    .. math::
 
-    Sphere: :math:`\kappa^2=0`; straight rod (two non-zero dims degenerate): :math:`\kappa^2=1`.
+        \kappa^2 = 1 - \frac{3(\lambda_1\lambda_2 + \lambda_2\lambda_3 +
+        \lambda_3\lambda_1)}{(\lambda_1 + \lambda_2 + \lambda_3)^2}
+
+    Isotropic cloud :math:`\to \kappa^2 = 0`; straight filament :math:`\to 1`.
+    The result is clamped to :math:`[0, 1]`. Eigenvalues are from
+    :func:`_gyration_eigenvalues_descending`.
+
+    Parameters
+    ----------
+    snapshot:
+        Coordinate source; see :func:`_coords_torch`.
+    atom_mask:
+        Optional mask ``(N,)`` or ``(1, N)``.
+
+    Returns
+    -------
+    float
+        ``0.0`` if fewer than two points remain or if the eigenvalue trace is
+        negligible (numerical degeneracy).
     """
     pts = _masked_points(snapshot, atom_mask)
-    n = int(pts.shape[0])
+    n = pts.shape[0]
     if n < 2:
         return 0.0
     with torch.no_grad():
@@ -129,9 +184,26 @@ def shape_kappa2(snapshot, atom_mask: torch.Tensor | None = None) -> float:
 
 
 def shape_acylindricity(snapshot, atom_mask: torch.Tensor | None = None) -> float:
-    r"""Acylindricity :math:`\lambda_2 - \lambda_3` (Å²) from the gyration tensor eigenvalues."""
+    r"""Triaxial acylindricity :math:`\lambda_2 - \lambda_3` in Å².
+
+    :math:`\lambda_i` are descending eigenvalues of the unweighted centroid
+    gyration tensor (see :func:`_gyration_eigenvalues_descending`). Vanishes for
+    axisymmetric objects (e.g. ideal cylinder symmetry).
+
+    Parameters
+    ----------
+    snapshot:
+        Coordinate source; see :func:`_coords_torch`.
+    atom_mask:
+        Optional mask ``(N,)`` or ``(1, N)``.
+
+    Returns
+    -------
+    float
+        ``0.0`` if fewer than two points remain after masking.
+    """
     pts = _masked_points(snapshot, atom_mask)
-    n = int(pts.shape[0])
+    n = pts.shape[0]
     if n < 2:
         return 0.0
     with torch.no_grad():

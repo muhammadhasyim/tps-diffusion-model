@@ -1,19 +1,22 @@
 """Incremental Škrinjar-style training similarity (Foldseek + RDKit shape/SuCOS + pocket qcov).
 
-This mirrors the chemistry stack in ``papers/runs-n-poses/similarity_scoring.py``:
-Crippen pre-alignment, :func:`rdShapeAlign.AlignMol`, and SuCOS-like
+This mirrors the **chemistry stack** in ``papers/runs-n-poses/similarity_scoring.py`` where
+possible: Crippen pre-alignment, :func:`rdShapeAlign.AlignMol`, and SuCOS-like
 pharmacophore + shape protrusion. **Foldseek** is optional for GPU structural
 prefiltering; ligand scoring remains **CPU**-bound.
 
-**Pocket qcov** is a geometric proxy: Cα within ``pocket_radius`` Å of any query
-ligand heavy atom define the query pocket; the target structure is
-superimposed onto the query using the first ``min(n_query, n_target)`` Cα atoms
-(in file order), then each query-pocket Cα is “covered” if a target-pocket Cα
-lies within ``pocket_qcov_cutoff`` Å after superposition. This is meaningful when
-query and training complexes share the same atom ordering for protein Cα (e.g.
-Boltz output vs a neighbor built from the same template); for unrelated PDBs,
-interpretation is approximate — prefer supplying **paired** training complexes
-from your own pipeline.
+**Non-parity with the paper / PLINDER (important):**
+
+- :func:`geometric_pocket_qcov_ca` (exposed also as :func:`pocket_qcov_ca`) is a **geometric
+  proxy**, not PLINDER’s pocket_qcov from the Runs N’ Poses pipeline (Methods §7.4).
+- Upstream ``similarity_scoring.py`` applies **Foldseek’s rigid (u, t)** to the **training
+  ligand** before SuCOS when comparing holo systems; this incremental path **does not** —
+  it superimposes receptors with a Kabsch on the first ``min(n_q, n_t)`` Cα for the pocket
+  term and aligns ligands with RDKit only. Expect **numerical differences** vs Zenodo
+  ``all_similarity_scores.parquet`` even when RDKit behaves perfectly.
+
+Set ``SKRINJAR_LOG_ALIGN_FALLBACK=1`` to emit a warning whenever :func:`rdShapeAlign.AlignMol`
+fails and the code falls back to Crippen-only alignment.
 
 See ``docs/runs_n_poses_reproduction.md`` for batch reproduction context.
 """
@@ -21,15 +24,19 @@ See ``docs/runs_n_poses_reproduction.md`` for batch reproduction context.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 import subprocess
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
+
+_LOG = logging.getLogger(__name__)
 
 # --- RDKit SuCOS-style scoring (adapted from runs-n-poses / SuCOS) -----------------
 
@@ -69,11 +76,21 @@ def align_molecules_crippen(mol_ref, mol_probe, iterations: int = 100) -> None:
     crippen_o3a.Align()
 
 
+def _default_conf_id(mol) -> int:
+    """First conformer id for shape alignment (0 if any conformers exist, else -1)."""
+    n = int(mol.GetNumConformers())
+    if n <= 0:
+        return -1
+    return 0
+
+
 def align_molecules(
     reference,
     mobile,
     max_preiters: int = 100,
     max_postiters: int = 100,
+    *,
+    on_align_fallback: Callable[[], None] | None = None,
 ) -> tuple[float, ...]:
     """Crippen pre-align then :func:`rdShapeAlign.AlignMol` when the binding works.
 
@@ -84,17 +101,40 @@ def align_molecules(
     from rdkit.Chem import rdShapeAlign  # noqa: PLC0415
 
     align_molecules_crippen(reference, mobile, iterations=max_preiters)
+    ref_cid = _default_conf_id(reference)
+    mob_cid = _default_conf_id(mobile)
     try:
         return rdShapeAlign.AlignMol(
             reference,
             mobile,
-            refConfId=0,
-            probeConfId=0,
+            refConfId=ref_cid,
+            probeConfId=mob_cid,
             max_preiters=max_preiters,
             max_postiters=max_postiters,
         )
     except Exception:  # noqa: BLE001 — Boost.ArgumentError or missing shape backend
+        if os.environ.get("SKRINJAR_LOG_ALIGN_FALLBACK", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            _LOG.warning(
+                "rdShapeAlign.AlignMol failed; using Crippen-only alignment — "
+                "scores may diverge from papers/runs-n-poses similarity_scoring.py"
+            )
+        if on_align_fallback is not None:
+            on_align_fallback()
         return (0.0, 0.0)
+
+
+def _ensure_ring_info_for_featmaps(mol) -> None:
+    """Ring perception required before :meth:`MolChemicalFeatureFactory.GetFeaturesForMol`."""
+    from rdkit.Chem import rdmolops  # noqa: PLC0415
+
+    try:
+        rdmolops.FastFindRings(mol)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def get_feature_map_score(mol_1, mol_2, score_mode=None) -> float:
@@ -105,6 +145,7 @@ def get_feature_map_score(mol_1, mol_2, score_mode=None) -> float:
     FDEF, FEAT_MAP_PARAMS = _feat_factory()
     feat_lists = []
     for molecule in (mol_1, mol_2):
+        _ensure_ring_info_for_featmaps(molecule)
         raw_feats = FDEF.GetFeaturesForMol(molecule)
         feat_lists.append([f for f in raw_feats if f.GetFamily() in _PHARMACOPHORE_FEATURES])
 
@@ -126,11 +167,19 @@ def get_sucos_score(mol_1, mol_2, score_mode=None) -> float:
         from rdkit.Chem.FeatMaps import FeatMaps  # noqa: PLC0415
 
         score_mode = FeatMaps.FeatMapScoreMode.All
-    fm_score = float(np.clip(get_feature_map_score(mol_1, mol_2, score_mode), 0.0, 1.0))
-    protrude_dist = float(
-        np.clip(rdShapeHelpers.ShapeProtrudeDist(mol_1, mol_2, allowReordering=False), 0.0, 1.0)
-    )
-    return float(0.5 * fm_score + 0.5 * (1.0 - protrude_dist))
+    try:
+        fm_score = float(np.clip(get_feature_map_score(mol_1, mol_2, score_mode), 0.0, 1.0))
+        protrude_dist = float(
+            np.clip(
+                rdShapeHelpers.ShapeProtrudeDist(mol_1, mol_2, allowReordering=False),
+                0.0,
+                1.0,
+            )
+        )
+        return float(0.5 * fm_score + 0.5 * (1.0 - protrude_dist))
+    except Exception as exc:  # noqa: BLE001 — RDKit C++/FeatMaps can throw
+        _LOG.debug("get_sucos_score failed (%s): %s", type(exc).__name__, exc)
+        return 0.0
 
 
 # --- Geometry ----------------------------------------------------------------------
@@ -167,8 +216,8 @@ def ca_coords_from_pdb(path: Path) -> np.ndarray:
             continue
         if len(line) < 54:
             continue
-        atom_name = line[12:16]
-        if atom_name != " CA ":
+        atom_name = line[12:16].strip()
+        if atom_name != "CA":
             continue
         try:
             x = float(line[30:38])
@@ -205,14 +254,17 @@ def ligand_heavy_coords_from_pdb(path: Path) -> np.ndarray:
     return np.asarray(coords, dtype=np.float64)
 
 
-def pocket_qcov_ca(
+def geometric_pocket_qcov_ca(
     query_pdb: Path,
     target_pdb: Path,
     *,
     pocket_radius: float = 6.0,
     match_cutoff: float = 2.0,
 ) -> float:
-    """Fraction of query-pocket Cα with a target-pocket Cα within ``match_cutoff`` Å."""
+    """Geometric proxy: fraction of query-pocket Cα matched to target-pocket Cα.
+
+    This is **not** PLINDER pocket_qcov from the benchmark pipeline; see module docstring.
+    """
     q_ca = ca_coords_from_pdb(query_pdb)
     t_ca = ca_coords_from_pdb(target_pdb)
     q_lig = ligand_heavy_coords_from_pdb(query_pdb)
@@ -240,6 +292,11 @@ def pocket_qcov_ca(
     return float(np.count_nonzero(covered) / len(q_pocket))
 
 
+def pocket_qcov_ca(*args: Any, **kwargs: Any) -> float:
+    """Alias for :func:`geometric_pocket_qcov_ca` (backward-compatible name)."""
+    return geometric_pocket_qcov_ca(*args, **kwargs)
+
+
 def pick_largest_organic_fragment(mol):
     from rdkit.Chem import rdmolops  # noqa: PLC0415
 
@@ -256,8 +313,32 @@ def pick_largest_organic_fragment(mol):
     return best
 
 
-def ligand_mol_from_pdb(path: Path):
+def mol_from_sdf_path(sdf: Path):
+    """Load a training ligand SDF with sanitization so FeatMaps / SuCOS are safe."""
     from rdkit import Chem  # noqa: PLC0415
+
+    mol = Chem.MolFromMolFile(str(sdf), sanitize=True)
+    if mol is None:
+        mol = Chem.MolFromMolFile(str(sdf), sanitize=False, strictParsing=False)
+    if mol is None:
+        return None
+    try:
+        Chem.SanitizeMol(mol)
+    except Exception:  # noqa: BLE001
+        return None
+    _ensure_ring_info_for_featmaps(mol)
+    return mol
+
+
+def ligand_mol_from_pdb(path: Path):
+    """Largest organic fragment from PDB, sanitized for FeatMaps / SuCOS.
+
+    Incomplete PDB chemistry often leaves molecules without ring perception;
+    :func:`GetFeaturesForMol` then aborts. We sanitize when possible, otherwise
+    rebuild from SMILES and embed a conformer for shape scoring.
+    """
+    from rdkit import Chem  # noqa: PLC0415
+    from rdkit.Chem import AllChem  # noqa: PLC0415
 
     mol = Chem.MolFromPDBFile(str(path), sanitize=False, removeHs=False)
     if mol is None:
@@ -267,16 +348,45 @@ def ligand_mol_from_pdb(path: Path):
         return None
     try:
         Chem.SanitizeMol(frag)
-    except Exception:  # noqa: BLE001 — RDKit sanitization can fail on odd PDBs
+        frag_h = Chem.AddHs(frag)
+        seed = int(hashlib.md5(str(path).encode()).hexdigest()[:8], 16) % (2**31)
+        if frag_h.GetNumConformers() == 0 and frag_h.GetNumAtoms() > 0:
+            AllChem.EmbedMolecule(frag_h, randomSeed=seed)
+        _ensure_ring_info_for_featmaps(frag_h)
+        return frag_h
+    except Exception:  # noqa: BLE001
         pass
-    return frag
+    try:
+        smi = Chem.MolToSmiles(frag)
+        fresh = Chem.MolFromSmiles(smi) if smi else None
+        n_h = int(frag.GetNumHeavyAtoms())
+        if fresh is None and n_h == 2:
+            fresh = Chem.MolFromSmiles("CC")
+        if fresh is None and n_h == 1:
+            fresh = Chem.MolFromSmiles("C")
+        if fresh is None:
+            return None
+        fresh = Chem.AddHs(fresh)
+        seed = int(hashlib.md5(str(path).encode()).hexdigest()[:8], 16) % (2**31)
+        if AllChem.EmbedMolecule(fresh, randomSeed=seed) != 0:
+            AllChem.EmbedMolecule(fresh, randomSeed=seed + 1)
+        Chem.SanitizeMol(fresh)
+        _ensure_ring_info_for_featmaps(fresh)
+        return fresh
+    except Exception:  # noqa: BLE001
+        return None
 
 
-def sucos_shape_after_align(reference, mobile) -> float:
+def sucos_shape_after_align(
+    reference,
+    mobile,
+    *,
+    on_align_fallback: Callable[[], None] | None = None,
+) -> float:
     """SuCOS score after Crippen + rdShapeAlign (reference fixed, mobile moved)."""
     m_ref = reference.__copy__()
     m_mob = mobile.__copy__()
-    align_molecules(m_ref, m_mob)
+    align_molecules(m_ref, m_mob, on_align_fallback=on_align_fallback)
     return get_sucos_score(m_ref, m_mob)
 
 
@@ -286,11 +396,34 @@ def sucos_shape_after_align(reference, mobile) -> float:
 _PDB_ID_RE = re.compile(r"(?<![A-Za-z0-9])([0-9][A-Za-z0-9]{3})(?![A-Za-z0-9])")
 
 
+def _pdb_id_from_subject_field(subject: str) -> str | None:
+    subject = subject.strip()
+    if not subject:
+        return None
+    m = _PDB_ID_RE.search(subject)
+    if m:
+        return m.group(1).lower()
+    head = subject.split("_", 1)[0].strip()
+    if len(head) == 4 and head[0].isdigit() and head[1:].isalnum():
+        return head.lower()
+    return None
+
+
 def parse_pdb_ids_from_foldseek_output(text: str, max_hits: int) -> list[str]:
+    """Parse target PDB ids from Foldseek/BLAST m8-style output."""
     seen: list[str] = []
     for line in text.splitlines():
         if not line.strip() or line.startswith("#"):
             continue
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            pid = _pdb_id_from_subject_field(parts[1])
+            if pid is not None:
+                if pid not in seen:
+                    seen.append(pid)
+                    if len(seen) >= max_hits:
+                        return seen
+                continue
         for m in _PDB_ID_RE.finditer(line):
             pid = m.group(1).lower()
             if pid not in seen:
@@ -362,7 +495,11 @@ class IncrementalSkrinjarScorer:
     pocket_qcov_cutoff: float = 2.0
     enable_coord_cache: bool = True
     scratch_dir: Path | None = None
+    align_mol_fallback_count: int = field(init=False, default=0)
     _cache: dict[str, float] = field(default_factory=dict, repr=False)
+
+    def _bump_align_fallback(self) -> None:
+        self.align_mol_fallback_count += 1
 
     def _coord_key(self, coords: np.ndarray) -> str:
         arr = np.asarray(coords, dtype=np.float32).ravel(order="C")
@@ -456,36 +593,49 @@ class IncrementalSkrinjarScorer:
             return 0.0
 
         best = 0.0
+        bump = self._bump_align_fallback
         for tpath in self._training_complex_candidates(query_pdb):
             t_mol = ligand_mol_from_pdb(tpath)
             if t_mol is None:
                 continue
             try:
-                su = sucos_shape_after_align(q_mol, t_mol)
-                pq = pocket_qcov_ca(
+                su = sucos_shape_after_align(q_mol, t_mol, on_align_fallback=bump)
+                pq = geometric_pocket_qcov_ca(
                     query_pdb,
                     tpath,
                     pocket_radius=self.pocket_radius,
                     match_cutoff=self.pocket_qcov_cutoff,
                 )
                 best = max(best, su * pq)
-            except Exception:  # noqa: BLE001 — robust scoring over heterogeneous PDBs
+            except (ValueError, OSError, RuntimeError) as exc:
+                _LOG.debug("skrinjar pair skip (%s): %s", type(exc).__name__, exc)
+                continue
+            except Exception as exc:  # noqa: BLE001
+                _LOG.debug(
+                    "skrinjar pair skip (unexpected %s): %s",
+                    type(exc).__name__,
+                    exc,
+                )
                 continue
 
         for sdf in self.training_ligand_sdfs:
             if not sdf.is_file():
                 continue
             try:
-                from rdkit import Chem  # noqa: PLC0415
-
-                t_mol = Chem.MolFromMolFile(str(sdf), sanitize=False)
-                if t_mol is None:
-                    t_mol = Chem.MolFromMolFile(str(sdf), sanitize=False, strictParsing=False)
+                t_mol = mol_from_sdf_path(sdf)
                 if t_mol is None:
                     continue
-                su = sucos_shape_after_align(q_mol, t_mol)
+                su = sucos_shape_after_align(q_mol, t_mol, on_align_fallback=bump)
                 best = max(best, su)
-            except Exception:  # noqa: BLE001
+            except (ValueError, OSError, RuntimeError) as exc:
+                _LOG.debug("skrinjar sdf skip (%s): %s", type(exc).__name__, exc)
+                continue
+            except Exception as exc:  # noqa: BLE001
+                _LOG.debug(
+                    "skrinjar sdf skip (unexpected %s): %s",
+                    type(exc).__name__,
+                    exc,
+                )
                 continue
 
         return float(best)

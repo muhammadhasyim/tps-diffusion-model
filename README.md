@@ -16,7 +16,9 @@ pip install -e ./boltz
 pip install -e "./boltz[cuda]"
 ```
 
-Or conda: `conda env create -f environment.yml` then `conda activate genai-tps`.
+Or conda: `conda env create -f environment.yml` then `conda activate genai-tps` (that file includes **OpenMM** + **openmmforcefields** + **OpenFF Toolkit**, **ProDy**, **PyMOL**, **pymbar** stack, plus editable `boltz` and `genai-tps` with `[boltz,dev,enhanced_sampling]`).
+
+**Optional pip extras** (see `pyproject.toml`): `[viz]` (PyMOL), `[analysis]` (ProDy), `[enhanced_sampling]` (OpenMM + pymbar + GAFF/OpenFF pins). For a **single pip line** without conda: `pip install -e ./boltz` and `pip install -e ".[boltz,dev,full]"` (`full` bundles PyMOL, ProDy, and the full OpenMM/ligand/MBAR set).
 
 ## Example: TPS-style sampling on Boltz-2 diffusion
 

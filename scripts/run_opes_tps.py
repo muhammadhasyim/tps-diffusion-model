@@ -130,7 +130,8 @@ def _make_cv_function(
         ``"contact_order"``, ``"clash_count"``, ``"end_to_end"``,
         ``"ca_contact_count"``, ``"shape_kappa2"``, ``"shape_acylindricity"``, ``"lddt"``,
         ``"ramachandran_outlier"``, ``"ligand_rmsd"``,
-        ``"ligand_pocket_dist"``, ``"ligand_contacts"``,         ``"ligand_hbonds"``, ``"training_sucos_pocket_qcov"``.
+        ``"ligand_pocket_dist"``, ``"ligand_contacts"``, ``"ligand_hbonds"``,
+        ``"training_sucos_pocket_qcov"``.
     reference_coords:
         Ca coordinates of the initial structure, shape ``(N, 3)``.
         Required for ``"rmsd"``.
@@ -481,11 +482,14 @@ def _initial_trajectory(core: BoltzSamplerCore, n_steps: int | None = None) -> T
 def _build_diagnostic_cv_functions(
     names_csv: str | None,
 ) -> dict[str, "Callable[[Trajectory], float]"] | None:
-    """Build a dict of diagnostic CV functions from a comma-separated name list.
+    """Map comma-separated diagnostic CV names to callables on ``Trajectory``.
 
-    Returns None when ``names_csv`` is empty/None.
-    Available names: contact_order, clash_count, end_to_end, ca_contact_count,
-    shape_kappa2, shape_acylindricity, lddt, ramachandran_outlier, rg.
+    Diagnostic CVs are logged only; they do not enter the OPES bias. Unknown
+    names are skipped (warning to stderr). Returns ``None`` if ``names_csv``
+    is empty or only whitespace.
+
+    Recognized names match the keys in the internal ``_registry`` (see also
+    ``--diagnostic-cvs`` in ``main()``).
     """
     if not names_csv:
         return None
@@ -581,7 +585,7 @@ def main() -> None:
             "Comma-separated list of diagnostic CV names to log per MC step "
             "(observation-only; do not affect OPES bias). "
             "Available: contact_order, clash_count, end_to_end, ca_contact_count, "
-            "shape_kappa2, shape_acylindricity, lddt, ramachandran_outlier, rg. "
+            "shape_kappa2, shape_acylindricity, ramachandran_outlier, rg. "
             "Example: --diagnostic-cvs contact_order,clash_count"
         ),
     )
@@ -660,8 +664,10 @@ def main() -> None:
             "'ligand_hbonds': N/O···N/O distance proxy for H-bonds (cutoff=--hbond-cutoff); "
             "requires --topo-npz.  "
             "'lddt': requires --reference-pdb or uses initial-trajectory coordinates.  "
-            "'training_sucos_pocket_qcov': Škrinjar-style SuCOS-shape × pocket_qcov vs "
-            "training PDBs/SDFs (CPU RDKit + optional Foldseek GPU prefilter); "
+            "'training_sucos_pocket_qcov': incremental **proxy** — SuCOS-shape after RDKit "
+            "alignment × **geometric** pocket Cα overlap (not PLINDER pocket_qcov); "
+            "training ligands are not rotated by Foldseek (u,t) like runs-n-poses "
+            "holo scoring (CPU RDKit + optional Foldseek GPU prefilter on complexes); "
             "requires --topo-npz and --skrinjar-training-complexes-dir and/or "
             "--skrinjar-training-ligands-dir (see docs/runs_n_poses_reproduction.md)."
         ),

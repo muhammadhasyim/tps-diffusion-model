@@ -97,6 +97,12 @@ dependencies:
   # openmmforcefields provides AMBER14 + GAFF2 + SMIRNOFF templates used by
   # compute_cv_rmsd.minimize_pdb (amber14-all.xml, implicit/gbn2.xml).
   - openmmforcefields>=0.14
+  # OpenFF Toolkit: OpenFF Molecule / protonation paths for GAFF2 ligands in compute_cv_rmsd.
+  - openff-toolkit>=0.14.0
+  # ProDy: scripts/analyze_terminal_ensemble_prody.py, genai_tps.analysis.terminal_ensemble_prody
+  - prody>=2.4
+  # PyMOL: scripts/visualize_cofolding_trajectory.py --render-cartoon (ribbon cartoons)
+  - pymol-open-source>=2.5
 
   - pip:
     # ── Version anchors pinned BEFORE editable installs ──────────────────────
@@ -116,6 +122,8 @@ dependencies:
     # packages, causing cascading undefined-symbol ImportErrors.  Using
     # jax[cpu] keeps the nvidia package set solely under torch's control.
     - -e ./boltz
+    # enhanced_sampling pulls pymbar + openmmforcefields + openff-toolkit on pip; conda
+    # already provides openmm, pdbfixer, openmmforcefields, openff-toolkit, prody, pymol.
     - -e .[boltz,dev,enhanced_sampling]
 
     # ── torchmetrics: required by pytorch-lightning==2.5.0 ───────────────────
@@ -130,5 +138,4 @@ dependencies:
     # torch cu121 (nvjitlink version cascade).  Upgrade to jax[cuda12] only
     # on a machine where torch and jax use matching CUDA versions.
     - "jax[cpu]>=0.4"
-    # Optional: cartoon PNGs from scripts/visualize_cofolding_trajectory.py --render-cartoon
-    # - -e .[boltz,dev,viz,enhanced_sampling]
+    # Pip-only full stack (PyMOL + ProDy + OpenMM ligands): pip install -e ".[boltz,dev,full]"

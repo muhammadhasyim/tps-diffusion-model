@@ -7,7 +7,8 @@ This document ties the **[plinder-org/runs-n-poses](https://github.com/plinder-o
 - Preprint: [bioRxiv 2025.02.03.636309](https://doi.org/10.1101/2025.02.03.636309)
 - Benchmark repo (submodule): [`papers/runs-n-poses/`](../papers/runs-n-poses/)
 - Zenodo concept DOI: [10.5281/zenodo.14794785](https://doi.org/10.5281/zenodo.14794785) (resolve to **latest version** record for download URLs)
-- Similarity definition: `SuCOS-pocket` = SuCOS (shape + pharmacophore) after RDKit `rdShapeAlign.AlignMol`, multiplied by **pocket_qcov** (PLINDER / paper Methods §7.4)
+- Similarity definition (paper / PLINDER benchmark): `SuCOS-pocket` = SuCOS after RDKit `rdShapeAlign.AlignMol`, multiplied by **pocket_qcov** from the PLINDER pipeline (Methods §7.4).
+- **This repo’s incremental CV** (`training_sucos_pocket_qcov` in `genai_tps.analysis.skrinjar_similarity`) uses a **geometric pocket Cα proxy** and **does not** apply Foldseek’s rigid transform to the training ligand the way `papers/runs-n-poses/similarity_scoring.py` does for holo pairs — expect differences vs Zenodo `all_similarity_scores.parquet` even when RDKit matches upstream.
 
 ## Disk and RAM (order of magnitude)
 
@@ -107,6 +108,10 @@ Use **`IncrementalSkrinjarScorer`** when you have:
 - A **query** complex as PDB (e.g. Boltz last frame), and
 - Either a **Foldseek** database of training structures for prefilters, and/or
 - A **directory of training ligand SDFs** (curated neighbors) for ligand-only SuCOS.
+
+**Parity note:** `geometric_pocket_qcov_ca` / `pocket_qcov_ca` superimpose receptors with Kabsch on the first `min(n_query, n_target)` Cα atoms (file order) and measure pocket overlap — it is **not** PLINDER’s pocket_qcov. Ligand–ligand scores use RDKit alignment only, **without** the Foldseek **(u, t)** rotation applied to the training ligand in the benchmark holo path.
+
+Set **`SKRINJAR_LOG_ALIGN_FALLBACK=1`** if you need log warnings when `rdShapeAlign.AlignMol` fails and the code falls back to Crippen-only alignment. **`IncrementalSkrinjarScorer.align_mol_fallback_count`** counts those fallbacks during a run.
 
 See module docstrings and `tests/test_skrinjar_similarity.py`.
 

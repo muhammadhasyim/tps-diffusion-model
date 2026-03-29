@@ -52,11 +52,25 @@ enhanced_sampling = [
   # For pure NumPy fallback: pip install pymbar.
   # Source: https://github.com/choderalab/pymbar
   "pymbar>=4.0",
-  # OpenMM + PDBFixer: required by OpenMMLocalMinRMSD (RMSD-to-local-minimum CV).
-  # Prefer conda-forge: conda install -c conda-forge openmm pdbfixer openmmforcefields
-  # because conda-forge bundles CUDA plugins and force-field XML data files.
+  # OpenMM stack: local-min RMSD / energy CVs, compute_cv_rmsd minimization.
+  # Prefer conda-forge for openmm + CUDA plugins; pip pins keep pip-only envs working.
   "openmm>=8.0",
   "pdbfixer>=1.9",
+  # GAFF2 / SMIRNOFF ligand parameterization (scripts/compute_cv_rmsd.py, cofactors).
+  "openmmforcefields>=0.14",
+  "openff-toolkit>=0.14.0",
+]
+# Pip-only one-shot: PyMOL cartoons, ProDy ensemble analysis, OpenMM+MBAR+ligands.
+# Conda users: environment.yml installs prody, pymol-open-source, openff-toolkit from conda-forge
+# and uses -e .[boltz,dev,enhanced_sampling] to avoid duplicate PyMOL/ProDy wheels.
+full = [
+  "pymol-open-source>=3.2.0a0",
+  "prody>=2.0",
+  "pymbar>=4.0",
+  "openmm>=8.0",
+  "pdbfixer>=1.9",
+  "openmmforcefields>=0.14",
+  "openff-toolkit>=0.14.0",
 ]
 
 [tool.setuptools.packages.find]
