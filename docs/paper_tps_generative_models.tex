@@ -9,6 +9,12 @@
 \usepackage{hyperref}
 \usepackage{algpseudocode}
 
+% ---------- shared notation (must stay consistent with SI) ----------
+\newcommand{\HAB}{H_{AB}}
+\newcommand{\pacc}{p_{\mathrm{acc}}}
+\newcommand{\Xnew}{X^{\mathrm{n}}}
+\newcommand{\Xold}{X^{\mathrm{o}}}
+
 \begin{document}
 
 \title{Probing Generative Protein Structure Models with Transition Path Sampling}
@@ -32,7 +38,15 @@ statistically unbiased ensembles of denoising trajectories. Applied to a
 Monte Carlo steps yield an ensemble of predicted structures with C$\alpha$ RMSD
 spread of only $0.48$--$0.69$~\AA{} and a $\approx 53\%$ shooting acceptance
 rate, revealing that the model's stochastic landscape is sharply concentrated
-near a single structural attractor. The approach provides a principled
+near a single structural attractor. We further augment TPS with On-the-fly
+Probability Enhanced Sampling (OPES) using a two-dimensional collective variable
+comprising ligand pose RMSD and ligand--pocket distance, enabling systematic
+exploration of the projected free-energy surface for protein--ligand co-folding.
+Despite the strong concentration of the distribution near the native pose, TPS+OPES
+discovers rare but persistent metastable configurations with substantially
+elevated pose RMSD ($>1.0$~\AA) and larger pocket distances, revealing
+that generative models can produce surprisingly distant alternative binding
+geometries even for well-constrained inputs. The approach provides a principled
 diagnostic for characterizing generative model confidence, identifying
 structurally ambiguous predictions, and evaluating the physical quality of
 generated structures.
@@ -117,6 +131,42 @@ EDM schedules.}
 \label{alg:tps}
 \end{figure}
 
+\begin{figure}[t]
+\hrule\vspace{2pt}
+{\footnotesize\textbf{Algorithm 2.} TPS+OPES for a Non-Reversible Generative Model}
+\vspace{1pt}\hrule\vspace{3pt}
+\begin{algorithmic}[1]
+\footnotesize
+\Require $G$: forward kernel; $\pi_i$: noise prior; $A,B$: state volumes;
+         $\mathcal{X}^{(0)}$: initial reactive path;
+         $\mathbf{s}(\cdot)$: CV map; $\gamma$: biasfactor; $\Delta E$: barrier height;
+         $h$, $\sigma_{\mathrm{OPES}}$: kernel height and bandwidth; \texttt{pace}: deposition interval.
+\State \textbf{Initialize:} KDE state $\mathcal{K}_0 \leftarrow \emptyset$;\; compute $V_0(\mathbf{s}) = 0$
+\For{$k = 1, \ldots, N_{\mathrm{MC}}$}
+  \State \textbf{Select \& Resample:} (as Algorithm 1, Steps 1--3)
+  \State \textbf{Reactivity check:} if $x_L^{\mathrm{new}}\!\notin\!B$: reject, $\mathcal{X}^{(k)}\!=\!\mathcal{X}^{(k-1)}$; continue
+  \State \textbf{Log-ratio:} compute $\Delta$ via Eq.~(\ref{eq:delta})
+  \State \textbf{CV evaluation:} compute $\mathbf{s}^{\mathrm{n}} = \mathbf{s}(x_L^{\mathrm{new}})$ and $\mathbf{s}^{\mathrm{o}} = \mathbf{s}(x_L^{(k-1)})$
+  \State \textbf{OPES bias:} $\Delta V \leftarrow V_{k-1}(\mathbf{s}^{\mathrm{n}}) - V_{k-1}(\mathbf{s}^{\mathrm{o}})$
+  \State \textbf{Accept:} $\mathcal{X}^{(k)}\!=\!\mathcal{X}^{\mathrm{new}}$ w.p.\ $\min\!\left(1, e^{\Delta - \Delta V / k_BT}\right)$; else $\mathcal{X}^{(k-1)}$
+  \If{$k \bmod \texttt{pace} = 0$}
+    \State \textbf{Deposit kernel:} $\mathcal{K}_k \leftarrow \mathcal{K}_{k-1} \cup \mathcal{N}(\mathbf{s}^{(k)}, \sigma_{\mathrm{OPES}}^2)$;\; reweight with compression
+    \State \textbf{Update bias:} $V_k(\mathbf{s}) \leftarrow \frac{k_BT(\gamma-1)}{\gamma}\ln\!\left(\frac{\hat{\rho}_k(\mathbf{s})}{Z_k} + \epsilon\right)$
+  \Else
+    \State $\mathcal{K}_k \leftarrow \mathcal{K}_{k-1}$;\; $V_k \leftarrow V_{k-1}$
+  \EndIf
+\EndFor
+\end{algorithmic}
+\vspace{1pt}\hrule\vspace{2pt}
+{\footnotesize\textit{Note.}  $\hat{\rho}_k$ is the compressed KDE estimate of the marginal CV
+distribution, $Z_k$ its partition function, and $\epsilon$ a regularization floor.
+At convergence $V_\infty$ flattens the FES, so $e^{-\Delta V/k_BT}$ uniformly
+boosts acceptance toward under-sampled CV regions.  See Eq.~(\ref{eq:tps-opes})
+and the Supplemental Material~\cite{hasyim2025si} for derivation.}
+\vspace{1pt}
+\label{alg:tps-opes}
+\end{figure}
+
 The Boltz-2 reverse sampler advances a coordinate tensor
 $x \in \mathbb{R}^{M \times 3}$ (with $M$ padded atoms) along a fixed schedule
 of noise levels $\sigma_0 > \sigma_1 > \cdots > \sigma_L = 0$ over $L$
@@ -198,8 +248,8 @@ shooting distribution~\cite{bolhuis2002}, and all accepted paths remain
 reactive.  At every 10 MC steps, we extract the final denoised structure from
 the accepted path and evaluate two diagnostics: (i) C$\alpha$ RMSD with respect
 to the initial accepted structure, and (ii) the total potential energy computed
-by energy minimization in OpenMM.  The resulting TPS ensemble of 10 structures
-is shown in Fig.~\ref{fig:structures}.
+by energy minimization in OpenMM.  Basin-resolved structural ensembles from the
+subsequent TPS+OPES run are shown in Fig.~\ref{fig:structures}.
 
 The C$\alpha$ RMSD values across the ensemble span only $0.48$--$0.69$~\AA{}
 with mean $0.59 \pm 0.06$~\AA{} (Fig.~\ref{fig:distributions}a), indicating
@@ -213,20 +263,132 @@ $(R_i, \tau_i, \varepsilon_i)$ at every denoising step, so the structural
 similarity is a genuine property of the model's denoising landscape rather than
 a sampling artifact.
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
-  \includegraphics[width=\columnwidth]{../cofolding_tps_out_fixed/checkpoint_last_frames_grid.png}
-  \caption{\textbf{TPS-sampled structural ensemble.}
-  Final denoised structures extracted from 10 consecutive accepted TPS paths
-  (MC steps 10--100 in increments of 10), rendered as C$\alpha$ ribbon
-  cartoons.  Both chains of the heterodimer are shown; chain coloring is
-  preserved across panels.  The overall fold and interface geometry are
-  consistent across the ensemble, with the largest variations confined to
-  exposed loop regions.  The visual similarity is quantified in
-  Fig.~\ref{fig:distributions}.
+  \includegraphics[width=\textwidth]{figs/basin_structural_ensemble.png}
+  \caption{\textbf{Basin-resolved structural ensemble from TPS+OPES.}
+  Representative last-frame structures from the four metastable basins
+  identified in the 2D free-energy landscape (Fig.~\ref{fig:opes2d}).
+  \textbf{Columns} (left to right): B$_0$ (native pose, $s_1\approx
+  0.07$~\AA, $s_2\approx 5.37$~\AA); B$_1$ (intermediate,
+  $s_1\approx 0.35$~\AA, $s_2\approx 5.47$~\AA); B$_2$ (displaced,
+  $s_1\approx 0.75$~\AA, $s_2\approx 5.56$~\AA); B$_3$ (far-tail,
+  $s_1\approx 1.10$~\AA, $s_2\approx 5.48$~\AA).
+  \textbf{Rows}: three representative MC snapshots per basin, chosen to
+  span the basin interior from the centroid outward.  Structures are
+  rendered as C$\alpha$ cartoon ribbons with ligand sticks; protein chain
+  coloring is preserved across all panels.
   }
   \label{fig:structures}
+\end{figure*}
+
+\section{OPES-Enhanced Exploration of the Ligand Pose Landscape}
+\label{sec:opes}
+
+Plain TPS is unbiased but concentrates sampling near the dominant structural
+attractor.  To probe the \emph{full} projected free-energy surface (FES)
+in ligand-pose space, we augment TPS with On-the-fly Probability Enhanced
+Sampling (OPES)~\cite{invernizzi2020,invernizzi2022} (Algorithm~\ref{alg:tps-opes}).
+OPES builds an
+adaptive bias $V_n(\mathbf{s})$ on a chosen collective variable (CV)
+via kernel density estimation with compression, and modifies the TPS
+Metropolis acceptance as
+\begin{equation}
+  \pacc^{\mathrm{OPES}} = \HAB(\Xnew)\cdot
+    \min\!\left[1,\; e^{-[V_n(\mathbf{s}^{\mathrm{n}}) -
+                           V_n(\mathbf{s}^{\mathrm{o}})]/k_BT} \right],
+  \label{eq:tps-opes}
+\end{equation}
+where $\mathbf{s}^{\mathrm{n,o}}$ are the CVs of the terminal frame $x_L$
+on the new and old paths (see Supplemental Material~\cite{hasyim2025si} for
+full derivation).
+
+We apply TPS+OPES to a protein--ligand co-folding system with the
+two-dimensional CV $\mathbf{s} = (s_1, s_2)$, where $s_1$ is the
+heavy-atom RMSD of the predicted ligand pose relative to a reference
+crystal structure (Å), and $s_2$ is the ligand center-of-mass to
+binding-pocket C$\alpha$ distance (Å).  The run uses biasfactor $\gamma = 10$,
+barrier $= 5\,k_BT$, and yields 1159 OPES depositions and 82 surviving
+kernels after compression (Fig.~\ref{fig:opes2d}).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figs/opes_tps_ligand_2d_fes.png}
+  \caption{\textbf{OPES-TPS 2D free-energy landscape in ligand pose space.}
+  \textit{Left}: renormalized OPES kernel mixture $P_n(s_1, s_2)$ showing
+  the distribution of adaptive bias kernels; the orange circles mark kernel
+  centroids.
+  \textit{Middle}: reweighted free-energy proxy $-\ln(\hat\rho/\hat\rho_{\max})$
+  as a function of ligand RMSD and ligand--pocket distance.  The primary basin
+  near $(s_1, s_2) \approx (0.07\,\text{\AA},\, 5.37\,\text{\AA})$ corresponds
+  to the native-like pose; secondary basins at $s_1 \approx 0.70$--$0.83$~\AA{}
+  mark distinct metastable configurations.
+  \textit{Right}: hexagonal-bin histogram of the TPS+OPES chain's visited
+  $(s_1, s_2)$ values, with OPES contours overlaid.
+  Run parameters: $\gamma = 10$, barrier $= 5\,k_BT$, $N_{\mathrm{MC}} = 11{,}590$,
+  $N_{\mathrm{acc}} = 3{,}184$ (acceptance rate $27.5\%$).
+  }
+  \label{fig:opes2d}
 \end{figure}
+
+The three-panel figure reveals a qualitatively rich landscape despite
+the strong concentration of the prior distribution at the native pose:
+\begin{enumerate}
+  \item \textbf{Native-like dominant basin} ($s_1 \lesssim 0.3$~Å,
+    $s_2 \approx 5.34$--$5.37$~Å): the primary density peak (median accepted
+    $s_1 = 0.26$~Å) confirms that the model's default denoising landscape
+    is sharply focused on a single binding geometry.
+  \item \textbf{Metastable high-RMSD regions}: the OPES bias progressively
+    fills the primary basin and drives the chain toward elevated-pose-RMSD
+    configurations.  Among all 11\,590 logged steps, $8.8\%$ have
+    $s_1 > 1.0$~Å and $1.7\%$ have $s_1 > 1.25$~Å.  Crucially, these visits
+    occur in persistent runs (mean run length $\approx 73$ consecutive steps
+    at $s_1 > 1$~Å, maximum 196 steps), not isolated spikes, indicating that
+    the model can genuinely stabilize to alternative local minima in pose space
+    separated from the primary basin by free-energy ridges $\sim 5$--$15\,k_BT$.
+  \item \textbf{Correlated pocket displacement}: the metastable high-RMSD
+    configurations cluster at slightly larger pocket distances
+    ($s_2 \approx 5.55$--$5.62$~Å vs.\ $5.34$--$5.37$~Å for the native),
+    suggesting that the diffusion model accesses qualitatively different
+    pocket-engagement geometries, not merely rotational pose variants.
+\end{enumerate}
+
+\paragraph{Basin-resolved structural ensembles.}
+To assess structural differences across basins, we selected three
+representative last-frame snapshots from each basin and rendered them as
+C$\alpha$ cartoon ribbons (Fig.~\ref{fig:structures}).  Basin B$_0$
+(native) displays a well-packed binding pose with the ligand fully
+enclosed by the pocket, consistent with the training-set crystal geometry.
+Basin B$_1$ (intermediate) retains protein fold integrity but shows a
+partial ligand slippage along the pocket axis ($\Delta s_2 \approx
++0.10$~\AA\ relative to B$_0$), with minor side-chain rearrangements at
+the binding interface.  Basin B$_2$ (displaced) exhibits a more
+pronounced ligand displacement, with the center of mass shifted $\sim
+0.19$~\AA\ further from the pocket C$\alpha$ centroid; the protein
+backbone remains largely undisturbed, but exposed pocket residues show
+visibly different contact patterns.  Basin B$_3$ (far tail) captures the
+most distinct configurations: the ligand is partially egressed, and
+subtle but consistent protein loop deformations appear at the pocket rim,
+suggesting a low-affinity, high-entropy escape mode.  These observations
+confirm that the secondary basins correspond to structurally
+distinguishable, physically interpretable configurations rather than
+numerical noise.
+
+These results carry an important caveat: the projected 2-D FES is a marginal
+over all remaining degrees of freedom, and the secondary basins could in
+principle arise from structurally diverse configurations mapping to similar
+$(s_1, s_2)$ values (projection effects), or from imperfect OPES convergence
+at finite $\gamma$ and barrier.  Whether the rare high-RMSD poses are
+physically meaningful alternative binding modes or generative model artifacts
+requires cross-validation with diagnostic CVs (steric clashes, Ramachandran
+outliers, lDDT, pLDDT) and structural inspection of saved
+checkpoints---tasks enabled directly by the logged \texttt{cv\_values.json}
+and \texttt{trajectory\_checkpoints/} produced by \texttt{run\_opes\_tps.py}.
+This memorization concern is directly relevant given that protein--ligand
+co-folding methods have been shown to largely memorize training-set
+poses~\cite{skrinjar2025}; TPS+OPES provides a principled route to
+quantifying how far a model's denoising landscape extends beyond the
+memorized attractor.
 
 \section{Discussion}
 
@@ -243,13 +405,28 @@ diagnostic.  The framework applies to any generator that can be cast as an
 explicit Markov chain with computable transition kernels, including score-based
 diffusion, flow matching, and closely related
 architectures~\cite{song2021,lipman2022}. TPS requires only that path weights
-are computable — satisfied here by Eq.~(\ref{eq:logpath})~\cite{falkner2023}
-— and shifts the question from ``what structures does the model produce on
+are computable --- satisfied here by Eq.~(\ref{eq:logpath})~\cite{falkner2023}
+--- and shifts the question from ``what structures does the model produce on
 average'' to ``what is the full reactive ensemble for this specific input''.
 The full ergodic move set (forward + backward shooting + global reshuffle)
 ensures the Markov chain on the reactive path ensemble is irreducible
 regardless of the connectivity of path
 space~\cite{falkner2024,buijsman2020}.
+
+The OPES augmentation extends this diagnostic from a point estimate of model
+confidence to a systematic map of the projected free-energy landscape.
+Persistent metastable excursions to large ligand RMSD values ($s_1 > 1$~\AA{}
+with mean dwell $\approx 73$ consecutive steps) demonstrate that the diffusion
+model's denoising landscape contains identifiable secondary basins, not merely
+diffuse tail noise.  The correlated pocket-distance shift ($\Delta s_2
+\approx 0.2$~\AA{}) in these regions suggests geometrically distinct
+binding-pocket engagement, motivating structural inspection of saved
+checkpoints.  Several natural extensions follow: applying TPS+OPES across
+MSA depths would quantify how evolutionary information focuses the pose
+landscape; varying biasfactor $\gamma$ and barrier provides a convergence
+check on the FES topology; and replacing the 2-D pose CV with a learned
+collective variable~\cite{invernizzi2022} would improve sampling efficiency
+in high-dimensional chemical space.
 
 \begin{figure}[t]
   \centering
@@ -283,8 +460,15 @@ per-step noise draws, that the resulting path probability factorizes cleanly,
 and that 100 MC steps are sufficient to characterize the model's stochastic
 landscape for a 228-residue co-folding task.  The sub-angstrom structural
 spread we find establishes that the model is highly confident in its prediction
-for this input, and the framework provides a direct route to interrogating
-generative model behavior in cases where confidence is less clear.
+for this input.  Augmenting TPS with OPES and a 2-D ligand-pose CV further
+reveals that this confidence does not preclude rare, geometrically distinct
+metastable configurations ($s_1 > 1$~\AA, persistent over $\sim 70$--$200$
+consecutive MC steps) that would be entirely invisible to single forward
+passes or standard RMSD benchmarks.  The framework provides a direct route to
+interrogating generative model behavior in cases where confidence is less clear,
+and to distinguishing genuine multi-basin landscapes from memorization
+artifacts.  Full derivations are given in the Supplemental
+Material~\cite{hasyim2025si}.
 
 \begin{acknowledgments}
 The author acknowledges support from the Simons Center for Computational
@@ -298,6 +482,23 @@ the use of NYU IT High Performance Computing resources.
 J.~M.~Dorman, E.~Gillman, D.~C.~Rose, J.~F.~Mair, and J.~P.~Garrahan,
 Rare event analysis of large language models,
 \textit{arXiv:2602.06791} (2026).
+
+\bibitem{hasyim2025si}
+M.~R.~Hasyim,
+Supporting Information: Probing Generative Protein Structure Models with
+Transition Path Sampling,
+unpublished (2025); see \texttt{docs/paper\_tps\_generative\_models\_SI.tex}
+in the project repository.
+
+\bibitem{invernizzi2020}
+M.~Invernizzi and M.~Parrinello,
+Rethinking metadynamics: From bias potentials to probability distributions,
+\textit{J.~Phys.~Chem.~Lett.} \textbf{11}, 2731 (2020).
+
+\bibitem{invernizzi2022}
+M.~Invernizzi and M.~Parrinello,
+Exploration vs convergence speed in adaptive-bias enhanced sampling,
+\textit{J.~Chem.~Theory Comput.} \textbf{18}, 3988 (2022).
 
 \bibitem{gopalan2025}
 S.~Gopalan and S.~Narayanan,

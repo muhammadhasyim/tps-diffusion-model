@@ -236,6 +236,38 @@ class TestAdaptiveSigma:
         sigma = bias._current_sigma()
         assert sigma >= 0.5
 
+    def test_sigma_min_prevents_density_spike_on_identical_cvs(self):
+        """Regression: sigma_min=0 + identical CVs causes kde_probability ~1e6.
+
+        When consecutive accepted paths all produce the same CV value, the
+        Welford running variance collapses to zero.  The height-adjustment
+        factor sigma_0/sigma then diverges while kde_norm stays O(1),
+        producing a density spike of order 1e6.  A non-zero sigma_min caps
+        the amplification to sigma_0/sigma_min, keeping the density finite
+        and reasonable.
+        """
+        sigma_min = 0.005
+        bias_safe = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0,
+                             pace=1, sigma_min=sigma_min)
+        bias_nofloor = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0,
+                                pace=1, sigma_min=0.0)
+
+        for step in range(1, 4):
+            bias_safe.update(0.461, step)
+            bias_nofloor.update(0.461, step)
+
+        import math
+        p_safe = bias_safe.kde_probability(0.461)
+        p_nofloor = bias_nofloor.kde_probability(0.461)
+
+        max_allowed = math.sqrt(2.0 * 5.0) / sigma_min * 10  # generous bound
+        assert p_safe < max_allowed, (
+            f"sigma_min={sigma_min} should cap density; got P={p_safe:.2e}"
+        )
+        assert p_nofloor > p_safe, (
+            "sigma_min=0 case should produce a higher density spike"
+        )
+
     def test_fixed_sigma_overrides(self):
         bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, fixed_sigma=2.0)
         for cv in [1.0, 2.0, 3.0, 4.0, 5.0]:
@@ -261,9 +293,21 @@ class TestStateSaveLoad:
         assert loaded.counter == bias.counter
         assert loaded.zed == pytest.approx(bias.zed, rel=1e-10)
         assert loaded.sum_weights == pytest.approx(bias.sum_weights, rel=1e-10)
+        assert getattr(loaded, "saved_bias_cv", None) is None
 
         cv_test = 5.0
         assert loaded.evaluate(cv_test) == pytest.approx(bias.evaluate(cv_test), rel=1e-10)
+
+    def test_roundtrip_includes_bias_cv_metadata(self, tmp_path):
+        bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1, fixed_sigma=1.0)
+        bias.update(cv_accepted=1.0, mc_step=1)
+        p = tmp_path / "st.json"
+        bias.save_state(
+            p, bias_cv="openmm", bias_cv_names=["openmm"],
+        )
+        loaded = OPESBias.load_state(p)
+        assert loaded.saved_bias_cv == "openmm"
+        assert loaded.saved_bias_cv_names == ["openmm"]
 
     def test_load_preserves_config(self, tmp_path):
         bias = OPESBias(kbt=2.0, barrier=8.0, biasfactor=20.0, epsilon=0.01,

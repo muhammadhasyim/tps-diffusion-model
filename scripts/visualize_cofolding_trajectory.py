@@ -101,6 +101,67 @@ def write_last_frame_boltz2_pdb(
     out_path.write_text(to_pdb(new_structure, plddts=None, boltz2=True))
 
 
+def _ligand_sticks_pml() -> str:
+    """PyMOL lines: draw hetero (ligand, etc.) as sticks; skip water."""
+    return """
+show sticks, hetatm and not resn HOH
+set stick_radius, 0.12
+color atomic, hetatm and not resn HOH
+"""
+
+
+def _pocket_zoom_pml(
+    pdb_w: str,
+    png_w: str,
+    *,
+    reference_pdb_w: str | None = None,
+    width: int = 1600,
+    height: int = 1600,
+    dpi: int = 150,
+    ray_flag: int = 0,
+) -> str:
+    """Generate PML for pocket-zoom rendering: cartoon + pocket lines + colored ligand sticks.
+
+    No surface (transparency is unreliable without ray-tracing). Shows protein as a light grey
+    cartoon ribbon; pocket-lining residues (within 5 Å of ligand) as thin grey lines for
+    binding-site context; and the ligand as thick CPK-colored sticks. Camera is zoomed to the
+    ligand with enough buffer to see the surrounding pocket. If a reference PDB is given, the
+    structure is Cα-aligned to it before rendering for consistent orientation.
+    """
+    ref_block = ""
+    align_block = ""
+    if reference_pdb_w is not None:
+        ref_block = f"load {reference_pdb_w}, ref\n"
+        align_block = "align mobile, ref and name CA\nhide everything, ref\n"
+
+    return f"""load {pdb_w}, mobile
+hide everything
+{ref_block}{align_block}show cartoon, mobile and polymer
+set cartoon_fancy_helices, 1
+dss mobile
+color 0xBBBBBB, mobile and polymer
+set cartoon_transparency, 0.2, mobile and polymer
+select ligand, mobile and hetatm and not resn HOH
+select pocket5, byres (mobile and polymer within 5 of ligand)
+show lines, pocket5
+set line_width, 1.5
+color 0x999999, pocket5
+show sticks, ligand
+set stick_radius, 0.22
+color salmon,   ligand and elem C
+color blue,     ligand and elem N
+color red,      ligand and elem O
+color yellow,   ligand and elem S
+color 0x00CC44, ligand and elem Cl
+zoom ligand, buffer=6
+bg_color white
+set ray_opaque_background, 1
+set antialias, 2
+png {png_w}, width={width}, height={height}, dpi={dpi}, ray={ray_flag}
+quit
+"""
+
+
 def _render_cartoon_pymol_api(
     pdb_path: Path,
     png_path: Path,
@@ -109,6 +170,7 @@ def _render_cartoon_pymol_api(
     height: int,
     dpi: int,
     use_ray: bool = True,
+    show_ligand_sticks: bool = False,
 ) -> None:
     """Headless PyMOL via the ``pymol`` Python package (same interpreter as this script).
 
@@ -129,6 +191,10 @@ def _render_cartoon_pymol_api(
         cmd.color("red", "ss H")
         cmd.color("yellow", "ss S")
         cmd.color("palegreen", "ss L+''")
+        if show_ligand_sticks:
+            cmd.show("sticks", "hetatm and not resn HOH")
+            cmd.set("stick_radius", "0.12")
+            cmd.color("atomic", "hetatm and not resn HOH")
         cmd.bg_color("white")
         cmd.set("ray_opaque_background", 1)
         cmd.set("antialias", 2)
@@ -170,6 +236,7 @@ def _render_cartoon_pymol_subprocess(
     dpi: int,
     use_ray: bool = True,
     prefer_software_gl: bool = True,
+    show_ligand_sticks: bool = False,
 ) -> None:
     """Headless PyMOL in a separate process (``pymol -cqx script.pml``).
 
@@ -194,6 +261,7 @@ def _render_cartoon_pymol_subprocess(
     pdb_w = _pml_word(pdb_path)
     png_w = _pml_word(png_path)
     ray_flag = 1 if use_ray else 0
+    ligand_block = _ligand_sticks_pml() if show_ligand_sticks else ""
     pml = f"""load {pdb_w}
 hide everything
 show cartoon
@@ -202,7 +270,7 @@ dss
 color red, ss H
 color yellow, ss S
 color palegreen, ss L+''
-bg_color white
+{ligand_block}bg_color white
 set ray_opaque_background, 1
 set antialias, 2
 orient
@@ -273,6 +341,7 @@ def render_cartoon_png_pymol(
     force_subprocess: bool = False,
     use_ray: bool = True,
     prefer_software_gl: bool | None = None,
+    show_ligand_sticks: bool = False,
 ) -> None:
     """Cartoon PNG via PyMOL: ribbon colored by DSSP-like secondary structure.
 
@@ -288,6 +357,9 @@ def render_cartoon_png_pymol(
     prefer_software_gl
         If True, set ``LIBGL_ALWAYS_SOFTWARE=1`` for the PyMOL subprocess (unless already set).
         Default: same as ``force_subprocess`` (Mesa llvmpipe avoids many headless NVIDIA crashes).
+    show_ligand_sticks
+        If True, also draw ``hetatm`` (ligands, ions, …) as sticks with ``color atomic``;
+        water (``HOH``) is excluded. Cartoon alone does not show small molecules.
     """
     pdb_path = pdb_path.resolve()
     png_path = png_path.resolve()
@@ -307,12 +379,19 @@ def render_cartoon_png_pymol(
             dpi=dpi,
             use_ray=use_ray,
             prefer_software_gl=prefer_software_gl,
+            show_ligand_sticks=show_ligand_sticks,
         )
         return
 
     if importlib.util.find_spec("pymol") is not None:
         _render_cartoon_pymol_api(
-            pdb_path, png_path, width=width, height=height, dpi=dpi, use_ray=use_ray
+            pdb_path,
+            png_path,
+            width=width,
+            height=height,
+            dpi=dpi,
+            use_ray=use_ray,
+            show_ligand_sticks=show_ligand_sticks,
         )
         if not png_path.is_file():
             raise RuntimeError(f"PyMOL did not write {png_path}")
@@ -326,7 +405,105 @@ def render_cartoon_png_pymol(
         dpi=dpi,
         use_ray=use_ray,
         prefer_software_gl=prefer_software_gl,
+        show_ligand_sticks=show_ligand_sticks,
     )
+
+
+def render_pocket_zoom_png_pymol(
+    pdb_path: Path,
+    png_path: Path,
+    *,
+    reference_pdb: Path | None = None,
+    width: int = 1600,
+    height: int = 1600,
+    dpi: int = 150,
+    use_ray: bool = False,
+    prefer_software_gl: bool = True,
+) -> None:
+    """Pocket-zoom PNG via PyMOL: translucent surface + CPK ligand sticks + pocket-zoomed camera.
+
+    Renders the protein as a white translucent surface (65% transparency) over a cartoon,
+    ligand heteroatoms as salmon/CPK sticks, and zooms the camera onto the ligand + 8 Å
+    pocket neighborhood. If ``reference_pdb`` is given, the structure is Cα-aligned to it
+    first for consistent orientation across an ensemble.
+
+    Parameters
+    ----------
+    pdb_path
+        Input PDB (single-model; last-frame topology PDB from :func:`write_last_frame_boltz2_pdb`).
+    png_path
+        Output PNG path (created with parent dirs).
+    reference_pdb
+        Optional reference PDB for Cα alignment before rendering (consistent orientation).
+    width, height, dpi
+        PNG dimensions passed to the PyMOL ``png`` command.
+    use_ray
+        If True, use PyMOL ray tracing (slow; can segfault headless). Default: False (OpenGL).
+    prefer_software_gl
+        Set ``LIBGL_ALWAYS_SOFTWARE=1`` for the subprocess to avoid headless GPU crashes.
+    """
+    pdb_path = pdb_path.resolve()
+    png_path = png_path.resolve()
+    if not pdb_path.is_file():
+        raise FileNotFoundError(f"Pocket-zoom input PDB not found: {pdb_path}")
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+
+    pymol_bin = shutil.which("pymol")
+    if not pymol_bin:
+        raise RuntimeError(
+            "PyMOL executable not on PATH. "
+            "Install: pip install pymol-open-source  OR  conda install -c conda-forge pymol-open-source"
+        )
+
+    def _pml_word(path: Path) -> str:
+        import json as _json  # noqa: PLC0415
+        s = str(path)
+        if any(c in s for c in " \t\n\"'\\"):
+            return _json.dumps(s)
+        return s
+
+    ref_w = _pml_word(reference_pdb) if reference_pdb and reference_pdb.is_file() else None
+    ray_flag = 1 if use_ray else 0
+    pml = _pocket_zoom_pml(
+        _pml_word(pdb_path),
+        _pml_word(png_path),
+        reference_pdb_w=ref_w,
+        width=width,
+        height=height,
+        dpi=dpi,
+        ray_flag=ray_flag,
+    )
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pml", delete=False) as tf:
+        tf.write(pml)
+        pml_path = tf.name
+    try:
+        env = _pymol_subprocess_env(prefer_software_gl=prefer_software_gl)
+        base_cmd = [pymol_bin, "-cqx", pml_path]
+        xvfb = shutil.which("xvfb-run")
+
+        def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(argv, check=False, capture_output=True, text=True, env=env)
+
+        used_xvfb = False
+        if xvfb and not os.environ.get("DISPLAY"):
+            proc = _run(["xvfb-run", "-a", *base_cmd])
+            used_xvfb = True
+        else:
+            proc = _run(base_cmd)
+        combined = (proc.stderr or "") + (proc.stdout or "")
+        if _proc_looks_like_segfault(proc.returncode) and xvfb and not used_xvfb:
+            proc = _run(["xvfb-run", "-a", *base_cmd])
+            combined = (proc.stderr or "") + (proc.stdout or "") + "\n[xvfb retry]\n" + combined
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"PyMOL pocket-zoom exited {proc.returncode}: {combined[:2000]}")
+        if "ScenePNG-Error" in combined and not png_path.is_file():
+            raise RuntimeError(f"PyMOL failed to write pocket-zoom PNG: {combined[-1500:]}")
+    finally:
+        Path(pml_path).unlink(missing_ok=True)
+    if not png_path.is_file():
+        raise RuntimeError(f"PyMOL did not write pocket-zoom PNG: {png_path}")
 
 
 def _pdb_line(serial: int, x: float, y: float, z: float, resseq: int, chain: str = "A") -> str:
@@ -587,6 +764,11 @@ def main() -> None:
     p.add_argument("--cartoon-height", type=int, default=1600, help="Cartoon PNG height (pixels)")
     p.add_argument("--cartoon-dpi", type=int, default=150, help="Cartoon PNG DPI for PyMOL png command")
     p.add_argument(
+        "--cartoon-ligand-sticks",
+        action="store_true",
+        help="With --render-cartoon: show HETATM (ligand, etc.) as sticks; cartoon hides small molecules.",
+    )
+    p.add_argument(
         "--render-preview-png",
         action="store_true",
         help="Also write a matplotlib 3D scatter of the last frame (no PyMOL).",
@@ -667,6 +849,7 @@ def main() -> None:
                     dpi=args.cartoon_dpi,
                     force_subprocess=not args.cartoon_embedded_pymol,
                     use_ray=False,
+                    show_ligand_sticks=args.cartoon_ligand_sticks,
                 )
                 print(f"Wrote cartoon ribbon PNG: {c_png.resolve()}")
                 pymol_ok = True

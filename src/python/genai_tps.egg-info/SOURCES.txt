@@ -326,6 +326,7 @@ tests/test_gpu_core_device_propagation.py
 tests/test_openpathsampling_version.py
 tests/test_opes_bias.py
 tests/test_path_probability.py
+tests/test_plot_opes_fes.py
 tests/test_prody_terminal_ensemble.py
 tests/test_snapshot_gpu_contract.py
 tests/test_tps_boltz_unit.py

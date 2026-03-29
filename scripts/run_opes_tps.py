@@ -46,11 +46,20 @@ from openpathsampling.engines.trajectory import Trajectory
 from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
 from genai_tps.backends.boltz.bridge import snapshot_from_gpu
 from genai_tps.backends.boltz.collective_variables import (
+    PoseCVIndexer,
+    clash_count,
+    contact_order,
+    lddt_to_reference,
+    ligand_pose_rmsd,
+    ligand_pocket_distance,
+    protein_ligand_contacts,
+    protein_ligand_hbond_count,
     radius_of_gyration,
+    ramachandran_outlier_fraction,
     rmsd_to_reference,
 )
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
-from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy, OpenMMLocalMinRMSD
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.snapshot import (
     BoltzSnapshot,
@@ -59,6 +68,22 @@ from genai_tps.backends.boltz.snapshot import (
 )
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.enhanced_sampling import OPESBias
+
+# All supported single-CV names for --bias-cv
+_SINGLE_CV_NAMES = [
+    "rmsd",
+    "rg",
+    "openmm",
+    "openmm_energy",
+    "contact_order",
+    "clash_count",
+    "lddt",
+    "ramachandran_outlier",
+    "ligand_rmsd",
+    "ligand_pocket_dist",
+    "ligand_contacts",
+    "ligand_hbonds",
+]
 
 
 def _atomic_write_json(path: Path, payload: dict) -> None:
@@ -81,24 +106,38 @@ def _make_cv_function(
     openmm_platform: str = "CUDA",
     openmm_max_iter: int = 500,
     mol_dir: Path | None = None,
-) -> Callable[[Trajectory], float]:
-    """Build a CV function that operates on the last frame of a trajectory.
+    lddt_reference: torch.Tensor | None = None,
+    pocket_radius: float = 6.0,
+    contact_r0: float = 3.5,
+    hbond_cutoff: float = 3.5,
+) -> "Callable[[Trajectory], float]":
+    """Build a scalar CV function (single-CV bias, returns float).
 
     Parameters
     ----------
     cv_type:
-        ``"rmsd"``   -- fast RMSD to the initial structure's last frame (proxy CV).
-        ``"rg"``     -- fast radius of gyration (proxy CV).
-        ``"openmm"`` -- AMBER14/GBn2 Cα-RMSD to local energy minimum; identical
-                        to the CV used by ``watch_rmsd_live.py`` and required for
-                        a meaningful comparison against the vanilla TPS baseline.
-                        Requires *topo_npz* and has ~1--10 s per-call cost
-                        (mitigated by coordinate-hash caching).
+        One of: ``"rmsd"``, ``"rg"``, ``"openmm"``, ``"openmm_energy"``,
+        ``"contact_order"``, ``"clash_count"``, ``"lddt"``,
+        ``"ramachandran_outlier"``, ``"ligand_rmsd"``,
+        ``"ligand_pocket_dist"``, ``"ligand_contacts"``, ``"ligand_hbonds"``.
+    reference_coords:
+        Ca coordinates of the initial structure, shape ``(N, 3)``.
+        Required for ``"rmsd"``.
+    lddt_reference:
+        Reference coordinates for ``"lddt"``.  Falls back to
+        ``reference_coords`` when not provided.
     mol_dir:
-        Path to the Boltz CCD molecule directory (``~/.boltz/mols``).  When
-        provided, SMILES for non-protein (NONPOLYMER) chains are read from
-        the pkl files and passed to OpenMM for GAFF2 parameterisation.
-        Required for inputs that contain ligands (e.g. FZC, ATP, MG).
+        Path to the Boltz CCD molecule directory (``~/.boltz/mols``).
+        Required for ``"openmm"`` when ligands are present.
+    pocket_radius:
+        Radius (Å) around the initial ligand COM used to define the binding
+        pocket for pose-quality CVs (default 6.0).
+    contact_r0:
+        Switching-function half-maximum distance (Å) for ``"ligand_contacts"``
+        (default 3.5).
+    hbond_cutoff:
+        Heavy-atom N/O···N/O distance cutoff (Å) for ``"ligand_hbonds"``
+        (default 3.5).
     """
 
     def _cv_rmsd(traj: Trajectory) -> float:
@@ -108,6 +147,26 @@ def _make_cv_function(
     def _cv_rg(traj: Trajectory) -> float:
         snap = traj[-1]
         return radius_of_gyration(snap, atom_mask)
+
+    def _cv_contact_order(traj: Trajectory) -> float:
+        return contact_order(traj[-1])
+
+    def _cv_clash_count(traj: Trajectory) -> float:
+        return float(clash_count(traj[-1]))
+
+    def _cv_ramachandran_outlier(traj: Trajectory) -> float:
+        return ramachandran_outlier_fraction(traj[-1])
+
+    _lddt_ref = lddt_reference if lddt_reference is not None else reference_coords
+
+    def _cv_lddt(traj: Trajectory) -> float:
+        if _lddt_ref is None:
+            raise RuntimeError(
+                "--bias-cv lddt requires a reference structure. "
+                "Provide --reference-pdb or ensure the initial trajectory "
+                "snapshot has valid coordinates."
+            )
+        return lddt_to_reference(traj[-1], _lddt_ref)
 
     if cv_type == "rmsd":
         if reference_coords is None:
@@ -128,8 +187,158 @@ def _make_cv_function(
             mol_dir=mol_dir,
         )
         return openmm_cv
+    elif cv_type == "openmm_energy":
+        if topo_npz is None:
+            raise ValueError(
+                "--bias-cv openmm_energy requires --topo-npz pointing to the "
+                "Boltz processed/structures/*.npz file."
+            )
+        openmm_energy_cv = OpenMMEnergy(
+            topo_npz=topo_npz,
+            platform=openmm_platform,
+            mol_dir=mol_dir,
+        )
+        return openmm_energy_cv
+    elif cv_type == "contact_order":
+        return _cv_contact_order
+    elif cv_type == "clash_count":
+        return _cv_clash_count
+    elif cv_type == "ramachandran_outlier":
+        return _cv_ramachandran_outlier
+    elif cv_type == "lddt":
+        return _cv_lddt
+    elif cv_type in ("ligand_rmsd", "ligand_pocket_dist", "ligand_contacts", "ligand_hbonds"):
+        _pose_cv_names = {
+            "ligand_rmsd": "ligand_rmsd",
+            "ligand_pocket_dist": "ligand_pocket_dist",
+            "ligand_contacts": "ligand_contacts",
+            "ligand_hbonds": "ligand_hbonds",
+        }
+        if topo_npz is None:
+            raise ValueError(
+                f"--bias-cv {cv_type} requires --topo-npz pointing to the Boltz "
+                "processed/structures/*.npz file."
+            )
+        if reference_coords is None:
+            raise ValueError(
+                f"--bias-cv {cv_type} requires reference coordinates from the "
+                "initial trajectory snapshot."
+            )
+        from genai_tps.analysis.boltz_npz_export import load_topo  # noqa: PLC0415
+
+        structure, _ = load_topo(Path(topo_npz))
+        ref_np = (
+            reference_coords.detach().cpu().numpy()
+            if isinstance(reference_coords, torch.Tensor)
+            else np.asarray(reference_coords)
+        )
+        indexer = PoseCVIndexer(structure, ref_np, pocket_radius=pocket_radius)
+        # Use plain callables on traj[-1].  OPS FunctionCV(traj) maps over all
+        # frames and returns shape (n_frames,) — OPES needs a scalar per MC step.
+        if cv_type == "ligand_rmsd":
+
+            def _cv_ligand_rmsd(traj: Trajectory) -> float:
+                return float(ligand_pose_rmsd(traj[-1], indexer))
+
+            return _cv_ligand_rmsd
+        if cv_type == "ligand_pocket_dist":
+
+            def _cv_ligand_pocket(traj: Trajectory) -> float:
+                return float(ligand_pocket_distance(traj[-1], indexer))
+
+            return _cv_ligand_pocket
+        if cv_type == "ligand_contacts":
+
+            def _cv_ligand_contacts(traj: Trajectory) -> float:
+                return float(
+                    protein_ligand_contacts(traj[-1], indexer, r0=contact_r0)
+                )
+
+            return _cv_ligand_contacts
+
+        def _cv_ligand_hbonds(traj: Trajectory) -> float:
+            return float(
+                protein_ligand_hbond_count(traj[-1], indexer, cutoff=hbond_cutoff)
+            )
+
+        return _cv_ligand_hbonds
     else:
-        raise ValueError(f"Unknown CV type: {cv_type!r}. Use 'rmsd', 'rg', or 'openmm'.")
+        raise ValueError(
+            f"Unknown CV type: {cv_type!r}. "
+            f"Available: {_SINGLE_CV_NAMES}"
+        )
+
+
+def _parse_bias_cv_list(bias_cv_str: str) -> list[str]:
+    """Parse comma-separated --bias-cv string into a list of CV names.
+
+    Validates each name against the supported list and raises ``ValueError``
+    for unknown names.
+    """
+    names = [n.strip() for n in bias_cv_str.split(",") if n.strip()]
+    for n in names:
+        if n not in _SINGLE_CV_NAMES:
+            raise ValueError(
+                f"Unknown --bias-cv: {n!r}. "
+                f"Supported: {_SINGLE_CV_NAMES}.  "
+                "Separate multiple CVs with commas, e.g. "
+                "--bias-cv contact_order,clash_count"
+            )
+    return names
+
+
+def _make_multi_cv_function(
+    cv_names: list[str],
+    reference_coords: torch.Tensor | None = None,
+    atom_mask: torch.Tensor | None = None,
+    topo_npz: Path | None = None,
+    openmm_platform: str = "CUDA",
+    openmm_max_iter: int = 500,
+    mol_dir: Path | None = None,
+    lddt_reference: torch.Tensor | None = None,
+    pocket_radius: float = 6.0,
+    contact_r0: float = 3.5,
+    hbond_cutoff: float = 3.5,
+) -> "tuple[Callable[[Trajectory], np.ndarray], int]":
+    """Build a vector CV function for multi-dimensional OPES bias.
+
+    Returns ``(cv_fn, ndim)`` where ``cv_fn(traj) -> np.ndarray`` of shape
+    ``(ndim,)`` and ``ndim = len(cv_names)``.
+
+    For a single CV name, the returned function still returns a scalar
+    (``ndim=1``).
+    """
+    scalar_fns = [
+        _make_cv_function(
+            name,
+            reference_coords=reference_coords,
+            atom_mask=atom_mask,
+            topo_npz=topo_npz,
+            openmm_platform=openmm_platform,
+            openmm_max_iter=openmm_max_iter,
+            mol_dir=mol_dir,
+            lddt_reference=lddt_reference,
+            pocket_radius=pocket_radius,
+            contact_r0=contact_r0,
+            hbond_cutoff=hbond_cutoff,
+        )
+        for name in cv_names
+    ]
+    ndim = len(scalar_fns)
+
+    if ndim == 1:
+        # Scalar path: return float directly for backward compat with 1-D OPES
+        fn0 = scalar_fns[0]
+
+        def _scalar_cv(traj: Trajectory) -> float:
+            return fn0(traj)
+
+        return _scalar_cv, 1  # type: ignore[return-value]
+
+    def _vector_cv(traj: Trajectory) -> np.ndarray:
+        return np.array([fn(traj) for fn in scalar_fns], dtype=np.float64)
+
+    return _vector_cv, ndim
 
 
 def _write_tps_checkpoint_npz(traj: Trajectory, out_npz: Path, *, mc_step: int) -> bool:
@@ -180,7 +389,11 @@ def _trajectory_checkpoint_callback(work_root: Path) -> Callable[[int, Trajector
 
 
 def _opes_state_checkpoint_callback(
-    bias: OPESBias, work_root: Path, every: int,
+    bias: OPESBias,
+    work_root: Path,
+    every: int,
+    bias_cv: str,
+    bias_cv_names: list[str],
 ) -> Callable[[int, Trajectory], None]:
     """Periodic OPES state checkpoints for restart and analysis."""
     def cb(mc_step: int, _traj: Trajectory) -> None:
@@ -189,7 +402,9 @@ def _opes_state_checkpoint_callback(
         state_dir = work_root / "opes_states"
         state_dir.mkdir(parents=True, exist_ok=True)
         tagged = state_dir / f"opes_state_{mc_step:08d}.json"
-        bias.save_state(tagged)
+        bias.save_state(
+            tagged, bias_cv=bias_cv, bias_cv_names=bias_cv_names,
+        )
         latest = state_dir / "opes_state_latest.json"
         shutil.copyfile(tagged, latest)
         print(
@@ -218,6 +433,41 @@ def _initial_trajectory(core: BoltzSamplerCore, n_steps: int | None = None) -> T
     return Trajectory(snaps)
 
 
+def _build_diagnostic_cv_functions(
+    names_csv: str | None,
+) -> dict[str, "Callable[[Trajectory], float]"] | None:
+    """Build a dict of diagnostic CV functions from a comma-separated name list.
+
+    Returns None when ``names_csv`` is empty/None.
+    Available names: contact_order, clash_count, lddt, ramachandran_outlier, rg.
+    """
+    if not names_csv:
+        return None
+    from genai_tps.backends.boltz.collective_variables import (  # noqa: PLC0415
+        contact_order,
+        clash_count,
+        ramachandran_outlier_fraction,
+        radius_of_gyration,
+    )
+    _registry: dict[str, "Callable"] = {
+        "contact_order": lambda traj: contact_order(traj[-1]),
+        "clash_count": lambda traj: clash_count(traj[-1]),
+        "ramachandran_outlier": lambda traj: ramachandran_outlier_fraction(traj[-1]),
+        "rg": lambda traj: radius_of_gyration(traj[-1]),
+    }
+    result: dict[str, "Callable"] = {}
+    for name in [n.strip() for n in names_csv.split(",") if n.strip()]:
+        if name in _registry:
+            result[name] = _registry[name]
+        else:
+            print(
+                f"[TPS-OPES] WARNING: unknown diagnostic CV '{name}'; skipping. "
+                f"Available: {sorted(_registry)}",
+                file=sys.stderr, flush=True,
+            )
+    return result if result else None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="OPES-biased enhanced TPS on Boltz-2 co-folding",
@@ -236,6 +486,50 @@ def main() -> None:
     parser.add_argument("--forward-only", action="store_true", default=False)
     parser.add_argument("--reshuffle-probability", type=float, default=0.1)
     parser.add_argument("--kernels", action="store_true")
+    parser.add_argument(
+        "--use-msa-server",
+        action="store_true",
+        help=(
+            "Boltz preprocessing: query the ColabFold/MMseqs2 MSA server "
+            "(https://api.colabfold.com) for protein chains that use auto MSA. "
+            "Your YAML must *not* set msa: empty on those proteins (omit the key "
+            "or use msa: path/to/file.a3m). With msa: empty, Boltz stays in "
+            "single-sequence mode regardless of this flag."
+        ),
+    )
+    parser.add_argument(
+        "--compile-model", action="store_true", default=False,
+        help=(
+            "Wrap preconditioned_network_forward with torch.compile(mode='reduce-overhead'). "
+            "First call incurs ~30s warmup; subsequent calls are 2-3x faster."
+        ),
+    )
+    parser.add_argument(
+        "--n-fixed-point", type=int, default=4,
+        help=(
+            "Fixed-point iterations for the backward-step implicit inversion "
+            "(default: 4). Reducing to 2 cuts backward-step cost by ~50%%; "
+            "the Hastings ratio absorbs the approximation error."
+        ),
+    )
+    parser.add_argument(
+        "--inference-dtype", type=str, default=None,
+        choices=["float32", "bfloat16"],
+        help=(
+            "Dtype for score-network forward passes. 'bfloat16' halves bandwidth "
+            "and uses tensor cores on Ampere/Ada GPUs (~1.5-2x on diffusion cost). "
+            "Only applied on CUDA. Default: None (float32, no autocast)."
+        ),
+    )
+    parser.add_argument(
+        "--diagnostic-cvs", type=str, default=None,
+        help=(
+            "Comma-separated list of diagnostic CV names to log per MC step "
+            "(observation-only; do not affect OPES bias). "
+            "Available: contact_order, clash_count, lddt, ramachandran_outlier, rg. "
+            "Example: --diagnostic-cvs contact_order,clash_count"
+        ),
+    )
 
     opes_group = parser.add_argument_group("OPES bias parameters")
     opes_group.add_argument(
@@ -259,12 +553,22 @@ def main() -> None:
         help="Kernel merge threshold in sigma units. (default: 1.0)",
     )
     opes_group.add_argument(
-        "--opes-sigma-min", type=float, default=0.0,
-        help="Minimum kernel width. (default: 0.0 = no floor)",
+        "--opes-sigma-min", type=float, default=0.005,
+        help=(
+            "Minimum kernel width (default: 0.005). Prevents sigma -> 0 when "
+            "consecutive accepted paths have identical CV values, which causes the "
+            "sigma_0/sigma height amplification to diverge and produce a density "
+            "spike of ~1e6. Set to 0.0 to disable the floor."
+        ),
     )
     opes_group.add_argument(
-        "--opes-fixed-sigma", type=float, default=None,
-        help="Fixed kernel width (overrides adaptive estimation). Default: adaptive.",
+        "--opes-fixed-sigma", type=str, default=None,
+        help=(
+            "Fixed kernel width per dimension (overrides adaptive estimation). "
+            "Provide a single float for all dimensions, or a comma-separated list "
+            "matching the number of --bias-cv CVs. E.g. '0.1' or '0.1,0.05'. "
+            "Default: adaptive."
+        ),
     )
     opes_group.add_argument(
         "--opes-explore", action="store_true", default=False,
@@ -279,20 +583,42 @@ def main() -> None:
         help="Path to saved OPES state JSON for restart.",
     )
     opes_group.add_argument(
-        "--bias-cv", type=str, default="openmm", choices=["rmsd", "rg", "openmm"],
+        "--bias-cv", type=str, default="openmm",
         help=(
-            "Collective variable for bias. "
-            "'openmm' (default): AMBER14/GBn2 Cα-RMSD to local energy minimum -- "
-            "identical to watch_rmsd_live.py; requires --topo-npz. "
-            "'rmsd': fast RMSD to initial structure (proxy; no OpenMM needed). "
-            "'rg': fast radius of gyration (proxy)."
+            "Collective variable(s) for the OPES bias.  "
+            "Single CV: one of {rmsd, rg, openmm, openmm_energy, contact_order, "
+            "clash_count, lddt, ramachandran_outlier, ligand_rmsd, ligand_pocket_dist, "
+            "ligand_contacts, ligand_hbonds}.  "
+            "Multi-CV (multi-D OPES): comma-separated list, e.g. "
+            "'contact_order,clash_count'.  "
+            "'openmm' (default): AMBER14/GBn2 Cα-RMSD to local energy minimum; "
+            "requires --topo-npz.  "
+            "'openmm_energy': raw AMBER14/GBn2 single-point energy (kJ/mol); "
+            "requires --topo-npz.  "
+            "'ligand_rmsd': ligand pose RMSD after Kabsch alignment on protein Cα "
+            "(BPMD/PLUMED TYPE=OPTIMAL convention); requires --topo-npz.  "
+            "'ligand_pocket_dist': COM–COM distance between ligand and pocket Cα; "
+            "requires --topo-npz.  "
+            "'ligand_contacts': PLUMED COORDINATION-style contact sum (r0=--contact-r0); "
+            "requires --topo-npz.  "
+            "'ligand_hbonds': N/O···N/O distance proxy for H-bonds (cutoff=--hbond-cutoff); "
+            "requires --topo-npz.  "
+            "'lddt': requires --reference-pdb or uses initial-trajectory coordinates."
+        ),
+    )
+    opes_group.add_argument(
+        "--reference-pdb", type=Path, default=None,
+        help=(
+            "Path to a reference PDB/coordinate file whose Cα coordinates are "
+            "used as the reference for --bias-cv lddt (and optionally --bias-cv rmsd). "
+            "Default: initial trajectory last frame."
         ),
     )
     opes_group.add_argument(
         "--topo-npz", type=Path, default=None,
         help=(
             "Path to Boltz processed/structures/*.npz for PDB conversion. "
-            "Required when --bias-cv openmm is used."
+            "Required when --bias-cv is openmm or openmm_energy."
         ),
     )
     opes_group.add_argument(
@@ -303,6 +629,28 @@ def main() -> None:
     opes_group.add_argument(
         "--openmm-max-iter", type=int, default=500,
         help="Max L-BFGS iterations per minimization (default: 500).",
+    )
+    opes_group.add_argument(
+        "--pocket-radius", type=float, default=6.0,
+        help=(
+            "Radius (Å) around the initial ligand COM used to define the binding pocket "
+            "for pose-quality CVs: ligand_rmsd, ligand_pocket_dist, ligand_contacts, "
+            "ligand_hbonds (default: 6.0)."
+        ),
+    )
+    opes_group.add_argument(
+        "--contact-r0", type=float, default=3.5,
+        help=(
+            "Switching-function half-maximum distance (Å) for the ligand_contacts CV. "
+            "Corresponds to PLUMED COORDINATION R_0 (default: 3.5)."
+        ),
+    )
+    opes_group.add_argument(
+        "--hbond-cutoff", type=float, default=3.5,
+        help=(
+            "Heavy-atom N/O···N/O distance cutoff (Å) for the ligand_hbonds CV "
+            "(standard H-bond donor-acceptor threshold without explicit H; default: 3.5)."
+        ),
     )
     opes_group.add_argument(
         "--save-opes-state-every", type=int, default=100,
@@ -360,7 +708,8 @@ def main() -> None:
         data=data_list, out_dir=boltz_run_dir,
         ccd_path=cache / "ccd.pkl", mol_dir=mol_dir,
         msa_server_url="https://api.colabfold.com",
-        msa_pairing_strategy="greedy", use_msa_server=False,
+        msa_pairing_strategy="greedy",
+        use_msa_server=bool(args.use_msa_server),
         boltz2=True, preprocessing_threads=1,
     )
 
@@ -426,7 +775,14 @@ def main() -> None:
         }
 
     diffusion = model.structure_module
-    core = BoltzSamplerCore(diffusion, atom_mask, network_kwargs, multiplicity=1)
+    _dtype_map = {"float32": torch.float32, "bfloat16": torch.bfloat16}
+    inference_dtype = _dtype_map.get(args.inference_dtype) if args.inference_dtype else None
+    core = BoltzSamplerCore(
+        diffusion, atom_mask, network_kwargs, multiplicity=1,
+        compile_model=args.compile_model,
+        n_fixed_point=args.n_fixed_point,
+        inference_dtype=inference_dtype,
+    )
     core.build_schedule(args.diffusion_steps)
     n_atoms = int(atom_mask.shape[1])
 
@@ -438,9 +794,42 @@ def main() -> None:
     if isinstance(last_snap, BoltzSnapshot) and last_snap.tensor_coords is not None:
         ref_coords = last_snap.tensor_coords[0].clone()
 
+    # Optional external reference PDB for lddt (and rmsd override).
+    lddt_reference = ref_coords  # default: initial trajectory
+    if args.reference_pdb is not None:
+        try:
+            import mdtraj as md  # noqa: PLC0415
+            _traj = md.load(str(args.reference_pdb))
+            ca_sel = _traj.top.select("name CA")
+            lddt_reference = torch.tensor(
+                _traj.xyz[0][ca_sel] * 10.0,  # nm -> Å
+                dtype=torch.float32,
+            )
+            print(
+                f"[TPS-OPES] Loaded reference PDB {args.reference_pdb} "
+                f"({ca_sel.shape[0]} Cα atoms)",
+                flush=True,
+            )
+        except Exception as exc:
+            print(
+                f"[TPS-OPES] WARNING: could not load --reference-pdb {args.reference_pdb}: {exc}; "
+                "falling back to initial-trajectory coordinates.",
+                file=sys.stderr, flush=True,
+            )
+
+    # Parse --bias-cv (single name or comma-separated list for multi-D).
+    try:
+        bias_cv_names = _parse_bias_cv_list(args.bias_cv)
+    except ValueError as exc:
+        print(f"[TPS-OPES] ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    ndim = len(bias_cv_names)
+
     # Auto-detect topo_npz from the processed structures directory if not set.
     topo_npz = args.topo_npz
-    if topo_npz is None and args.bias_cv == "openmm":
+    _needs_topo = {"openmm", "openmm_energy", "ligand_rmsd", "ligand_pocket_dist", "ligand_contacts", "ligand_hbonds"}
+    if topo_npz is None and _needs_topo & set(bias_cv_names):
         struct_candidates = sorted((processed_dir / "structures").glob("*.npz"))
         if struct_candidates:
             topo_npz = struct_candidates[0]
@@ -452,19 +841,27 @@ def main() -> None:
             print(f"[TPS-OPES] Auto-detected topo_npz: {topo_npz}", flush=True)
         else:
             print(
-                "[TPS-OPES] ERROR: --bias-cv openmm requires --topo-npz but no "
-                "processed/structures/*.npz found.",
+                "[TPS-OPES] ERROR: --bias-cv openmm/openmm_energy requires "
+                "--topo-npz but no processed/structures/*.npz found.",
                 file=sys.stderr, flush=True,
             )
             sys.exit(1)
 
-    cv_function = _make_cv_function(
-        args.bias_cv,
+    cv_function, ndim = _make_multi_cv_function(
+        bias_cv_names,
         reference_coords=ref_coords,
         topo_npz=topo_npz,
         openmm_platform=args.openmm_platform,
         openmm_max_iter=args.openmm_max_iter,
         mol_dir=mol_dir,
+        lddt_reference=lddt_reference,
+        pocket_radius=args.pocket_radius,
+        contact_r0=args.contact_r0,
+        hbond_cutoff=args.hbond_cutoff,
+    )
+    print(
+        f"[TPS-OPES] Bias CV(s): {bias_cv_names}  ndim={ndim}",
+        flush=True,
     )
 
     if args.opes_restart is not None:
@@ -472,7 +869,25 @@ def main() -> None:
         bias = OPESBias.load_state(args.opes_restart)
     else:
         biasfactor = float("inf") if args.opes_biasfactor <= 0 else args.opes_biasfactor
+
+        # Parse --opes-fixed-sigma: may be scalar string or comma-separated list
+        fixed_sigma: np.ndarray | None = None
+        if args.opes_fixed_sigma is not None:
+            fs_parts = [float(x.strip()) for x in str(args.opes_fixed_sigma).split(",") if x.strip()]
+            if len(fs_parts) == 1:
+                fixed_sigma = np.full(ndim, fs_parts[0])
+            elif len(fs_parts) == ndim:
+                fixed_sigma = np.array(fs_parts, dtype=np.float64)
+            else:
+                print(
+                    f"[TPS-OPES] ERROR: --opes-fixed-sigma has {len(fs_parts)} value(s) "
+                    f"but --bias-cv has {ndim} dimension(s).",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
         bias = OPESBias(
+            ndim=ndim,
             kbt=args.opes_kbt,
             barrier=args.opes_barrier,
             biasfactor=biasfactor,
@@ -481,7 +896,7 @@ def main() -> None:
             compression_threshold=args.opes_compression_threshold,
             pace=args.opes_pace,
             sigma_min=args.opes_sigma_min,
-            fixed_sigma=args.opes_fixed_sigma,
+            fixed_sigma=fixed_sigma,
             explore=args.opes_explore,
         )
 
@@ -507,7 +922,13 @@ def main() -> None:
     save_opes_every = max(0, int(args.save_opes_state_every))
     if save_opes_every > 0:
         periodic_extra.append(
-            (_opes_state_checkpoint_callback(bias, work_root, save_opes_every), save_opes_every)
+            (
+                _opes_state_checkpoint_callback(
+                    bias, work_root, save_opes_every,
+                    args.bias_cv, bias_cv_names,
+                ),
+                save_opes_every,
+            )
         )
 
     if args.save_cv_json_every is not None:
@@ -522,11 +943,24 @@ def main() -> None:
 
     def _opes_step_postprocess(mc_step: int, entry: dict) -> None:
         cv_raw = entry.get("cv_value")
+        log_entry: dict = {"mc_step": mc_step}
         if cv_raw is not None:
-            try:
-                cv_values_log.append({"mc_step": mc_step, "cv": float(cv_raw)})
-            except (TypeError, ValueError):
-                pass
+            # cv_raw may be a float (1-D) or a list (multi-D, already tolist()-ed)
+            if isinstance(cv_raw, list):
+                log_entry["cv"] = cv_raw  # list of floats for multi-D
+            else:
+                try:
+                    log_entry["cv"] = float(cv_raw)
+                except (TypeError, ValueError):
+                    pass
+            cv_values_log.append(log_entry)
+        # Append any diagnostic CVs to the log entry
+        for key, val in entry.items():
+            if key.startswith("diag_") and val is not None:
+                try:
+                    log_entry[key] = float(val)
+                except (TypeError, ValueError):
+                    pass
         with jsonl_path.open("a", encoding="utf-8") as jf:
             jf.write(json.dumps(entry, default=str) + "\n")
             jf.flush()
@@ -535,8 +969,10 @@ def main() -> None:
                 cv_data_path,
                 {
                     "cv_type": args.bias_cv,
-                    "cv_values": [x["cv"] for x in cv_values_log],
-                    "mc_steps": [x["mc_step"] for x in cv_values_log],
+                    "cv_names": bias_cv_names,
+                    "ndim": ndim,
+                    "cv_values": [x["cv"] for x in cv_values_log if "cv" in x],
+                    "mc_steps": [x["mc_step"] for x in cv_values_log if "cv" in x],
                 },
             )
 
@@ -554,10 +990,13 @@ def main() -> None:
         reshuffle_probability=args.reshuffle_probability,
         enhanced_bias=bias,
         cv_function=cv_function,
+        diagnostic_cv_functions=_build_diagnostic_cv_functions(args.diagnostic_cvs),
     )
 
     final_state_path = work_root / "opes_state_final.json"
-    bias.save_state(final_state_path)
+    bias.save_state(
+        final_state_path, bias_cv=args.bias_cv, bias_cv_names=bias_cv_names,
+    )
     print(
         f"[TPS-OPES] Final OPES state: {bias.n_kernels} kernels, "
         f"{bias.counter} depositions, zed={bias.zed:.4g}",
@@ -566,14 +1005,15 @@ def main() -> None:
 
     cv_data = {
         "cv_type": args.bias_cv,
-        "cv_values": [entry["cv"] for entry in cv_values_log],
-        "mc_steps": [entry["mc_step"] for entry in cv_values_log],
+        "cv_names": bias_cv_names,
+        "ndim": ndim,
+        "cv_values": [entry["cv"] for entry in cv_values_log if "cv" in entry],
+        "mc_steps": [entry["mc_step"] for entry in cv_values_log if "cv" in entry],
     }
     _atomic_write_json(cv_data_path, cv_data)
 
     cv_stats = {}
-    from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
-    if isinstance(cv_function, OpenMMLocalMinRMSD):
+    if ndim == 1 and isinstance(cv_function, (OpenMMLocalMinRMSD, OpenMMEnergy)):
         cv_stats = cv_function.stats()
         print(
             f"[TPS-OPES] OpenMM CV stats: {cv_stats['n_calls']} calls, "
@@ -589,6 +1029,8 @@ def main() -> None:
         "opes_pace": bias.pace,
         "opes_explore": bias.explore,
         "bias_cv": args.bias_cv,
+        "bias_cv_names": bias_cv_names,
+        "ndim": ndim,
         "total_steps": len(tps_step_log),
         "n_kernels_final": bias.n_kernels,
         "n_depositions": bias.counter,

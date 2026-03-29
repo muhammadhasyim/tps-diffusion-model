@@ -125,6 +125,7 @@ def batch_export(
     frame_idx: int = -1,
     glob: str = "tps_mc_step_*.npz",
     skip_patterns: Tuple[str, ...] = ("last_frame", "latest"),
+    max_files: int | None = None,
 ) -> list[Path]:
     """Convert every checkpoint NPZ in *ckpt_dir* to a last-frame PDB.
 
@@ -142,6 +143,9 @@ def batch_export(
         Glob pattern for checkpoint files within *ckpt_dir*.
     skip_patterns:
         NPZ stems containing any of these substrings are skipped.
+    max_files:
+        If set and positive, only process the first *max_files* checkpoints (after
+        sort and skip filter).
 
     Returns
     -------
@@ -153,6 +157,8 @@ def batch_export(
         p for p in ckpt_dir.glob(glob)
         if not any(pat in p.stem for pat in skip_patterns)
     )
+    if max_files is not None and max_files > 0:
+        ckpts = ckpts[:max_files]
     written: list[Path] = []
     for ckpt in ckpts:
         out_pdb = out_dir / (ckpt.stem + "_last.pdb")

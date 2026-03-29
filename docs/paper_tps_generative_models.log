@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  24 MAR 2026 13:32
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2026.1.30)  27 MAR 2026 20:03
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -383,10 +383,10 @@ Document Style algorithmicx 1.2 - a greatly improved `algorithmic' style
 Document Style - pseudocode environments for use with the `algorithmicx' style
 )
 Class revtex4-2 Info: Unrecognized LaTeX tabular. Please update this document c
-lass! (Proceeding with fingers crossed.) on input line 12.
-Class revtex4-2 Info: cite was not loaded (OK!) on input line 12.
-Class revtex4-2 Info: mcite was not loaded (OK!) on input line 12.
-Class revtex4-2 Info: multicol was not loaded (OK!) on input line 12.
+lass! (Proceeding with fingers crossed.) on input line 18.
+Class revtex4-2 Info: cite was not loaded (OK!) on input line 18.
+Class revtex4-2 Info: mcite was not loaded (OK!) on input line 18.
+Class revtex4-2 Info: multicol was not loaded (OK!) on input line 18.
  (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
 File: l3backend-pdftex.def 2022-01-12 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count296
@@ -395,24 +395,24 @@ File: l3backend-pdftex.def 2022-01-12 L3 backend support: PDF output (pdfTeX)
 (./paper_tps_generative_models.aux)
 \openout1 = `paper_tps_generative_models.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 12.
-LaTeX Font Info:    ... okay on input line 12.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 18.
+LaTeX Font Info:    ... okay on input line 18.
 
 (/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
@@ -436,7 +436,7 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
-Package hyperref Info: Link coloring OFF on input line 12.
+Package hyperref Info: Link coloring OFF on input line 18.
 
 (/usr/share/texlive/texmf-dist/tex/latex/hyperref/nameref.sty
 Package: nameref 2021-04-02 v2.47 Cross-referencing by name of section
@@ -449,130 +449,218 @@ Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 )
 \c@section@level=\count303
 )
-LaTeX Info: Redefining \ref on input line 12.
-LaTeX Info: Redefining \pageref on input line 12.
-LaTeX Info: Redefining \nameref on input line 12.
+LaTeX Info: Redefining \ref on input line 18.
+LaTeX Info: Redefining \pageref on input line 18.
+LaTeX Info: Redefining \nameref on input line 18.
 
 (./paper_tps_generative_models.out) (./paper_tps_generative_models.out)
 \@outlinefile=\write4
 \openout4 = `paper_tps_generative_models.out'.
 
-Class revtex4-2 Info: Taking \maketitle back from hyperref on input line 12.
+Class revtex4-2 Info: Taking \maketitle back from hyperref on input line 18.
 \openout3 = `paper_tps_generative_modelsNotes.bib'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 32.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 38.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 32.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 38.
 
 
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-Underfull \hbox (badness 3019) in paragraph at lines 43--58
+Underfull \hbox (badness 3019) in paragraph at lines 57--72
 []\OT1/cmr/m/n/10 Diffusion-based struc-ture gen-er-a-tors such as Al-
  []
 
 
-Package hyperref Warning: Suppressing empty link on input line 79.
+Underfull \hbox (badness 3158) in paragraph at lines 57--72
+\OT1/cmr/m/n/10 phaFold3 [[]], Boltz-2 [[]], and RoseTTAFold All-
+ []
 
 
-LaTeX Warning: Reference `eq:deltabwd' on page 1 undefined on input line 112.
+Package hyperref Warning: Suppressing empty link on input line 93.
+
+
+LaTeX Warning: Reference `eq:deltabwd' on page 1 undefined on input line 126.
 
 [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
-Overfull \hbox (11.92316pt too wide) detected at line 155
+
+LaTeX Warning: A float is stuck (cannot be placed) on input line 187.
+
+
+LaTeX Warning: A float is stuck (cannot be placed) on input line 187.
+
+
+Class revtex4-2 Warning: Deferred float stuck during \clearpage processing.
+
+
+Overfull \hbox (11.92316pt too wide) detected at line 205
 [][][] \OML/cmm/m/it/10 P\OT1/cmr/m/n/10 (\OMS/cmsy/m/n/10 X\OT1/cmr/m/n/10 ) =
  [] \OML/cmm/m/it/10 ^^Z\OT1/cmr/m/n/10 (\OML/cmm/m/it/10 x[]\OT1/cmr/m/n/10 ) 
 + [] [] \OML/cmm/m/it/10 ;
  []
 
 
-Underfull \hbox (badness 5374) in paragraph at lines 177--185
+Underfull \hbox (badness 5374) in paragraph at lines 227--235
 \OT1/cmr/m/n/10 The pro-posed path is ac-cepted with prob-a-bil-ity
  []
 
 
-Underfull \hbox (badness 2277) in paragraph at lines 188--195
+Underfull \hbox (badness 2277) in paragraph at lines 238--245
 []\OT1/cmr/m/n/10 We ap-ply the frame-work to a 228-residue two-
  []
 
-<../cofolding_tps_out_fixed/checkpoint_last_frames_grid.png, id=98, 2007.5pt x 
-871.255pt>
-File: ../cofolding_tps_out_fixed/checkpoint_last_frames_grid.png Graphic file (
-type png)
-<use ../cofolding_tps_out_fixed/checkpoint_last_frames_grid.png>
-Package pdftex.def Info: ../cofolding_tps_out_fixed/checkpoint_last_frames_grid
-.png  used on input line 218.
-(pdftex.def)             Requested size: 246.0pt x 106.75293pt.
+[2]
+<figs/basin_structural_ensemble.png, id=124, 772.5663pt x 614.295pt>
+File: figs/basin_structural_ensemble.png Graphic file (type png)
+<use figs/basin_structural_ensemble.png>
+Package pdftex.def Info: figs/basin_structural_ensemble.png  used on input line
+ 268.
+(pdftex.def)             Requested size: 510.0pt x 405.51093pt.
 
-Underfull \hbox (badness 1616) in paragraph at lines 241--253
+
+Package hyperref Warning: Suppressing empty link on input line 291.
+
+<figs/opes_tps_ligand_2d_fes.png, id=132, 1271.952pt x 328.5876pt>
+File: figs/opes_tps_ligand_2d_fes.png Graphic file (type png)
+<use figs/opes_tps_ligand_2d_fes.png>
+Package pdftex.def Info: figs/opes_tps_ligand_2d_fes.png  used on input line 31
+6.
+(pdftex.def)             Requested size: 246.0pt x 63.55037pt.
+
+Underfull \hbox (badness 10000) in paragraph at lines 349--354
+ []\OT1/cmr/bx/n/10 Correlated pocket dis-place-ment\OT1/cmr/m/n/10 : the
+ []
+
+
+Underfull \hbox (badness 8075) in paragraph at lines 349--354
+ \OT1/cmr/m/n/10 metastable high-RMSD con-fig-u-ra-tions clus-ter
+ []
+
+
+Underfull \hbox (badness 1867) in paragraph at lines 377--392
+\OT1/cmr/m/n/10 grees of free-dom, and the sec-ondary basins could
+ []
+
+
+Underfull \hbox (badness 1394) in paragraph at lines 377--392
+\OT1/cmr/m/n/10 with di-ag-nos-tic CVs (steric clashes, Ra-machan-dran
+ []
+
+[3]
+Underfull \hbox (badness 1616) in paragraph at lines 403--415
 []\OT1/cmr/m/n/10 This per-spec-tive el-e-vates TPS from a rare-event
  []
 
-[2 <../cofolding_tps_out_fixed/checkpoint_last_frames_grid.png (PNG copy)>]
-<fig_distributions_placeholder.pdf, id=120, 476.86794pt x 196.56688pt>
+[4 <./figs/basin_structural_ensemble.png>]
+
+LaTeX Warning: A float is stuck (cannot be placed) on input line 430.
+
+
+LaTeX Warning: A float is stuck (cannot be placed) on input line 430.
+
+
+Class revtex4-2 Warning: Deferred float stuck during \clearpage processing.
+
+<fig_distributions_placeholder.pdf, id=166, 476.86794pt x 196.56688pt>
 File: fig_distributions_placeholder.pdf Graphic file (type pdf)
 <use fig_distributions_placeholder.pdf>
 Package pdftex.def Info: fig_distributions_placeholder.pdf  used on input line 
-256.
+433.
 (pdftex.def)             Requested size: 246.0pt x 101.40253pt.
 
-Underfull \hbox (badness 7064) in paragraph at lines 341--344
+Underfull \hbox (badness 3138) in paragraph at lines 487--492
+ []\OT1/cmr/m/n/9 M. R. Hasyim, Sup-port-ing In-for-ma-tion: Prob-ing
+ []
+
+
+Underfull \hbox (badness 6625) in paragraph at lines 487--492
+ \OT1/cmr/m/n/9 Gen-er-a-tive Pro-tein Struc-ture Mod-els with Tran-
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 487--492
+ \OT1/cmr/m/n/9 si-tion Path Sam-pling, un-pub-lished (2025); see
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 487--492
+ \OT1/cmtt/m/n/9 docs/paper[]tps[]generative[]models[]SI.tex \OT1/cmr/m/n/9 in 
+the
+ []
+
+
+Underfull \hbox (badness 1270) in paragraph at lines 499--502
+ \OT1/cmr/m/n/9 ver-gence speed in adaptive-bias en-hanced sam-pling,
+ []
+
+[5 <./figs/opes_tps_ligand_2d_fes.png> <./fig_distributions_placeholder.pdf>]
+Underfull \hbox (badness 7064) in paragraph at lines 542--545
  []\OT1/cmr/m/n/9 P. G. Bol-huis, D. Chan-dler, C. Del-lago, and
  []
 
 
-Underfull \hbox (badness 1817) in paragraph at lines 341--344
+Underfull \hbox (badness 1817) in paragraph at lines 542--545
  \OT1/cmr/m/n/9 P. L. Geissler, Tran-si-tion path sam-pling: Throw-
  []
 
 No file paper_tps_generative_models.bbl.
-[3 <./fig_distributions_placeholder.pdf>] (./paper_tps_generative_models.aux)
+[6] (./paper_tps_generative_models.aux)
 
 LaTeX Warning: There were undefined references.
 
 Package rerunfilecheck Info: File `paper_tps_generative_models.out' has not cha
 nged.
-(rerunfilecheck)             Checksum: AD90A28CDEA13160E1BF8223F5860ECF;1146.
+(rerunfilecheck)             Checksum: 23DE87562F69E7F226B113D611FEC90B;1488.
  ) 
 Here is how much of TeX's memory you used:
- 12516 strings out of 479598
- 188169 string characters out of 5880928
- 530302 words of memory out of 5000000
- 30428 multiletter control sequences out of 15000+600000
- 482945 words of font info for 78 fonts, out of 8000000 for 9000
+ 12574 strings out of 479598
+ 188911 string characters out of 5880928
+ 527105 words of memory out of 5000000
+ 30470 multiletter control sequences out of 15000+600000
+ 483617 words of font info for 82 fonts, out of 8000000 for 9000
  309 hyphenation exceptions out of 8191
- 60i,10n,63p,920b,405s stack positions out of 5000i,500n,10000p,200000b,80000s
-</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></us
-r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr/share
-/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx9.pfb></usr/share/texliv
-e/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texm
-f-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist
-/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/
-type1/public/amsfonts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/p
-ublic/amsfonts/cm/cmmi8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/a
-msfonts/cm/cmmi9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts
-/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr
-6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></
-usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/shar
-e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/share/texliv
-e/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texm
-f-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/share/texlive/texmf-dist/
-fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/share/texlive/texmf-dist/fonts/t
-ype1/public/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/pu
-blic/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/am
-sfonts/cm/cmsy9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/
-cm/cmti10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmt
-i8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti9.pfb>
-</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt9.pfb></usr/s
-hare/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on paper_tps_generative_models.pdf (3 pages, 1086291 bytes).
+ 60i,10n,63p,1079b,504s stack positions out of 5000i,500n,10000p,200000b,80000s
+</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></us
+r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/shar
+e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx6.pfb></usr/share/texli
+ve/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb></usr/share/texlive/texm
+f-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></usr/share/texlive/texmf-dist/
+fonts/type1/public/amsfonts/cm/cmbx9.pfb></usr/share/texlive/texmf-dist/fonts/t
+ype1/public/amsfonts/cm/cmex10.pfb></usr/share/texlive/texmf-dist/fonts/type1/p
+ublic/amsfonts/cmextra/cmex8.pfb></usr/share/texlive/texmf-dist/fonts/type1/pub
+lic/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/am
+sfonts/cm/cmmi5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/
+cm/cmmi6.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi
+7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb><
+/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/sh
+are/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/tex
+live/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/share/texlive/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/share/texlive/texmf-dist/
+fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/ty
+pe1/public/amsfonts/cm/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/publ
+ic/amsfonts/cm/cmr9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfo
+nts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm
+/cmsy5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.
+pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></u
+sr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/shar
+e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/share/texli
+ve/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/share/texlive/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmti8.pfb></usr/share/texlive/texmf-dist
+/fonts/type1/public/amsfonts/cm/cmti9.pfb></usr/share/texlive/texmf-dist/fonts/
+type1/public/amsfonts/cm/cmtt10.pfb></usr/share/texlive/texmf-dist/fonts/type1/
+public/amsfonts/cm/cmtt8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/
+amsfonts/cm/cmtt9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfont
+s/symbols/msam10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts
+/symbols/msbm10.pfb>
+Output written on paper_tps_generative_models.pdf (6 pages, 4608397 bytes).
 PDF statistics:
- 305 PDF objects out of 1000 (max. 8388607)
- 200 compressed objects within 2 object streams
- 35 named destinations out of 1000 (max. 500000)
- 67 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 395 PDF objects out of 1000 (max. 8388607)
+ 265 compressed objects within 3 object streams
+ 48 named destinations out of 1000 (max. 500000)
+ 80 words of extra memory for PDF output out of 10000 (max. 10000000)
 

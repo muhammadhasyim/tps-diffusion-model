@@ -17,7 +17,12 @@ the TPS acceptance probability via ``trial.bias`` in the MC loop.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Protocol, Union, runtime_checkable
+
+import numpy as np
+
+# CV value type: scalar float for 1-D bias, np.ndarray shape (D,) for N-D.
+CVValue = Union[float, np.ndarray]
 
 
 @runtime_checkable
@@ -32,13 +37,16 @@ class EnhancedSamplingBias(Protocol):
       decision with the CV value of the current (accepted) path.  Used by
       adaptive methods (OPES) to evolve the bias; no-op for fixed methods
       (exponential tilting).
+
+    CV values may be a scalar ``float`` (1-D bias) or a 1-D ``np.ndarray``
+    of shape ``(D,)`` for a multi-dimensional bias.
     """
 
-    def compute_acceptance_factor(self, cv_old: float, cv_new: float) -> float:
+    def compute_acceptance_factor(self, cv_old: CVValue, cv_new: CVValue) -> float:
         """Return multiplicative factor for trial.bias given old and new CV values."""
         ...
 
-    def update(self, cv_accepted: float, mc_step: int) -> None:
+    def update(self, cv_accepted: CVValue, mc_step: int) -> None:
         """Update internal state after accept/reject with the accepted path's CV."""
         ...
 

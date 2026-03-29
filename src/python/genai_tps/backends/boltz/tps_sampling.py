@@ -490,7 +490,8 @@ def run_tps_path_sampling(
     forward_only: bool = False,
     reshuffle_probability: float = 0.1,
     enhanced_bias: "EnhancedSamplingBias | None" = None,
-    cv_function: Callable[[Trajectory], float] | None = None,
+    cv_function: "Callable[[Trajectory], float | np.ndarray] | None" = None,
+    diagnostic_cv_functions: "dict[str, Callable[[Trajectory], float]] | None" = None,
 ) -> tuple[Trajectory, list[dict[str, Any]]]:
     """Run OPS :class:`PathSampling` with one-way shooting; return final trajectory and step log.
 
@@ -542,6 +543,13 @@ def run_tps_path_sampling(
     cv_function
         Callable that takes a :class:`Trajectory` and returns a scalar CV value
         (e.g. RMSD of the last frame).  Required when ``enhanced_bias`` is set.
+    diagnostic_cv_functions
+        Optional dict mapping diagnostic CV names to callables
+        ``(trajectory) -> float``.  These CVs are evaluated on the **current
+        accepted path** after each MC step and logged in the step entry under
+        the key ``"diag_<name>"``.  They do **not** feed into the OPES bias.
+        Useful for monitoring memorization / mode-collapse / unphysical geometry
+        without perturbing the sampling distribution.
     """
     if enhanced_bias is not None and cv_function is None:
         raise ValueError("cv_function is required when enhanced_bias is set.")
@@ -632,13 +640,13 @@ def run_tps_path_sampling(
                 "min_1_r": min_1_r,
             }
 
-            cv_val: float | None = None
+            cv_val: "float | np.ndarray | None" = None
             if enhanced_bias is not None and cv_function is not None:
                 cur_traj = _rep0_trajectory(sampler.sample_set)
                 if cur_traj is not None:
                     try:
                         cv_val = cv_function(cur_traj)
-                        if cv_val is not None and math.isfinite(cv_val):
+                        if cv_val is not None and np.all(np.isfinite(np.atleast_1d(cv_val))):
                             enhanced_bias.update(cv_val, i + 1)
                         elif cv_val is not None:
                             _tps_logger.warning(
@@ -650,7 +658,26 @@ def run_tps_path_sampling(
                         _tps_logger.warning(
                             "Enhanced bias update failed at step %d: %s", i + 1, exc
                         )
-                entry["cv_value"] = cv_val
+                # Serialize cv_val for JSON: convert ndarray to list
+                if isinstance(cv_val, np.ndarray):
+                    entry["cv_value"] = cv_val.tolist()
+                else:
+                    entry["cv_value"] = cv_val
+
+            # Evaluate diagnostic CVs (observation-only: do not affect acceptance)
+            if diagnostic_cv_functions:
+                _diag_traj = _rep0_trajectory(sampler.sample_set)
+                for diag_name, diag_fn in diagnostic_cv_functions.items():
+                    diag_val: float | None = None
+                    try:
+                        if _diag_traj is not None:
+                            diag_val = diag_fn(_diag_traj)
+                    except Exception as exc:
+                        _tps_logger.warning(
+                            "Diagnostic CV '%s' failed at step %d: %s",
+                            diag_name, i + 1, exc,
+                        )
+                    entry[f"diag_{diag_name}"] = diag_val
 
             step_log.append(entry)
 
@@ -664,7 +691,14 @@ def run_tps_path_sampling(
             # is None (log as "na", not a blank field).
             mp = "na" if metro_p is None else f"{float(metro_p):.6g}"
             m1 = "na" if min_1_r is None else f"{float(min_1_r):.6g}"
-            cv_str = "na" if cv_val is None else f"{cv_val:.6g}"
+            if cv_val is None:
+                cv_str = "na"
+            elif isinstance(cv_val, np.ndarray):
+                cv_str = "[" + ",".join(f"{v:.6g}" for v in cv_val.ravel()) + "]"
+            elif isinstance(cv_val, (list, tuple)):
+                cv_str = "[" + ",".join(f"{float(v):.6g}" for v in cv_val) + "]"
+            else:
+                cv_str = f"{float(cv_val):.6g}"
             log_file.write(
                 f"step {entry['step']} accepted {accepted} "
                 f"metropolis_acceptance {mp} min_1_r {m1} mover {mover_name}"

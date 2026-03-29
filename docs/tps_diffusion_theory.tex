@@ -1,6 +1,13 @@
 % ============================================================
 %  Transition Path Sampling for Boltz-2 Reverse Diffusion
 %  Merged theory: rigorous formulation + implementation notes
+%
+%  NOTE: This file is a standalone working notes document.
+%  The canonical Supporting Information for publication is:
+%    docs/paper_tps_generative_models_SI.tex
+%  which is generated from the content below.  If editing either
+%  document, keep them consistent.  The SI omits implementation-only
+%  notes (commit hashes, bug histories) for concision.
 % ============================================================
 \documentclass[11pt,a4paper]{article}
 
@@ -673,30 +680,88 @@ All four layers are implemented in commit \texttt{f0c6731}.
 \label{sec:cvs}
 % ============================================================
 
-The following collective variables (CVs) are evaluated on the
-intermediate structures $\{x_i\}$ or on the denoised predictions
-$\{\xhat_i\}$ at each step:
+The following collective variables (CVs) are available in
+\texttt{collective\_variables.py}.  They are evaluated per MC step on the
+current accepted path and logged to \texttt{cv\_values.json} alongside the
+OPES bias CV.  \emph{Diagnostic CVs do not feed into the OPES bias.}
 
+\subsection*{Bias CV (sampling)}
 \begin{description}
-  \item[RMSD] Root-mean-square deviation to a reference structure
-    $x_{\mathrm{ref}}$ after Kabsch alignment:
-    $\mathrm{RMSD}(x_i) = \sqrt{\frac{1}{M}\sum_m \|x_i^m - x_{\mathrm{ref}}^m\|^2}$.
-    Implemented via \texttt{kabsch\_rmsd\_aligned} in
-    \texttt{collective\_variables.py}.
+  \item[OpenMM Cα-RMSD to local minimum (\textbf{sole bias CV})]
+    Each last frame of the TPS trajectory is energy-minimised with
+    AMBER14/GBn2 (OpenMM, L-BFGS).  The Kabsch-aligned Cα-RMSD between
+    the raw generated structure and its own local minimum is used as the
+    OPES collective variable.  Structures near a stable fold have low RMSD;
+    hallucinated or disordered structures have high RMSD.
+\end{description}
+
+\subsection*{Geometric diagnostic CVs}
+\begin{description}
+  \item[Contact order]
+    Fraction of long-range Cα pairs (sequence separation $\geq 6$,
+    threshold $8\,\text{\AA}$):
+    \[
+      \mathrm{CO}(x) = \frac{|\{(i,j): |i-j|\geq 6,\; d_{ij}<8\,\text{\AA}\}|}
+                            {|\{(i,j): |i-j|\geq 6\}|}
+    \]
+    Detects \textbf{mode collapse} (near-zero variance across ensemble implies
+    constant CO) and fold topology changes.  Implemented as
+    \texttt{contact\_order} in \texttt{collective\_variables.py}.
+
+  \item[Steric clash count]
+    Number of Cα pairs with $|i-j|\geq 3$ and $d_{ij}<3.0\,\text{\AA}$
+    (each pair counted once):
+    \[
+      N_{\mathrm{clash}}(x) = |\{(i,j): |i-j|\geq 3,\; d_{ij}<3.0\,\text{\AA},\; i<j\}|
+    \]
+    Detects \textbf{unphysical packing}, collapsed structures, and raw Boltz
+    output artefacts before OpenMM minimisation.  Implemented as
+    \texttt{clash\_count}.
+
+  \item[lDDT to reference]
+    Alignment-free local distance difference test \cite{Mariani2013}:
+    for each pair within $15\,\text{\AA}$ in the reference,
+    compute fraction of $|d^{\mathrm{query}}_{ij}-d^{\mathrm{ref}}_{ij}|$
+    below thresholds $\{0.5, 1.0, 2.0, 4.0\}\,\text{\AA}$, average:
+    \[
+      \mathrm{lDDT}(x, x_{\mathrm{ref}}) =
+        \frac{1}{4}\sum_{t\in\{0.5,1,2,4\}}
+        \frac{|\{(i,j): d^{\mathrm{ref}}_{ij}<15,\;
+              |d^{\mathrm{query}}_{ij}-d^{\mathrm{ref}}_{ij}|<t\}|}
+             {|\{(i,j): d^{\mathrm{ref}}_{ij}<15\}|}
+    \]
+    Detects \textbf{memorisation} ($\mathrm{lDDT}\approx 1$ implies
+    near-exact reproduction of the reference, likely a training set structure)
+    and local structural errors masked by good global RMSD.  Implemented as
+    \texttt{lddt\_to\_reference}.
+
+  \item[Ramachandran outlier fraction]
+    Fraction of residues with $(\phi,\psi)$ backbone dihedral angles outside
+    the simplified ``allowed'' Ramachandran regions
+    (Lovell et~al.\ 2003 contour approximation):
+    \[
+      f_{\mathrm{Rama}}(x) = \frac{N_{\mathrm{outlier}}}{N_{\mathrm{classified}}}
+    \]
+    Detects \textbf{unphysical backbone geometry}, hallucinated secondary
+    structure, and model shortcuts that satisfy RMSD but violate local
+    chemistry.  Implemented as \texttt{ramachandran\_outlier\_fraction}.
 
   \item[Radius of gyration]
-    $R_g(x_i) = \sqrt{\frac{1}{M}\sum_m \|x_i^m - \bar x_i\|^2}$.
+    $R_g(x) = \sqrt{\frac{1}{M}\sum_m \|x^m - \bar x\|^2}$
+    (Ångström, no mass weighting).
+    Detects global compaction / elongation changes along TPS trajectories.
+    Implemented as \texttt{radius\_of\_gyration}.
+\end{description}
 
-  \item[Contact order] Fraction of long-range contacts (sequence
-    separation $\geq 6$) with threshold $8\,\text{\AA}$.
-
-  \item[pLDDT of denoised prediction]
-    Applied to $\xhat_i = \Dtheta(\xnoisy_i, \that_i)$.  Tracks how
-    ``confident'' the model is at each denoising step.
-
-  \item[Attention entropy] Entropy of the attention weights in
-    $\ftheta$ at step $i$, measuring localisation of the model's
-    attention during denoising.
+\subsection*{Model self-confidence CV}
+\begin{description}
+  \item[Boltz pLDDT (model self-confidence)]
+    Mean per-residue pLDDT (0--100 scale) from the Boltz-2 confidence head
+    applied to the final denoised prediction.  Tracks how ``confident'' the
+    model is in its own output.  High pLDDT with large OpenMM RMSD indicates
+    \textbf{miscalibration} or overconfident hallucination.  Wired via
+    \texttt{make\_boltz\_plddt\_predictor} in \texttt{collective\_variables.py};
+    requires a loaded \texttt{Boltz2} model instance.
 
   \item[Step index $i$] Serves as the simplest reaction coordinate.
     The TPS committor $q(x_i) \approx i/L$ is a useful reference.
@@ -705,6 +770,17 @@ $\{\xhat_i\}$ at each step:
     ($\sigma_i \geq \sigma_A$) and state B ($\sigma_i \leq \sigma_B$)
     as used in \texttt{states.py}.
 \end{description}
+
+\subsection*{CVs not recommended at this stage}
+\begin{itemize}
+  \item \textbf{TM-score to training set}: requires a database of training
+    structures and TM-align; better as post-hoc analysis on saved checkpoints.
+  \item \textbf{Attention entropy}: requires hooking into Boltz internals at
+    every denoising step; high implementation cost for uncertain diagnostic value.
+  \item \textbf{Pairwise diversity} (mean pairwise RMSD, cluster count):
+    ensemble-level statistics, not per-step CVs; compute post-hoc from
+    saved checkpoint NPZ files.
+\end{itemize}
 
 % ============================================================
 \section*{References}

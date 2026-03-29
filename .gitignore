@@ -5,6 +5,7 @@ __pycache__/
 *.pyo
 
 opes*case2/
+muhammad*/
 
 # ── Python packaging / build artifacts ────────────────────────────────────────
 *.egg-info/

@@ -1,0 +1,612 @@
+%% Supporting Information for:
+%%   "Probing Generative Protein Structure Models with Transition Path Sampling"
+%%   Muhammad R. Hasyim, Simons Center for Computational Physical Chemistry, NYU
+%%
+%% This file contains the full technical derivation of the TPS framework for
+%% Boltz-2 reverse diffusion, together with the OPES-enhanced sampling
+%% integration and collective variable definitions.
+%%
+%% Build:   pdflatex paper_tps_generative_models_SI.tex
+%%
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{bbm}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{booktabs}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+% ---------- theorem environments ----------
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+% ---------- notation: match main letter ----------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\slogdet}{\operatorname{slogdet}}
+\newcommand{\Haar}{\mu_{\mathrm{Haar}}}
+\newcommand{\xtilde}{\tilde{x}}
+\newcommand{\xnoisy}{x^{\mathrm{noisy}}}
+\newcommand{\xhat}{\hat{x}}
+\newcommand{\that}{\hat{t}}
+\newcommand{\Dtheta}{D_\theta}
+\newcommand{\ftheta}{f_\theta}
+\newcommand{\cskip}{c_{\mathrm{skip}}}
+\newcommand{\cout}{c_{\mathrm{out}}}
+\newcommand{\cin}{c_{\mathrm{in}}}
+\newcommand{\cnoise}{c_{\mathrm{noise}}}
+\newcommand{\sigmaD}{\sigma_{\mathrm{d}}}
+\newcommand{\HAB}{H_{AB}}
+\newcommand{\pacc}{p_{\mathrm{acc}}}
+\newcommand{\pfwd}{p_{\mathrm{fwd}}}
+\newcommand{\pbwd}{p_{\mathrm{bwd}}}
+\newcommand{\Xold}{X^{\mathrm{o}}}
+\newcommand{\Xnew}{X^{\mathrm{n}}}
+\newcommand{\kold}{\hat{k}^{\mathrm{o}}}
+\newcommand{\knew}{\hat{k}^{\mathrm{n}}}
+
+\title{\textbf{Supporting Information}\\[4pt]
+Probing Generative Protein Structure Models\\
+with Transition Path Sampling}
+\author{Muhammad R.~Hasyim\\
+\small Simons Center for Computational Physical Chemistry,
+New York University, New York, NY~10003}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Extended State Space and Notation}
+\label{sec:setup}
+% ============================================================
+
+\subsection{Boltz-2 reverse sampler as discrete-time stochastic dynamics}
+
+Boltz-2~\cite{boltz2} generates biomolecular structures via reverse diffusion:
+starting from Gaussian noise, the model iteratively denoises atom coordinates
+over $L$ steps until a plausible 3-D structure emerges.  We treat this
+reverse sampler as a \emph{discrete-time, inhomogeneous Markov chain} and
+apply the Bolhuis--Chandler--Dellago transition path sampling
+(TPS)~\cite{bolhuis2002,falkner2023} framework to it.
+
+At each diffusion step $i \in \{0,1,\ldots,L\}$, define the extended state
+\begin{equation}
+  \mathcal{S}_i = \bigl(x_i,\; R_i,\; \tau_i,\; \varepsilon_i,\; i\bigr),
+\end{equation}
+where:
+\begin{itemize}
+  \item $x_i \in \R^{M \times 3}$: atom coordinates for $M$ atoms.
+  \item $R_i \in \mathrm{SO}(3)$: random rotation drawn from the Haar
+        (uniform) measure, implemented via \texttt{random\_quaternions}.
+  \item $\tau_i \in \R^{1 \times 3}$: translation from
+        $\N(0, s_{\mathrm{trans}}^2 I)$, $s_{\mathrm{trans}} = 1.0$.
+  \item $\varepsilon_i \in \R^{M \times 3}$: ``churn'' noise at step $i$.
+\end{itemize}
+
+The TPS boundary states are:
+\begin{align}
+  \text{State } A &: x_0 \sim \N(0,\, \sigma_{\max}^2 I)\quad (\text{pure noise}),\\
+  \text{State } B &: \phi(x_L) \in B\quad (\text{reactive endpoint, e.g.\ pLDDT threshold or RMSD cutoff}).
+\end{align}
+
+\paragraph{SE(3) augmentation (Option~A).}
+At each step Boltz-2 applies a random rigid transformation to the current
+coordinates before noise injection and denoising.  Including $(R_i,\tau_i)$
+in the extended state preserves the exact path probability factorization.
+Crucially, the Haar and translation terms cancel exactly in all acceptance
+ratios (proved in \cref{sec:jacobian-cancellation}), so the only runtime
+overhead is storing two small tensors per step.
+
+\paragraph{SE(3) augmentation index (implementation note).}
+When \texttt{single\_backward\_step}$(x_{i+1}, i)$ runs, it samples a
+fresh augmentation $(R_i, \tau_i)$ and stores it on the \emph{result}
+frame $x_i$.  For a backward-generated frame $x_i$, the correct
+augmentation to pass to \texttt{recover\_forward\_noise} is $s_0.R$ and
+$s_0.\tau$, not $s_1.R$ and $s_1.\tau$.
+
+% ============================================================
+\section{Full Transition Kernel with SE(3) Augmentation}
+\label{sec:kernel}
+% ============================================================
+
+\subsection{The one-step map}
+
+Each reverse-diffusion step consists of three sub-steps:
+
+\paragraph{(a) SE(3) augmentation.}
+\begin{equation}
+  \xtilde_i = R_i \cdot \bigl(x_i - \bar x_i\bigr) + \tau_i,
+  \qquad
+  R_i \sim \Haar\bigl(\mathrm{SO}(3)\bigr),\quad
+  \tau_i \sim \N\bigl(0,\, s_{\mathrm{trans}}^2 I\bigr),
+  \label{eq:se3-aug}
+\end{equation}
+where $\bar x_i = \frac{1}{M}\sum_m (x_i)_m$ is the centroid.
+
+\paragraph{(b) Churn noise injection.}
+Define $\that_i = \sigma_{i-1}(1 + \gamma_i)$ and inject
+\begin{equation}
+  \xnoisy_i = \xtilde_i + \varepsilon_i,
+  \qquad
+  \varepsilon_i \sim \N\bigl(0,\, v_i\, I\bigr),\quad
+  v_i = \eta^2\bigl(\that_i^2 - \sigma_{i-1}^2\bigr).
+  \label{eq:noise-inject}
+\end{equation}
+When $\gamma_i = 0$, $v_i = 0$ and no noise is injected.
+
+\paragraph{(c) Deterministic denoising update.}
+\begin{equation}
+  x_{i+1} = (1 + \alpha_i)\,\xnoisy_i - \alpha_i\,\Dtheta(\xnoisy_i,\, \that_i),
+  \label{eq:update-alpha}
+\end{equation}
+where $\alpha_i \coloneqq s(\sigma_i - \that_i)/\that_i$ and
+$\Dtheta$ is the EDM-preconditioned denoiser (Section~\ref{sec:edm-precond}).
+
+\subsection{The transition kernel}
+
+\begin{equation}
+  p\bigl((x_{i+1}, R_i, \tau_i, \varepsilon_i) \mid x_i\bigr)
+  =
+  \Haar(R_i)\cdot
+  \N(\tau_i;\, 0,\, s_{\mathrm{trans}}^2 I)\cdot
+  \N(\varepsilon_i;\, 0,\, v_i I)\cdot
+  \delta\bigl(x_{i+1} - T_i(x_i; R_i, \tau_i, \varepsilon_i)\bigr).
+  \label{eq:transition-kernel}
+\end{equation}
+
+\subsection{Backward step: SE(3) and fixed-point inversions}
+
+\paragraph{SE(3) inversion.}
+\begin{equation}
+  x_i = R_i^\top(\xtilde_i - \tau_i) + \bar x_i.
+  \label{eq:se3-inversion}
+\end{equation}
+Since $R_i$ is stored in the snapshot, this is exact and $\mathcal{O}(M)$.
+
+\paragraph{Fixed-point inversion for $\xnoisy_i$.}
+The forward update satisfies
+$x_{i+1} = (1+\alpha)\,\xnoisy - \alpha\,\Dtheta(\xnoisy, \that)$.
+The naive fixed-point iteration diverges at low noise.  The rescaled
+iteration
+\begin{equation}
+  x \;\leftarrow\; \frac{x_{i+1} + \alpha\bigl(\xhat(x,\that) - \cskip\,x\bigr)}
+                        {\gamma_{\mathrm{eff}}}, \qquad
+  \gamma_{\mathrm{eff}} = 1 + \alpha(1 - \cskip),
+  \label{eq:fp-inversion}
+\end{equation}
+is contractive and converges in four iterations in practice.
+
+% ============================================================
+\section{Boltz-2 as Karras Stochastic Sampler}
+\label{sec:karras-alg2}
+% ============================================================
+
+\subsection{VESDE forward process}
+
+Following Song et al.~\cite{song2021sde}, the forward process is a
+Variance-Exploding SDE (VESDE):
+\begin{equation}
+  p(x_t \mid x_0) = \N\bigl(x_t;\, x_0,\, \sigma(t)^2 I\bigr).
+\end{equation}
+The reverse process is steered by the score $\nabla_x \log p_\sigma(x)
+= (\Dtheta(x, \sigma) - x)/\sigma^2$ (Tweedie's formula).
+
+\subsection{EDM preconditioning}
+\label{sec:edm-precond}
+
+Karras et al.~\cite{karras2022edm} introduce preconditioning:
+\begin{equation}
+  \Dtheta(x, \sigma)
+  = \cskip(\sigma)\,x
+  + \cout(\sigma)\,\ftheta\!\bigl(\cin(\sigma)\,x,\; \cnoise(\sigma)\bigr),
+  \label{eq:edm-precond}
+\end{equation}
+with scalars
+\begin{align}
+  \cskip(\sigma) &= \frac{\sigmaD^2}{\sigma^2 + \sigmaD^2},
+  &
+  \cout(\sigma)  &= \frac{\sigma\,\sigmaD}{\sqrt{\sigma^2 + \sigmaD^2}},
+  \\
+  \cin(\sigma)   &= \frac{1}{\sqrt{\sigma^2 + \sigmaD^2}},
+  &
+  \cnoise(\sigma)&= \tfrac{1}{4}\ln\!\bigl(\sigma/\sigmaD\bigr).
+\end{align}
+
+\subsection{Churn as a finite Langevin correction}
+
+\begin{remark}
+  For $\gamma_i = 0.8$ (Boltz-2 default), the churn noise variance is
+  $\eta^2\gamma_i(2+\gamma_i)\sigma_{i-1}^2$, a \emph{finite} amount
+  independent of the step size $|\sigma_i - \sigma_{i-1}|$.  This is
+  \emph{not} an Euler--Maruyama discretisation of a fixed SDE; as
+  $\gamma_i \to 0$, stochasticity vanishes and the sampler reduces to
+  the deterministic probability flow ODE.
+\end{remark}
+
+% ============================================================
+\section{Path Probability and Jacobians}
+\label{sec:path-prob}
+% ============================================================
+
+\subsection{Log path probability}
+
+\begin{equation}
+  \log P(\mathcal{X})
+  = \log\rho(x_0)
+  + \sum_{i=0}^{L-1}
+    \Bigl[
+      \underbrace{\log\Haar(R_i)}_{\text{const.}}
+      + \underbrace{\log\N(\tau_i;\, 0,\, s_{\mathrm{trans}}^2 I)}_{\text{Gaussian}}
+      + \underbrace{\log\N(\varepsilon_i;\, 0,\, v_i I)}_{\text{Gaussian}}
+      - \underbrace{\log|\det J_i|}_{\text{Jacobian}}
+    \Bigr],
+  \label{eq:log-path-prob}
+\end{equation}
+where $J_i = \partial x_{i+1}/\partial\varepsilon_i$.
+
+\subsection{Exact Jacobian}
+\label{sec:jacobian}
+
+From Eq.~\eqref{eq:update-alpha}:
+\begin{equation}
+  \boxed{
+  J_i
+  = \beta_i\,I + \mu_i\,\nabla_z\ftheta\Big|_{z=\cin(\that_i)\,\xnoisy_i},
+  }
+  \label{eq:jacobian-exact}
+\end{equation}
+with $\beta_i = 1 + \alpha_i(1 - \cskip(\that_i))$ and
+$\mu_i = -\alpha_i\,\cout(\that_i)\,\cin(\that_i)$.
+
+\subsection{Cancellation in acceptance ratios}
+\label{sec:jacobian-cancellation}
+
+\begin{proposition}[Forward shooting: Jacobians cancel]
+\label{prop:oneway-cancel}
+For one-way forward shooting from point $k$, the Jacobian
+log-determinants cancel exactly in the Metropolis acceptance ratio.
+The remaining acceptance factor is $\HAB(\Xnew)$.
+\end{proposition}
+\begin{proof}
+Fresh $(R_i^\mathrm{n}, \tau_i^\mathrm{n}, \varepsilon_i^\mathrm{n})$
+are drawn from their priors for $i \geq k$.  The proposal probability
+$G(\Xnew|\Xold,k) = \prod_{i\geq k}\Haar(R_i^\mathrm{n})\N(\tau_i^\mathrm{n})\N(\varepsilon_i^\mathrm{n})$.
+In the MH ratio $P(\Xnew)/P(\Xold)\times G(\Xold)/G(\Xnew)$, the Haar,
+translation, and noise terms from $G$ cancel the same factors from $P$.
+The Jacobian terms $|\det J_i|$ remain; because $\alpha_i$ depends only
+on schedule step $i$, we have $|\det J_i^\mathrm{n}|=|\det J_i^\mathrm{o}|$
+for each $i\geq k$, giving exact cancellation.
+\end{proof}
+
+\subsection{Two-way acceptance ratio}
+
+\begin{equation}
+  \pacc = \HAB(\Xnew)\cdot
+  \min\!\Biggl[1,\;
+    \frac{\rho(x_0^{\mathrm{n}})}{\rho(x_0^{\mathrm{o}})}
+    \prod_{i=0}^{k-1}
+    \frac{\pfwd(x_{i+1}^{\mathrm{n}} \mid x_i^{\mathrm{n}})\,
+          \pbwd(x_i^{\mathrm{o}} \mid x_{i+1}^{\mathrm{o}})}
+         {\pfwd(x_{i+1}^{\mathrm{o}} \mid x_i^{\mathrm{o}})\,
+          \pbwd(x_i^{\mathrm{n}} \mid x_{i+1}^{\mathrm{n}})}
+  \Biggr],
+  \label{eq:twoway-acceptance-full}
+\end{equation}
+where
+\begin{align}
+  \log\pfwd(x_{i+1}\mid x_i)
+  &= -\frac{\|\varepsilon_i^*\|^2}{2v_i}
+     - \frac{3M}{2}\log(2\pi v_i)
+     - \log|\det J_i|,
+  \label{eq:pfwd-logprob}\\
+  \log\pbwd(x_i \mid x_{i+1})
+  &= -\frac{\|x_i - x_{i+1}\|^2}{2(\sigma_{i-1}^2 - \sigma_i^2)}
+     - \frac{3M}{2}\log\bigl(2\pi(\sigma_{i-1}^2 - \sigma_i^2)\bigr).
+  \label{eq:pbwd-logprob}
+\end{align}
+In implementation form:
+\begin{equation}
+  \log r
+  = (\mathrm{lf\_new} - \mathrm{lf\_old})
+  + (\mathrm{lb\_old} - \mathrm{lb\_new})
+  + \bigl(\log\rho(x_0^{\mathrm{n}}) - \log\rho(x_0^{\mathrm{o}})\bigr).
+  \label{eq:logr-implementation}
+\end{equation}
+
+% ============================================================
+\section{TPS in the Extended Ensemble}
+\label{sec:extended-ensemble}
+% ============================================================
+
+\subsection{Fixed-length reactive path ensemble}
+
+Following Falkner et al.~\cite{falkner2023}, the extended ensemble is
+\begin{equation}
+  \pi(\mathcal{X}, \hat k)
+  \propto
+  P_{AB}(\mathcal{X})\,P(\mathcal{X})\,p(\hat k \mid \mathcal{X}),
+\end{equation}
+where $P_{AB}(\mathcal{X}) = \mathbbm{1}[x_0 \in A,\, x_L \in B]$.
+
+\subsection{Move set and ergodicity}
+
+The complete move scheme combines three moves:
+\begin{itemize}
+  \item \textbf{45\% forward shooting} (uniform selector over $\{1,\ldots,L-1\}$;
+        always accepts reactive paths, $\pacc = \HAB(\Xnew)$).
+  \item \textbf{45\% backward shooting} (generates new prefix via
+        $q_{\mathrm{bwd}}$; MH-corrected via Eq.~\eqref{eq:logr-implementation}).
+  \item \textbf{10\% global reshuffle} (draws fresh $x_0 \sim \rho$ and
+        all $\xi_i$; always accepts, $\pacc = \HAB(\Xnew)$).
+\end{itemize}
+
+\begin{theorem}[Ergodicity]
+\label{thm:ergodicity}
+The Markov chain on the reactive path ensemble $\mathcal{R}$ defined by
+the above move set is ergodic with stationary distribution $\pi$,
+without requiring connectivity assumptions on path space.
+\end{theorem}
+\begin{proof}[Proof sketch]
+Forward + backward shooting jointly update both endpoints and satisfy
+detailed balance.  The reshuffle reaches any reactive path in a single
+step, guaranteeing irreducibility.
+\end{proof}
+
+\paragraph{NaN guard.}
+The Boltz-2 model can produce NaN outputs in degenerate configurations.
+Four defence layers are implemented: (i) \texttt{weighted\_rigid\_align}
+exits early on non-finite input; (ii) \texttt{\_nan\_fallback()} in
+\texttt{gpu\_core.py} replaces non-finite values with the previous state;
+(iii) \texttt{trajectory\_has\_finite\_coords()} sets bias to 0 for NaN
+trials; (iv) an \texttt{isfinite} check in OpenPathSampling~\cite{ops}
+prevents NaN probabilities from being accepted.
+
+% ============================================================
+\section{OPES-Enhanced TPS Acceptance}
+\label{sec:opes}
+% ============================================================
+
+\subsection{On-the-fly Probability Enhanced Sampling}
+
+The OPES method~\cite{invernizzi2020,invernizzi2022} builds an adaptive
+bias $V_n(\mathbf{s})$ on the CV $\mathbf{s} = \mathbf{s}(x_L)$ via
+on-the-fly kernel density estimation with compression.  The KDE estimate
+is
+\begin{equation}
+  P_n(\mathbf{s})
+  = \frac{1}{W}\sum_{k=1}^{n_k} h_k\,
+    \prod_{d=1}^{D}
+    G\!\bigl(s^d;\, c_k^d,\, \Sigma_k^d\bigr),
+  \label{eq:opes-kde}
+\end{equation}
+where $G$ is a truncated Gaussian, $D$ is the CV dimension, and
+$W = \sum_k h_k$ (convergence mode) or $n_k$ (explore mode).
+The bias is
+\begin{equation}
+  V_n(\mathbf{s}) = (1 - 1/\gamma)\,k_BT\,
+    \log\!\left(\frac{P_n(\mathbf{s})}{Z_n} + \epsilon\right),
+  \label{eq:opes-bias}
+\end{equation}
+where $\gamma$ is the well-tempered biasfactor and $\epsilon$ is a
+small regularizer preventing divergence in unsampled regions.
+
+\subsection{Modified TPS acceptance with OPES bias}
+
+The OPES bias enters the TPS Metropolis acceptance as a multiplicative
+factor on the trial weight:
+\begin{equation}
+  \pacc^{\mathrm{OPES}}
+  = \HAB(\Xnew)\cdot
+    \min\!\left[1,\; r_{\mathrm{TPS}} \cdot
+      \exp\!\Bigl(-\frac{V_n(\mathbf{s}^{\mathrm{n}}) -
+                        V_n(\mathbf{s}^{\mathrm{o}})}{k_BT}\Bigr)
+    \right],
+  \label{eq:tps-opes-acceptance}
+\end{equation}
+where $r_{\mathrm{TPS}}$ is the standard TPS log-ratio from
+Eq.~\eqref{eq:logr-implementation} (unity for forward-only shoots), and
+$\mathbf{s}^{\mathrm{n,o}}$ are the CVs of the new and old accepted
+paths evaluated at the terminal frame $x_L$.  The bias $V_n$ is updated
+after every \texttt{pace} MC steps by depositing a new kernel centred at
+the current $\mathbf{s}$ (Eq.~\eqref{eq:opes-kde}).
+
+\subsection{Two-dimensional CV case: ligand pose and pocket distance}
+
+For the co-folding application, we use the two-dimensional CV
+$\mathbf{s} = (s_1, s_2)$ where:
+\begin{itemize}
+  \item $s_1 = $ ligand pose RMSD (Å): Kabsch-aligned heavy-atom RMSD
+        of the predicted ligand pose to a reference crystal pose.
+  \item $s_2 = $ ligand--pocket distance (Å): mean distance between
+        the ligand center-of-mass and the nearest binding-pocket
+        C$\alpha$ atoms.
+\end{itemize}
+The native binding configuration corresponds to small $s_1$ and moderate
+$s_2$, while alternative poses or displaced ligands appear at larger
+$s_1$ or at the tails of the $s_2$ distribution.
+
+\paragraph{Bias parameters for the case-1 2D run.}
+$\gamma = 10$, barrier $= 5\,k_BT$, pace $= 1$, kernel compression
+threshold $= 1.0$; 1159 depositions and 82 surviving kernels (after
+compression) at the end of the run.
+
+% ============================================================
+\section{Collective Variables for Diagnostics}
+\label{sec:cvs}
+% ============================================================
+
+The following CVs are available in \texttt{collective\_variables.py}.
+They are evaluated on the current accepted path and logged to
+\texttt{cv\_values.json}.  \emph{Diagnostic CVs do not feed into the
+OPES bias.}
+
+\paragraph{Bias CVs (sampling).}
+\begin{description}
+  \item[Ligand pose RMSD ($s_1$)]
+    Kabsch-aligned heavy-atom RMSD of the predicted ligand to a reference
+    pose.  Low values indicate native-like binding; large values flag
+    off-target poses or model hallucinations.
+  \item[Ligand--pocket distance ($s_2$)]
+    Mean distance from ligand center-of-mass to nearest binding-pocket
+    C$\alpha$ atoms (Å).  Together with $s_1$ this provides a 2-D
+    fingerprint of pose quality.
+  \item[OpenMM C$\alpha$-RMSD to local minimum (single-chain runs)]
+    Each terminal frame is energy-minimised with AMBER14/GBn2
+    (OpenMM, L-BFGS); Kabsch-aligned C$\alpha$-RMSD to the minimised
+    structure.  Low values: near-stable fold; large values: hallucinated
+    or disordered.
+\end{description}
+
+\paragraph{Geometric diagnostics.}
+\begin{description}
+  \item[Contact order]
+    Fraction of long-range C$\alpha$ pairs (separation $\geq 6$,
+    threshold $8$~Å):
+    \[
+      \mathrm{CO}(x) = \frac{|\{(i,j): |i-j|\geq 6,\; d_{ij}<8\,\text{\AA}\}|}
+                            {|\{(i,j): |i-j|\geq 6\}|}.
+    \]
+    Detects mode collapse and topology changes.
+  \item[Steric clash count]
+    $N_{\mathrm{clash}} = |\{(i,j): |i-j|\geq 3,\; d_{ij}<3.0\,\text{\AA},\; i<j\}|$.
+    Flags unphysical packing.
+  \item[lDDT to reference]
+    Alignment-free local distance difference test~\cite{mariani2013lDDT}.
+    Detects memorisation ($\mathrm{lDDT}\approx 1$) and local errors.
+  \item[Ramachandran outlier fraction]
+    Fraction of residues outside allowed $(\phi,\psi)$ regions.
+    Detects unphysical backbone geometry.
+  \item[Radius of gyration]
+    $R_g = \sqrt{\frac{1}{M}\sum_m \|x^m - \bar x\|^2}$ (Å).
+    Tracks global compaction changes.
+\end{description}
+
+\paragraph{Model self-confidence.}
+\begin{description}
+  \item[Boltz pLDDT]
+    Mean per-residue pLDDT (0--100) from the Boltz-2 confidence head.
+    High pLDDT with large RMSD indicates overconfident hallucination.
+\end{description}
+
+% ============================================================
+\section{OPES-TPS 2D Case: Quantitative Summary}
+\label{sec:opes-2d-stats}
+% ============================================================
+
+The run in \texttt{opes\_tps\_out\_case1\_2d} consists of 11\,590 MC
+steps with 3\,184 accepted moves (acceptance rate $27.5\%$), using the
+2-D CV $\mathbf{s} = (s_1, s_2)$ described above.  Table~\ref{tab:cv-stats}
+summarises the marginal statistics from \texttt{scripts/summarize\_opes\_2d\_cv.py}.
+
+\begin{table}[h]
+\centering
+\caption{Marginal CV statistics for the OPES-TPS 2D run (case~1).
+``All'' = over all 11\,590 logged MC steps;
+``Acc.'' = restricted to 3\,184 accepted steps.}
+\label{tab:cv-stats}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{Ligand RMSD $s_1$ (Å)} & \multicolumn{3}{c}{Pocket dist.\ $s_2$ (Å)} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Subset & Mean $\pm$ SD & Median & $p_{95}$ & Mean $\pm$ SD & Median & $p_{95}$ \\
+\midrule
+All  & $0.49 \pm 0.35$ & $0.49$ & $1.19$ & $5.44 \pm 0.11$ & $5.40$ & $5.62$ \\
+Acc. & $0.38 \pm 0.32$ & $0.26$ & $0.95$ & $5.41 \pm 0.10$ & $5.37$ & $5.61$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Tail mass.}
+Among all logged steps, $48.9\%$ have $s_1 > 0.5$~Å, $23.5\%$ have
+$s_1 > 0.75$~Å, $8.8\%$ have $s_1 > 1.0$~Å, and $1.7\%$ have
+$s_1 > 1.25$~Å.  Among accepted steps, the corresponding fractions are
+$36.6\%$, $14.7\%$, $4.5\%$, and $0.9\%$, confirming that the bias
+successfully drives the chain to explore elevated-RMSD configurations
+while the Metropolis filter still preferentially retains lower-RMSD paths.
+
+\paragraph{Run-length structure.}
+Visits to $s_1 > 0.5$~Å occur in 147 distinct runs with a mean run
+length of 39 consecutive MC steps (maximum 299 steps) over the full
+trajectory, indicating that tail exploration is not isolated spikes
+but sustained excursions.  Restricting to accepted steps, the same
+$s_1 > 0.5$~Å threshold has a mean accepted-step run length of
+$\approx 8$ consecutive accepted paths, confirming genuine metastable
+dwell in higher-RMSD regions.
+
+\paragraph{2-D peak structure.}
+The 2-D histogram of $(s_1, s_2)$ over all logged steps reveals
+two dominant density peaks: a primary mode at
+$(s_1, s_2) \approx (0.07\,\text{\AA},\, 5.37\,\text{\AA})$
+corresponding to the native-like binding pose, and secondary peaks at
+$(s_1, s_2) \approx (0.70\,\text{\AA},\, 5.55\,\text{\AA})$ and
+$(0.83\,\text{\AA},\, 5.61\,\text{\AA})$ representing metastable
+high-RMSD / larger-pocket-distance configurations.
+
+% ============================================================
+\section*{References}
+% ============================================================
+
+\begin{thebibliography}{99}
+
+\bibitem{boltz2}
+J.~Wohlwend, G.~Corso, S.~Passaro, M.~Reveiz, V.~Portnoi, R.~Gondal,
+T.~Hothorn, R.~Barzilay, and T.~Jaakkola,
+Boltz-2: Towards accurate and efficient binding affinity prediction,
+\textit{bioRxiv} (2025), \url{https://doi.org/10.1101/2025.05.06.651165}.
+
+\bibitem{bolhuis2002}
+P.~G.~Bolhuis, D.~Chandler, C.~Dellago, and P.~L.~Geissler,
+Transition path sampling: Throwing ropes over rough mountain passes, in the dark,
+\textit{Annu.~Rev.~Phys.~Chem.} \textbf{53}, 291 (2002).
+
+\bibitem{falkner2023}
+S.~Falkner, A.~Coretti, S.~Romano, P.~Geissler, and C.~Dellago,
+Conditioning Boltzmann generators for rare event sampling,
+\textit{Mach.~Learn.: Sci.~Technol.} \textbf{4}, 035050 (2023).
+
+\bibitem{karras2022edm}
+T.~Karras, M.~Aila, S.~Laine, and J.~Lehtinen,
+Elucidating the design space of diffusion-based generative models,
+\textit{Adv.~Neural Inf.~Process.~Syst.} \textbf{35}, 26565 (2022).
+
+\bibitem{song2021sde}
+Y.~Song, J.~Sohl-Dickstein, D.~P.~Kingma, A.~Kumar, S.~Ermon, and B.~Poole,
+Score-based generative modeling through stochastic differential equations,
+\textit{ICLR} (2021).
+
+\bibitem{invernizzi2020}
+M.~Invernizzi and M.~Parrinello,
+Rethinking metadynamics: From bias potentials to probability distributions,
+\textit{J.~Phys.~Chem.~Lett.} \textbf{11}, 2731 (2020).
+
+\bibitem{invernizzi2022}
+M.~Invernizzi and M.~Parrinello,
+Exploration vs convergence speed in adaptive-bias enhanced sampling,
+\textit{J.~Chem.~Theory Comput.} \textbf{18}, 3988 (2022).
+
+\bibitem{ops}
+D.~W.~Swenson, J.-H.~Prinz, F.~Noé, J.~D.~Chodera, and P.~G.~Bolhuis,
+OpenPathSampling: A Python framework for path sampling simulations,
+\textit{J.~Chem.~Theory Comput.} \textbf{15}, 813 (2019).
+
+\bibitem{mariani2013lDDT}
+V.~Mariani, M.~Biasini, A.~Barbato, and T.~Schwede,
+lDDT: a local superposition-free score for comparing protein structures and models,
+\textit{Bioinformatics} \textbf{29}, 2722 (2013).
+
+\end{thebibliography}
+
+\end{document}

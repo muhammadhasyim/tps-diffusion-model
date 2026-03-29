@@ -10,3 +10,9 @@
 [submodule "all-atom-diffusion-transformer"]
 	path = all-atom-diffusion-transformer
 	url = https://github.com/facebookresearch/all-atom-diffusion-transformer
+[submodule "papers/PriceofFreedom"]
+	path = papers/PriceofFreedom
+	url = https://github.com/atomicarchitects/PriceofFreedom.git
+[submodule "papers/runs-n-poses"]
+	path = papers/runs-n-poses
+	url = https://github.com/plinder-org/runs-n-poses.git

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
+import shutil
+import sys
 from dataclasses import dataclass
 from math import sqrt
 from typing import Any
@@ -39,6 +42,50 @@ def _nan_fallback(x_next: torch.Tensor, x_fallback: torch.Tensor, *, label: str)
             label, n_bad, n_tot, _NAN_FALLBACK_LOG_COUNT,
         )
     return torch.where(bad, x_fallback, x_next)
+
+
+def _cuda_h_include_search_dirs() -> list[str]:
+    """Ordered directories that may contain ``cuda.h`` (Triton JIT helper build)."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def add(path: str) -> None:
+        p = os.path.normpath(os.path.expanduser(path))
+        if p and p not in seen:
+            seen.add(p)
+            ordered.append(p)
+
+    for key in ("CUDA_HOME", "CUDA_PATH"):
+        v = os.environ.get(key)
+        if v:
+            add(os.path.join(v, "include"))
+    nvcc = shutil.which("nvcc")
+    if nvcc:
+        root = os.path.dirname(os.path.dirname(os.path.realpath(nvcc)))
+        add(os.path.join(root, "include"))
+    add("/usr/local/cuda/include")
+    add("/usr/lib/cuda/include")
+    prefix = sys.prefix
+    add(os.path.join(prefix, "targets/x86_64-linux/include"))
+    add(os.path.join(prefix, "include"))
+    return ordered
+
+
+def _first_dir_with_cuda_h() -> str | None:
+    for d in _cuda_h_include_search_dirs():
+        if os.path.isfile(os.path.join(d, "cuda.h")):
+            return d
+    return None
+
+
+def _prepend_cpath_for_cuda_toolkit(include_dir: str) -> None:
+    """Prepend *include_dir* to CPATH / C_INCLUDE_PATH for subprocess gcc (Triton)."""
+    for var in ("CPATH", "C_INCLUDE_PATH"):
+        prev = os.environ.get(var, "")
+        if prev:
+            os.environ[var] = include_dir + os.pathsep + prev
+        else:
+            os.environ[var] = include_dir
 
 
 def _kwargs_for_preconditioned_forward(network_condition_kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -78,8 +125,33 @@ class BoltzSamplerCore:
         atom_mask: torch.Tensor,
         network_condition_kwargs: dict[str, Any],
         multiplicity: int = 1,
+        compile_model: bool = False,
+        n_fixed_point: int = 4,
+        inference_dtype: "torch.dtype | None" = None,
     ) -> None:
+        self.compile_model = compile_model
+        self.n_fixed_point = n_fixed_point
+        self.inference_dtype = inference_dtype
         self.diffusion = diffusion_module
+        if compile_model:
+            # torch.compile → inductor → Triton compiles driver.c with #include "cuda.h".
+            # Conda PyTorch envs often lack toolkit headers under sys.prefix; system CUDA is
+            # typically /usr/local/cuda/include — expose it to gcc via CPATH.
+            cuda_inc = _first_dir_with_cuda_h()
+            if cuda_inc is not None:
+                _prepend_cpath_for_cuda_toolkit(cuda_inc)
+                logger.debug("torch.compile: prepended CPATH for CUDA headers: %s", cuda_inc)
+            elif torch.cuda.is_available():
+                logger.warning(
+                    "compile_model=True but cuda.h was not found in CUDA_HOME, nvcc parent, "
+                    "/usr/local/cuda/include, or conda targets/*/include. "
+                    "torch.compile may fail when Triton builds GPU helpers; "
+                    "install the CUDA toolkit dev headers or set CUDA_HOME."
+                )
+            self.diffusion.preconditioned_network_forward = torch.compile(
+                self.diffusion.preconditioned_network_forward,
+                mode="reduce-overhead",
+            )
         # Keep masks on the same device as the score network (required for rigid align / batching).
         self.atom_mask = atom_mask.to(device=self.diffusion.device)
         self.network_condition_kwargs = network_condition_kwargs
@@ -147,7 +219,7 @@ class BoltzSamplerCore:
         self,
         x_out: torch.Tensor,
         step_idx: int,
-        n_fixed_point: int = 4,
+        n_fixed_point: int | None = None,
     ) -> torch.Tensor:
         """Recover x_noisy from the step output x_out via rescaled fixed-point iteration.
 
@@ -175,6 +247,7 @@ class BoltzSamplerCore:
         When ``alignment_reverse_diff`` is enabled, the rigid alignment is
         applied inside the loop to match the forward sampling kernel.
         """
+        n_fp = n_fixed_point if n_fixed_point is not None else self.n_fixed_point
         sch = self.schedule[step_idx]
         t_hat = sch.t_hat
 
@@ -190,14 +263,23 @@ class BoltzSamplerCore:
 
         b = x_out.shape[0]
         x_noisy = x_out
-        for _ in range(n_fixed_point):
+        for _ in range(n_fp):
             kw = _kwargs_for_preconditioned_forward(dict(self.network_condition_kwargs))
             kw.pop("multiplicity", None)
-            x_hat = self.diffusion.preconditioned_network_forward(
-                x_noisy,
-                t_hat,
-                network_condition_kwargs=dict(multiplicity=b, **kw),
-            )
+            if self.inference_dtype is not None and x_noisy.device.type == "cuda":
+                with torch.autocast("cuda", dtype=self.inference_dtype):
+                    x_hat = self.diffusion.preconditioned_network_forward(
+                        x_noisy,
+                        t_hat,
+                        network_condition_kwargs=dict(multiplicity=b, **kw),
+                    )
+                x_hat = x_hat.to(x_noisy.dtype)
+            else:
+                x_hat = self.diffusion.preconditioned_network_forward(
+                    x_noisy,
+                    t_hat,
+                    network_condition_kwargs=dict(multiplicity=b, **kw),
+                )
             if self.diffusion.alignment_reverse_diff:
                 x_noisy = weighted_rigid_align(
                     x_noisy.float(),
@@ -218,7 +300,7 @@ class BoltzSamplerCore:
         random_tr: torch.Tensor,
         center_mean_before: torch.Tensor | None = None,
         *,
-        n_fixed_point: int = 4,
+        n_fixed_point: int | None = None,
     ) -> tuple[torch.Tensor, dict[str, Any]]:
         """Recover forward-step noise :math:`\\varepsilon` given consecutive frames and augmentation.
 
@@ -260,7 +342,6 @@ class BoltzSamplerCore:
         x_aug = torch.einsum("bmd,bds->bms", x_prev - cm, random_r) + random_tr
 
         x_noisy = self._solve_x_noisy_from_output(x_next, step_idx, n_fixed_point)
-
         eps = x_noisy - x_aug
         meta = {
             "sigma_tm": sch.sigma_tm,
@@ -281,7 +362,7 @@ class BoltzSamplerCore:
         random_tr: torch.Tensor,
         center_mean_before: torch.Tensor,
         *,
-        n_fixed_point: int = 4,
+        n_fixed_point: int | None = None,
     ) -> tuple[torch.Tensor, dict[str, Any]]:
         """Recover backward-kernel noise :math:`\\varepsilon` given consecutive frames.
 
@@ -294,13 +375,14 @@ class BoltzSamplerCore:
         self._assert_coords_device(x_next)
         if self._schedule is None:
             self.build_schedule()
+        n_fp = n_fixed_point if n_fixed_point is not None else self.n_fixed_point
         sch = self.schedule[step_idx]
         b = x_prev.shape[0]
         cm = center_mean_before.to(device=x_prev.device, dtype=x_prev.dtype)
         y = x_prev - cm
         x_tilde = torch.einsum("bmd,bds->bms", y, random_r) + random_tr
 
-        x_noisy = self._solve_x_noisy_from_output(x_next, step_idx, n_fixed_point)
+        x_noisy = self._solve_x_noisy_from_output(x_next, step_idx, n_fp)
 
         eps = x_noisy - x_tilde
         meta = {
@@ -349,9 +431,16 @@ class BoltzSamplerCore:
         kw = _kwargs_for_preconditioned_forward(dict(self.network_condition_kwargs))
         kw.pop("multiplicity", None)
         kwargs = dict(multiplicity=sample_ids.numel(), **kw)
-        atom_coords_denoised = self.diffusion.preconditioned_network_forward(
-            x_noisy, t_hat, network_condition_kwargs=kwargs
-        )
+        if self.inference_dtype is not None and x_noisy.device.type == "cuda":
+            with torch.autocast("cuda", dtype=self.inference_dtype):
+                atom_coords_denoised = self.diffusion.preconditioned_network_forward(
+                    x_noisy, t_hat, network_condition_kwargs=kwargs
+                )
+            atom_coords_denoised = atom_coords_denoised.to(x_noisy.dtype)
+        else:
+            atom_coords_denoised = self.diffusion.preconditioned_network_forward(
+                x_noisy, t_hat, network_condition_kwargs=kwargs
+            )
 
         if self.diffusion.alignment_reverse_diff:
             x_noisy = weighted_rigid_align(
@@ -384,7 +473,7 @@ class BoltzSamplerCore:
         self,
         atom_coords: torch.Tensor,
         step_idx: int,
-        n_fixed_point: int = 4,
+        n_fixed_point: int | None = None,
         center_mean_before: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         """Approximate inverse step (re-noising toward higher sigma).
@@ -400,6 +489,7 @@ class BoltzSamplerCore:
             self.build_schedule()
         if step_idx < 0 or step_idx >= len(self.schedule):
             raise ValueError("step_idx out of range")
+        n_fp = n_fixed_point if n_fixed_point is not None else self.n_fixed_point
         sch = self.schedule[step_idx]
         b = atom_coords.shape[0]
         random_r, random_tr = compute_random_augmentation(
@@ -411,7 +501,7 @@ class BoltzSamplerCore:
         sigma_t = sch.sigma_t
         alpha = step_scale * (sigma_t - t_hat) / t_hat
 
-        x_noisy = self._solve_x_noisy_from_output(atom_coords, step_idx, n_fixed_point)
+        x_noisy = self._solve_x_noisy_from_output(atom_coords, step_idx, n_fp)
 
         noise_var = sch.noise_var
         eps = sqrt(noise_var) * torch.randn(x_noisy.shape, device=x_noisy.device, dtype=x_noisy.dtype)

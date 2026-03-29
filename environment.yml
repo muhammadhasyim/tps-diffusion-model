@@ -59,9 +59,39 @@ dependencies:
   - openmm>=8.5
   - pdbfixer>=1.9
   # NOTE: cuda-version is intentionally NOT pinned here.
-  # Pinning cuda-version=12.2 selects pre-migration openmm builds (numpy 1.x
-  # ABI).  OpenMM's CUDA platform falls back to OpenCL automatically via the
-  # smoke test in compute_cv_rmsd.py if the driver's PTX version is too old.
+  # All conda-forge openmm>=8.5 builds require cuda-nvrtc>=12.9, so pinning
+  # cuda-version=12.2 makes the solver fail.
+  #
+  # ── NVRTC override for driver 535 / CUDA 12.2 machines ───────────────────────
+  # OpenMM generates CUDA kernels at runtime via NVRTC (not pre-compiled SASS
+  # like PyTorch).  The conda-forge build ships cuda-nvrtc 12.9.86, which emits
+  # PTX 8.9.  Driver 535 (CUDA 12.2) can only JIT PTX up to ~8.2, causing:
+  #   CUDA_ERROR_UNSUPPORTED_PTX_VERSION (222)
+  # Fix applied to this env (do once after env creation on driver-535 machines):
+  #   pip install "nvidia-cuda-nvrtc-cu12==12.2.140"
+  #   cp $CONDA_PREFIX/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.12 \
+  #      $CONDA_PREFIX/lib/libnvrtc.so.12.2.140
+  #   cp $CONDA_PREFIX/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc-builtins.so.12.2 \
+  #      $CONDA_PREFIX/lib/libnvrtc-builtins.so.12.2
+  #   ln -sf $CONDA_PREFIX/lib/libnvrtc.so.12.2.140 $CONDA_PREFIX/lib/libnvrtc.so.12
+  # The RPATH in libOpenMMCUDA.so is $ORIGIN/.. ($CONDA_PREFIX/lib/), so
+  # redirecting the libnvrtc.so.12 symlink there is sufficient.
+  # Verify with: python -m openmm.testInstallation (CUDA should pass)
+  #
+  # ── OpenMM quick check (after: conda activate genai-tps) ─────────────────────
+  # Import (use -c; `python "import openmm"` wrongly treats that as a filename):
+  #   python -c "import openmm; print(openmm.__version__); print(openmm.Platform.getPluginLoadFailures())"
+  # Non-empty getPluginLoadFailures() often lists HIP plugins missing libhiprtc
+  # on NVIDIA-only machines — safe to ignore if CUDA/OpenCL/CPU work.
+  # Driver / GPU cap:
+  #   nvidia-smi
+  # CUDA runtime check (should print energy if NVRTC override is in place):
+  #   python -c "from openmm import openmm as mm, unit as u; p=mm.Platform.getPlatformByName('CUDA'); s=mm.System(); s.addParticle(1.0); c=mm.Context(s,mm.VerletIntegrator(1*u.femtoseconds),p); c.setPositions([[0,0,0]]*u.nanometer); print(c.getState(getEnergy=True).getPotentialEnergy())"
+  # If you still see CUDA_ERROR_UNSUPPORTED_PTX_VERSION (222): repeat the
+  # NVRTC override steps above; conda update may have restored the 12.9 symlink.
+  # If you see "No compatible CUDA device": free VRAM or stop other GPU
+  # processes (e.g. Boltz inference holds ~7 GiB, blocking a second CUDA client).
+  # OpenCL clCreateContext (-6) has the same root cause (GPU busy).
 
   # ── Additional force-field parameters (AMBER14, GBn2 implicit solvent) ──────
   # openmmforcefields provides AMBER14 + GAFF2 + SMIRNOFF templates used by
@@ -78,6 +108,9 @@ dependencies:
 
     # ── torch is NOT listed here — it is driver-specific ─────────────────────
     # Run `bash scripts/install_torch_cuda.sh` after env creation (see above).
+    # --compile-model: Triton JIT needs cuda.h. BoltzSamplerCore prepends
+    # CUDA_HOME/include or /usr/local/cuda/include to CPATH when found; otherwise
+    # `conda install -n genai-tps -c nvidia cuda-toolkit` (or set CUDA_HOME).
     # Reason: jax[cuda12] pulls in nvidia CUDA 12.9 packages (nvjitlink 12.9,
     # nccl 2.29, cublas 12.9, etc.) that conflict with torch cu121's CUDA 12.1
     # packages, causing cascading undefined-symbol ImportErrors.  Using
