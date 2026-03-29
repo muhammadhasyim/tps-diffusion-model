@@ -47,19 +47,25 @@ def test_collective_variables_callables() -> None:
     """contact_order, clash_count, lddt_to_reference, ramachandran_outlier_fraction
     must all be callable after import."""
     from genai_tps.backends.boltz.collective_variables import (
+        ca_contact_count,
         contact_order,
         clash_count,
+        end_to_end_distance,
         lddt_to_reference,
         ramachandran_outlier_fraction,
         radius_of_gyration,
         rmsd_to_reference,
+        shape_acylindricity,
+        shape_kappa2,
         make_rg_cv,
         make_plddt_proxy_cv,
         make_boltz_plddt_predictor,
     )
     for fn in [
-        contact_order, clash_count, lddt_to_reference,
+        contact_order, clash_count, ca_contact_count, end_to_end_distance,
+        lddt_to_reference,
         ramachandran_outlier_fraction, radius_of_gyration,
+        shape_kappa2, shape_acylindricity,
         rmsd_to_reference, make_rg_cv, make_plddt_proxy_cv,
         make_boltz_plddt_predictor,
     ]:

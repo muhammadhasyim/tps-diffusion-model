@@ -47,8 +47,10 @@ from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
 from genai_tps.backends.boltz.bridge import snapshot_from_gpu
 from genai_tps.backends.boltz.collective_variables import (
     PoseCVIndexer,
+    ca_contact_count,
     clash_count,
     contact_order,
+    end_to_end_distance,
     lddt_to_reference,
     ligand_pose_rmsd,
     ligand_pocket_distance,
@@ -57,6 +59,8 @@ from genai_tps.backends.boltz.collective_variables import (
     radius_of_gyration,
     ramachandran_outlier_fraction,
     rmsd_to_reference,
+    shape_acylindricity,
+    shape_kappa2,
 )
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy, OpenMMLocalMinRMSD
@@ -77,12 +81,17 @@ _SINGLE_CV_NAMES = [
     "openmm_energy",
     "contact_order",
     "clash_count",
+    "end_to_end",
+    "ca_contact_count",
+    "shape_kappa2",
+    "shape_acylindricity",
     "lddt",
     "ramachandran_outlier",
     "ligand_rmsd",
     "ligand_pocket_dist",
     "ligand_contacts",
     "ligand_hbonds",
+    "training_sucos_pocket_qcov",
 ]
 
 
@@ -110,6 +119,7 @@ def _make_cv_function(
     pocket_radius: float = 6.0,
     contact_r0: float = 3.5,
     hbond_cutoff: float = 3.5,
+    skrinjar_context: tuple | None = None,
 ) -> "Callable[[Trajectory], float]":
     """Build a scalar CV function (single-CV bias, returns float).
 
@@ -117,9 +127,10 @@ def _make_cv_function(
     ----------
     cv_type:
         One of: ``"rmsd"``, ``"rg"``, ``"openmm"``, ``"openmm_energy"``,
-        ``"contact_order"``, ``"clash_count"``, ``"lddt"``,
+        ``"contact_order"``, ``"clash_count"``, ``"end_to_end"``,
+        ``"ca_contact_count"``, ``"shape_kappa2"``, ``"shape_acylindricity"``, ``"lddt"``,
         ``"ramachandran_outlier"``, ``"ligand_rmsd"``,
-        ``"ligand_pocket_dist"``, ``"ligand_contacts"``, ``"ligand_hbonds"``.
+        ``"ligand_pocket_dist"``, ``"ligand_contacts"``,         ``"ligand_hbonds"``, ``"training_sucos_pocket_qcov"``.
     reference_coords:
         Ca coordinates of the initial structure, shape ``(N, 3)``.
         Required for ``"rmsd"``.
@@ -148,6 +159,18 @@ def _make_cv_function(
         snap = traj[-1]
         return radius_of_gyration(snap, atom_mask)
 
+    def _cv_end_to_end(traj: Trajectory) -> float:
+        return end_to_end_distance(traj[-1], atom_mask)
+
+    def _cv_ca_contact_count(traj: Trajectory) -> float:
+        return ca_contact_count(traj[-1], atom_mask=atom_mask)
+
+    def _cv_shape_kappa2(traj: Trajectory) -> float:
+        return shape_kappa2(traj[-1], atom_mask)
+
+    def _cv_shape_acylindricity(traj: Trajectory) -> float:
+        return shape_acylindricity(traj[-1], atom_mask)
+
     def _cv_contact_order(traj: Trajectory) -> float:
         return contact_order(traj[-1])
 
@@ -174,6 +197,14 @@ def _make_cv_function(
         return _cv_rmsd
     elif cv_type == "rg":
         return _cv_rg
+    elif cv_type == "end_to_end":
+        return _cv_end_to_end
+    elif cv_type == "ca_contact_count":
+        return _cv_ca_contact_count
+    elif cv_type == "shape_kappa2":
+        return _cv_shape_kappa2
+    elif cv_type == "shape_acylindricity":
+        return _cv_shape_acylindricity
     elif cv_type == "openmm":
         if topo_npz is None:
             raise ValueError(
@@ -262,6 +293,18 @@ def _make_cv_function(
             )
 
         return _cv_ligand_hbonds
+    elif cv_type == "training_sucos_pocket_qcov":
+        if skrinjar_context is None:
+            raise ValueError(
+                "--bias-cv training_sucos_pocket_qcov requires Skrinjar scorer "
+                "context (internal error: skrinjar_context is None)."
+            )
+        from genai_tps.backends.boltz.collective_variables import (  # noqa: PLC0415
+            make_training_sucos_pocket_qcov_traj_fn,
+        )
+
+        scorer, structure, n_struct = skrinjar_context
+        return make_training_sucos_pocket_qcov_traj_fn(scorer, structure, int(n_struct))
     else:
         raise ValueError(
             f"Unknown CV type: {cv_type!r}. "
@@ -299,6 +342,7 @@ def _make_multi_cv_function(
     pocket_radius: float = 6.0,
     contact_r0: float = 3.5,
     hbond_cutoff: float = 3.5,
+    skrinjar_context: tuple | None = None,
 ) -> "tuple[Callable[[Trajectory], np.ndarray], int]":
     """Build a vector CV function for multi-dimensional OPES bias.
 
@@ -321,6 +365,7 @@ def _make_multi_cv_function(
             pocket_radius=pocket_radius,
             contact_r0=contact_r0,
             hbond_cutoff=hbond_cutoff,
+            skrinjar_context=skrinjar_context if name == "training_sucos_pocket_qcov" else None,
         )
         for name in cv_names
     ]
@@ -439,19 +484,28 @@ def _build_diagnostic_cv_functions(
     """Build a dict of diagnostic CV functions from a comma-separated name list.
 
     Returns None when ``names_csv`` is empty/None.
-    Available names: contact_order, clash_count, lddt, ramachandran_outlier, rg.
+    Available names: contact_order, clash_count, end_to_end, ca_contact_count,
+    shape_kappa2, shape_acylindricity, lddt, ramachandran_outlier, rg.
     """
     if not names_csv:
         return None
     from genai_tps.backends.boltz.collective_variables import (  # noqa: PLC0415
+        ca_contact_count,
         contact_order,
         clash_count,
+        end_to_end_distance,
         ramachandran_outlier_fraction,
         radius_of_gyration,
+        shape_acylindricity,
+        shape_kappa2,
     )
     _registry: dict[str, "Callable"] = {
         "contact_order": lambda traj: contact_order(traj[-1]),
         "clash_count": lambda traj: clash_count(traj[-1]),
+        "end_to_end": lambda traj: end_to_end_distance(traj[-1]),
+        "ca_contact_count": lambda traj: ca_contact_count(traj[-1]),
+        "shape_kappa2": lambda traj: shape_kappa2(traj[-1]),
+        "shape_acylindricity": lambda traj: shape_acylindricity(traj[-1]),
         "ramachandran_outlier": lambda traj: ramachandran_outlier_fraction(traj[-1]),
         "rg": lambda traj: radius_of_gyration(traj[-1]),
     }
@@ -526,7 +580,8 @@ def main() -> None:
         help=(
             "Comma-separated list of diagnostic CV names to log per MC step "
             "(observation-only; do not affect OPES bias). "
-            "Available: contact_order, clash_count, lddt, ramachandran_outlier, rg. "
+            "Available: contact_order, clash_count, end_to_end, ca_contact_count, "
+            "shape_kappa2, shape_acylindricity, lddt, ramachandran_outlier, rg. "
             "Example: --diagnostic-cvs contact_order,clash_count"
         ),
     )
@@ -587,7 +642,8 @@ def main() -> None:
         help=(
             "Collective variable(s) for the OPES bias.  "
             "Single CV: one of {rmsd, rg, openmm, openmm_energy, contact_order, "
-            "clash_count, lddt, ramachandran_outlier, ligand_rmsd, ligand_pocket_dist, "
+            "clash_count, end_to_end, ca_contact_count, shape_kappa2, shape_acylindricity, "
+            "lddt, ramachandran_outlier, ligand_rmsd, ligand_pocket_dist, "
             "ligand_contacts, ligand_hbonds}.  "
             "Multi-CV (multi-D OPES): comma-separated list, e.g. "
             "'contact_order,clash_count'.  "
@@ -603,7 +659,11 @@ def main() -> None:
             "requires --topo-npz.  "
             "'ligand_hbonds': N/O···N/O distance proxy for H-bonds (cutoff=--hbond-cutoff); "
             "requires --topo-npz.  "
-            "'lddt': requires --reference-pdb or uses initial-trajectory coordinates."
+            "'lddt': requires --reference-pdb or uses initial-trajectory coordinates.  "
+            "'training_sucos_pocket_qcov': Škrinjar-style SuCOS-shape × pocket_qcov vs "
+            "training PDBs/SDFs (CPU RDKit + optional Foldseek GPU prefilter); "
+            "requires --topo-npz and --skrinjar-training-complexes-dir and/or "
+            "--skrinjar-training-ligands-dir (see docs/runs_n_poses_reproduction.md)."
         ),
     )
     opes_group.add_argument(
@@ -651,6 +711,55 @@ def main() -> None:
             "Heavy-atom N/O···N/O distance cutoff (Å) for the ligand_hbonds CV "
             "(standard H-bond donor-acceptor threshold without explicit H; default: 3.5)."
         ),
+    )
+    skr = parser.add_argument_group(
+        "Škrinjar training similarity CV (training_sucos_pocket_qcov)"
+    )
+    skr.add_argument(
+        "--skrinjar-foldseek-db",
+        type=Path,
+        default=None,
+        help="Optional Foldseek target database path for GPU prefilter of training complexes.",
+    )
+    skr.add_argument(
+        "--skrinjar-training-complexes-dir",
+        type=Path,
+        default=None,
+        help="Directory of training holo PDB files (optional; used with Foldseek hits or glob).",
+    )
+    skr.add_argument(
+        "--skrinjar-training-ligands-dir",
+        type=Path,
+        default=None,
+        help="Directory of training ligand .sdf files for ligand-only SuCOS (no pocket_qcov).",
+    )
+    skr.add_argument(
+        "--skrinjar-foldseek-bin",
+        type=str,
+        default=None,
+        help="Foldseek executable (default: FOLDSEEK_BIN env or 'foldseek').",
+    )
+    skr.add_argument(
+        "--skrinjar-top-k", type=int, default=5,
+        help="Max training complexes to evaluate after Foldseek prefilter (default: 5).",
+    )
+    skr.add_argument(
+        "--skrinjar-pocket-radius", type=float, default=6.0,
+        help="Pocket definition radius (Å) around ligand heavy atoms (default: 6).",
+    )
+    skr.add_argument(
+        "--skrinjar-pocket-qcov-cutoff", type=float, default=2.0,
+        help="Cα match cutoff (Å) for pocket_qcov (default: 2).",
+    )
+    skr.add_argument(
+        "--skrinjar-no-gpu",
+        action="store_true",
+        help="Do not pass --gpu 1 to Foldseek easy-search.",
+    )
+    skr.add_argument(
+        "--skrinjar-no-cache",
+        action="store_true",
+        help="Disable coordinate-hash cache for the Skrinjar scorer (recompute every MC step).",
     )
     opes_group.add_argument(
         "--save-opes-state-every", type=int, default=100,
@@ -828,7 +937,15 @@ def main() -> None:
 
     # Auto-detect topo_npz from the processed structures directory if not set.
     topo_npz = args.topo_npz
-    _needs_topo = {"openmm", "openmm_energy", "ligand_rmsd", "ligand_pocket_dist", "ligand_contacts", "ligand_hbonds"}
+    _needs_topo = {
+        "openmm",
+        "openmm_energy",
+        "ligand_rmsd",
+        "ligand_pocket_dist",
+        "ligand_contacts",
+        "ligand_hbonds",
+        "training_sucos_pocket_qcov",
+    }
     if topo_npz is None and _needs_topo & set(bias_cv_names):
         struct_candidates = sorted((processed_dir / "structures").glob("*.npz"))
         if struct_candidates:
@@ -841,11 +958,59 @@ def main() -> None:
             print(f"[TPS-OPES] Auto-detected topo_npz: {topo_npz}", flush=True)
         else:
             print(
-                "[TPS-OPES] ERROR: --bias-cv openmm/openmm_energy requires "
+                "[TPS-OPES] ERROR: --bias-cv requires "
                 "--topo-npz but no processed/structures/*.npz found.",
                 file=sys.stderr, flush=True,
             )
             sys.exit(1)
+
+    skrinjar_context: tuple | None = None
+    if "training_sucos_pocket_qcov" in bias_cv_names:
+        from genai_tps.analysis.boltz_npz_export import load_topo  # noqa: PLC0415
+        from genai_tps.analysis.skrinjar_similarity import IncrementalSkrinjarScorer  # noqa: PLC0415
+
+        if topo_npz is None:
+            print(
+                "[TPS-OPES] ERROR: --bias-cv training_sucos_pocket_qcov requires --topo-npz.",
+                file=sys.stderr,
+                flush=True,
+            )
+            sys.exit(1)
+        tdir = args.skrinjar_training_complexes_dir
+        ldir = args.skrinjar_training_ligands_dir
+        if tdir is None and ldir is None:
+            print(
+                "[TPS-OPES] ERROR: training_sucos_pocket_qcov needs at least one of "
+                "--skrinjar-training-complexes-dir or --skrinjar-training-ligands-dir.",
+                file=sys.stderr,
+                flush=True,
+            )
+            sys.exit(1)
+        structure, n_struct = load_topo(Path(topo_npz))
+        sdfs: tuple[Path, ...] = ()
+        if ldir is not None:
+            lp = Path(ldir).expanduser().resolve()
+            sdfs = tuple(sorted(p for p in lp.glob("*.sdf") if p.is_file()))
+        fdb = Path(args.skrinjar_foldseek_db).resolve() if args.skrinjar_foldseek_db else None
+        cdir = Path(tdir).expanduser().resolve() if tdir is not None else None
+        scorer = IncrementalSkrinjarScorer(
+            foldseek_bin=args.skrinjar_foldseek_bin,
+            foldseek_db=fdb,
+            training_complexes_dir=cdir,
+            training_ligand_sdfs=sdfs,
+            use_foldseek_gpu=not args.skrinjar_no_gpu,
+            top_k=int(args.skrinjar_top_k),
+            pocket_radius=float(args.skrinjar_pocket_radius),
+            pocket_qcov_cutoff=float(args.skrinjar_pocket_qcov_cutoff),
+            enable_coord_cache=not args.skrinjar_no_cache,
+            scratch_dir=work_root / "skrinjar_cv_scratch",
+        )
+        skrinjar_context = (scorer, structure, n_struct)
+        print(
+            f"[TPS-OPES] Skrinjar scorer: complexes_dir={cdir!s} n_sdfs={len(sdfs)} "
+            f"foldseek_db={fdb!s}",
+            flush=True,
+        )
 
     cv_function, ndim = _make_multi_cv_function(
         bias_cv_names,
@@ -858,6 +1023,7 @@ def main() -> None:
         pocket_radius=args.pocket_radius,
         contact_r0=args.contact_r0,
         hbond_cutoff=args.hbond_cutoff,
+        skrinjar_context=skrinjar_context,
     )
     print(
         f"[TPS-OPES] Bias CV(s): {bias_cv_names}  ndim={ndim}",

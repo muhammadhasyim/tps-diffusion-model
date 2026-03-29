@@ -80,6 +80,9 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
+# ── Large local datasets (Runs N' Poses / Zenodo) ─────────────────────────────
+data/runs_n_poses/
+
 # ── Secrets / credentials ─────────────────────────────────────────────────────
 .env
 *.pem

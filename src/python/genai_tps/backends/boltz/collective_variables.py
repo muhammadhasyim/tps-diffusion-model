@@ -44,6 +44,101 @@ def radius_of_gyration(snapshot, atom_mask: torch.Tensor | None = None) -> float
     return float(rg.detach().cpu())
 
 
+def _masked_points(snapshot, atom_mask: torch.Tensor | None) -> torch.Tensor:
+    """Return ``(n, 3)`` coordinates after optional ``atom_mask`` (same convention as ``radius_of_gyration``)."""
+    x = _coords_torch(snapshot)[0]
+    if atom_mask is not None:
+        m = atom_mask[0] if atom_mask.dim() > 1 else atom_mask
+        return x[m.bool()]
+    return x
+
+
+def end_to_end_distance(snapshot, atom_mask: torch.Tensor | None = None) -> float:
+    """Euclidean distance between first and last atom in the masked list (Å).
+
+    Intended for Cα traces: after masking, uses indices ``0`` and ``n-1``.
+    Returns ``0.0`` when ``n < 2`` (stable for OPES).
+    """
+    pts = _masked_points(snapshot, atom_mask)
+    n = int(pts.shape[0])
+    if n < 2:
+        return 0.0
+    with torch.no_grad():
+        d = torch.linalg.norm(pts[0] - pts[n - 1])
+        return float(d.detach().cpu())
+
+
+def ca_contact_count(
+    snapshot,
+    *,
+    seq_sep: int = 6,
+    dist_threshold: float = 8.0,
+    atom_mask: torch.Tensor | None = None,
+) -> float:
+    """Count long-range pairs with distance below ``dist_threshold`` (not normalized).
+
+    Same eligibility rule as :func:`contact_order` (``|i-j| >= seq_sep``) but returns
+    the raw number of contacting pairs (each unordered pair once).
+    """
+    x = _masked_points(snapshot, atom_mask)
+    n = int(x.shape[0])
+    if n < 2:
+        return 0.0
+    with torch.no_grad():
+        dists = torch.cdist(x.unsqueeze(0), x.unsqueeze(0))[0]
+        idx = torch.arange(n, device=x.device)
+        sep = (idx.unsqueeze(1) - idx.unsqueeze(0)).abs()
+        upper = torch.triu(
+            (sep >= int(seq_sep)) & (dists < float(dist_threshold)), diagonal=1
+        )
+        return float(upper.sum().item())
+
+
+def _gyration_eigenvalues_descending(pts: torch.Tensor) -> torch.Tensor:
+    """Eigenvalues ``λ1 >= λ2 >= λ3`` of mass-weighted gyration tensor (Å²)."""
+    n = int(pts.shape[0])
+    if n < 1:
+        return torch.zeros(3, device=pts.device, dtype=pts.dtype)
+    r = pts - pts.mean(dim=0, keepdim=True)
+    # S = (1/n) sum_i r_i r_i^T  ->  (3,3)
+    s = (r.T @ r) / float(max(n, 1))
+    w = torch.linalg.eigvalsh(s)  # ascending
+    return w.flip(0)
+
+
+def shape_kappa2(snapshot, atom_mask: torch.Tensor | None = None) -> float:
+    r"""Relative shape anisotropy :math:`\kappa^2 \in [0,1]` from gyration eigenvalues.
+
+    :math:`\kappa^2 = 1 - 3(\lambda_1\lambda_2 + \lambda_2\lambda_3 + \lambda_3\lambda_1)
+    / (\lambda_1+\lambda_2+\lambda_3)^2`.
+
+    Sphere: :math:`\kappa^2=0`; straight rod (two non-zero dims degenerate): :math:`\kappa^2=1`.
+    """
+    pts = _masked_points(snapshot, atom_mask)
+    n = int(pts.shape[0])
+    if n < 2:
+        return 0.0
+    with torch.no_grad():
+        lam = _gyration_eigenvalues_descending(pts)
+        t = lam.sum()
+        if float(t.item()) < 1e-12:
+            return 0.0
+        i2 = lam[0] * lam[1] + lam[1] * lam[2] + lam[2] * lam[0]
+        k2 = 1.0 - 3.0 * (i2 / (t * t))
+        return float(torch.clamp(k2, 0.0, 1.0).item())
+
+
+def shape_acylindricity(snapshot, atom_mask: torch.Tensor | None = None) -> float:
+    r"""Acylindricity :math:`\lambda_2 - \lambda_3` (Å²) from the gyration tensor eigenvalues."""
+    pts = _masked_points(snapshot, atom_mask)
+    n = int(pts.shape[0])
+    if n < 2:
+        return 0.0
+    with torch.no_grad():
+        lam = _gyration_eigenvalues_descending(pts)
+        return float((lam[1] - lam[2]).detach().cpu())
+
+
 def rmsd_to_reference(
     snapshot,
     reference: torch.Tensor,
@@ -852,3 +947,41 @@ def _protein_ligand_hbond_count_callable(
     snap, indexer: PoseCVIndexer, cutoff: float = 3.5
 ) -> float:
     return protein_ligand_hbond_count(snap, indexer, cutoff=cutoff)
+
+
+def make_training_sucos_pocket_qcov_traj_fn(
+    scorer: Any,
+    structure: Any,
+    n_struct: int,
+):
+    """Build ``f(traj) -> float`` for Škrinjar-style training similarity on trajectories.
+
+    Wraps :class:`genai_tps.analysis.skrinjar_similarity.IncrementalSkrinjarScorer`
+    with Boltz last-frame PDB export.  The CLI entry point is
+    ``scripts/run_opes_tps.py --bias-cv training_sucos_pocket_qcov`` (coordinate
+    hash caching lives on *scorer*).
+
+    Parameters
+    ----------
+    scorer:
+        Configured :class:`~genai_tps.analysis.skrinjar_similarity.IncrementalSkrinjarScorer`.
+    structure:
+        Boltz :class:`~boltz.data.types.StructureV2` from ``load_topo``.
+    n_struct:
+        Number of heavy atoms in *structure* (first *n_struct* rows are scored).
+
+    Returns
+    -------
+    Callable
+        ``Callable[[Trajectory], float]`` suitable for OPES bias hooks.
+    """
+    from genai_tps.backends.boltz.snapshot import snapshot_frame_numpy_copy  # noqa: PLC0415
+
+    n = int(n_struct)
+
+    def _fn(traj) -> float:
+        snap = traj[-1]
+        coords = snapshot_frame_numpy_copy(snap)[:n]
+        return float(scorer.score_coords(coords, structure, n))
+
+    return _fn

@@ -74,16 +74,27 @@ def align_molecules(
     mobile,
     max_preiters: int = 100,
     max_postiters: int = 100,
-) -> tuple[float, float, np.ndarray]:
+) -> tuple[float, ...]:
+    """Crippen pre-align then :func:`rdShapeAlign.AlignMol` when the binding works.
+
+    Some RDKit conda builds raise ``Boost.Python.ArgumentError`` for
+    ``AlignMol``; we fall back to Crippen-only alignment so SuCOS / protrusion
+    scores still run (parity with a fully working RDKit may differ slightly).
+    """
     from rdkit.Chem import rdShapeAlign  # noqa: PLC0415
 
     align_molecules_crippen(reference, mobile, iterations=max_preiters)
-    return rdShapeAlign.AlignMol(
-        reference,
-        mobile,
-        max_preiters=max_preiters,
-        max_postiters=max_postiters,
-    )
+    try:
+        return rdShapeAlign.AlignMol(
+            reference,
+            mobile,
+            refConfId=0,
+            probeConfId=0,
+            max_preiters=max_preiters,
+            max_postiters=max_postiters,
+        )
+    except Exception:  # noqa: BLE001 — Boost.ArgumentError or missing shape backend
+        return (0.0, 0.0)
 
 
 def get_feature_map_score(mol_1, mol_2, score_mode=None) -> float:
@@ -271,7 +282,8 @@ def sucos_shape_after_align(reference, mobile) -> float:
 
 # --- Foldseek ----------------------------------------------------------------------
 
-_PDB_ID_RE = re.compile(r"\b([0-9][A-Za-z0-9]{3})\b")
+# PDB ids are four chars; avoid ``\\b`` (underscore is a word char in Python).
+_PDB_ID_RE = re.compile(r"(?<![A-Za-z0-9])([0-9][A-Za-z0-9]{3})(?![A-Za-z0-9])")
 
 
 def parse_pdb_ids_from_foldseek_output(text: str, max_hits: int) -> list[str]:
@@ -349,6 +361,7 @@ class IncrementalSkrinjarScorer:
     pocket_radius: float = 6.0
     pocket_qcov_cutoff: float = 2.0
     enable_coord_cache: bool = True
+    scratch_dir: Path | None = None
     _cache: dict[str, float] = field(default_factory=dict, repr=False)
 
     def _coord_key(self, coords: np.ndarray) -> str:
@@ -399,8 +412,11 @@ class IncrementalSkrinjarScorer:
             interfaces=interfaces,
             coords=coord_arr,
         )
-        root = workdir or Path(tempfile.mkdtemp(prefix="skrinjar_cv_"))
-        root.mkdir(parents=True, exist_ok=True)
+        root = workdir or self.scratch_dir
+        if root is None:
+            root = Path(tempfile.mkdtemp(prefix="skrinjar_cv_"))
+        else:
+            root.mkdir(parents=True, exist_ok=True)
         qpath = root / "query.pdb"
         qpath.write_text(to_pdb(new_s, plddts=None, boltz2=True), encoding="utf-8")
         val = self._score_pdb_uncached(qpath)
@@ -485,11 +501,23 @@ def load_parquet_similarity_column(
 ) -> float | None:
     """Read one scalar from a parquet (optional regression helper)."""
     try:
-        import pandas as pd  # noqa: PLC0415
+        import pyarrow.parquet as pq  # noqa: PLC0415
     except ImportError:
         return None
-    df = pd.read_parquet(parquet_path)
-    if column not in df.columns or row_index >= len(df):
+    try:
+        table = pq.read_table(parquet_path, columns=[column])
+    except Exception:  # noqa: BLE001 — missing column or corrupt file
         return None
-    val = df.iloc[row_index][column]
-    return float(val) if val == val else None  # NaN -> None
+    if table.num_rows == 0 or row_index >= table.num_rows:
+        return None
+    try:
+        val = table.column(0)[row_index].as_py()
+    except Exception:  # noqa: BLE001
+        return None
+    if val is None:
+        return None
+    try:
+        x = float(val)
+    except (TypeError, ValueError):
+        return None
+    return None if x != x else x  # NaN -> None
