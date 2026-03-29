@@ -10,10 +10,14 @@ Default record id **18366081** matches Zenodo version **10.5281/zenodo.18366081*
 Examples::
 
     python scripts/download_runs_n_poses_zenodo.py --out data/runs_n_poses/zenodo \\
-        --files annotations.csv,all_similarity_scores.parquet,inputs.json
+        --preset light --skip-existing
 
     python scripts/download_runs_n_poses_zenodo.py --out data/runs_n_poses/zenodo \\
-        --all-metadata-only   # writes manifest for all files, downloads none
+        --files annotations.csv,all_similarity_scores.parquet,inputs.json
+
+    python scripts/download_runs_n_poses_zenodo.py --list-files
+
+    python scripts/download_runs_n_poses_zenodo.py --all-metadata-only
 """
 
 from __future__ import annotations
@@ -27,9 +31,16 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_RECORD_ID = "18366081"
 ZENODO_API_RECORD = "https://zenodo.org/api/records/{record_id}"
+
+# Comma-separated Zenodo ``key`` names (see ``--list-files``).
+DEFAULT_FILES_STR = "annotations.csv,all_similarity_scores.parquet,inputs.json"
+PRESETS: dict[str, str] = {
+    "light": DEFAULT_FILES_STR,
+    "medium": f"{DEFAULT_FILES_STR},ground_truth.tar.gz",
+    "heavy": f"{DEFAULT_FILES_STR},ground_truth.tar.gz,predictions.tar.gz",
+}
 
 
 def _fetch_json(url: str) -> dict[str, Any]:
@@ -60,6 +71,14 @@ def _download(url: str, dest: Path) -> None:
     tmp.replace(dest)
 
 
+def _resolve_files_arg(*, files: str | None, preset: str | None) -> str:
+    if files is not None:
+        return files
+    if preset is not None:
+        return PRESETS[preset]
+    return DEFAULT_FILES_STR
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -76,8 +95,22 @@ def main() -> int:
     parser.add_argument(
         "--files",
         type=str,
-        default="annotations.csv,all_similarity_scores.parquet,inputs.json",
-        help="Comma-separated list of Zenodo file keys to download.",
+        default=None,
+        help=(
+            "Comma-separated Zenodo file keys to download. "
+            "If set, overrides --preset. Default (no --preset): light tier."
+        ),
+    )
+    parser.add_argument(
+        "--preset",
+        choices=sorted(PRESETS.keys()),
+        default=None,
+        help="Download tier: light (~380 MB), medium (+ ground_truth), heavy (+ predictions.tar.gz).",
+    )
+    parser.add_argument(
+        "--list-files",
+        action="store_true",
+        help="Print remote file keys and sizes from Zenodo metadata, then exit (no downloads).",
     )
     parser.add_argument(
         "--all-metadata-only",
@@ -117,10 +150,6 @@ def main() -> int:
         "files": [],
     }
 
-    want: set[str] = set()
-    if not args.all_metadata_only:
-        want = {k.strip() for k in args.files.split(",") if k.strip()}
-
     for f in files:
         key = f.get("key")
         checksum = f.get("checksum") or ""
@@ -134,11 +163,35 @@ def main() -> int:
         }
         manifest["files"].append(entry)
 
+    if args.list_files:
+        print(f"Zenodo record {args.record_id} files ({len(manifest['files'])}):\n")
+        for entry in manifest["files"]:
+            key = entry.get("key")
+            raw_sz = entry.get("size")
+            if isinstance(raw_sz, int):
+                szs = f"{raw_sz:,}"
+            else:
+                szs = "" if raw_sz is None else str(raw_sz)
+            md5 = entry.get("md5") or ""
+            print(f"  {szs:>14}  {key}  md5={md5}")
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        print(f"\nWrote {manifest_path}", flush=True)
+        return 0
+
+    files_str = _resolve_files_arg(files=args.files, preset=args.preset)
+    want: set[str] = set()
+    if not args.all_metadata_only:
+        want = {k.strip() for k in files_str.split(",") if k.strip()}
+
+    for entry in manifest["files"]:
+        key = entry["key"]
+        md5_expected = entry["md5"]
+        url = entry["url"]
+
         if args.all_metadata_only:
             continue
         if key not in want:
             continue
-        url = entry["url"]
         if not url or not key:
             print(f"Missing download URL for {key!r}", file=sys.stderr)
             return 1

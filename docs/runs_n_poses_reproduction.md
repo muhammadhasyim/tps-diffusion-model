@@ -6,7 +6,18 @@ This document ties the **[plinder-org/runs-n-poses](https://github.com/plinder-o
 
 - Preprint: [bioRxiv 2025.02.03.636309](https://doi.org/10.1101/2025.02.03.636309)
 - Benchmark repo (submodule): [`papers/runs-n-poses/`](../papers/runs-n-poses/)
-- Zenodo concept DOI: [10.5281/zenodo.14794785](https://doi.org/10.5281/zenodo.14794785) (resolve to **latest version** record for download URLs)
+- Zenodo **version** pinned in this repo’s downloader: [10.5281/zenodo.18366081](https://doi.org/10.5281/zenodo.18366081) ([record 18366081](https://zenodo.org/records/18366081), v6).
+- Zenodo concept DOI: [10.5281/zenodo.14794785](https://doi.org/10.5281/zenodo.14794785) (all versions; use the version DOI above for reproducible file URLs).
+
+## Local data layout (`data/runs_n_poses/`)
+
+Large files live under **`data/runs_n_poses/`**, which is **gitignored** except a short tracked [`data/runs_n_poses/README.md`](../data/runs_n_poses/README.md). Do **not** `git add` parquet or tarballs. After download, `zenodo/manifest.json` records Zenodo file keys, sizes, and MD5 checksums for provenance.
+
+| Path | Role |
+|------|------|
+| `zenodo/` | Raw files from [`scripts/download_runs_n_poses_zenodo.py`](../scripts/download_runs_n_poses_zenodo.py) (keys match Zenodo filenames) |
+| `extracted/ground_truth/` | Optional unpack of `ground_truth.tar.gz` via [`scripts/extract_zenodo_runs_n_poses.py`](../scripts/extract_zenodo_runs_n_poses.py) |
+| `training_ligands_flat/` | Optional: flatten or symlink `*.sdf` here for `--skrinjar-training-ligands-dir` (incremental scorer uses non-recursive `glob("*.sdf")`) |
 - Similarity definition (paper / PLINDER benchmark): `SuCOS-pocket` = SuCOS after RDKit `rdShapeAlign.AlignMol`, multiplied by **pocket_qcov** from the PLINDER pipeline (Methods §7.4).
 - **This repo’s incremental CV** (`training_sucos_pocket_qcov` in `genai_tps.analysis.skrinjar_similarity`) uses a **geometric pocket Cα proxy** and **does not** apply Foldseek’s rigid transform to the training ligand the way `papers/runs-n-poses/similarity_scoring.py` does for holo pairs — expect differences vs Zenodo `all_similarity_scores.parquet` even when RDKit matches upstream.
 
@@ -17,9 +28,11 @@ This document ties the **[plinder-org/runs-n-poses](https://github.com/plinder-o
 | wwPDB mmCIF mirror (compressed) | ~150–400 GB |
 | Unpacked + PLINDER-derived trees | +0.3–1 TB typical |
 | Foldseek databases (training split) | tens–low hundreds of GB |
-| Zenodo `all_similarity_scores.parquet` only | ~360 MB |
-| Zenodo `ground_truth.tar.gz` | ~400 MB |
-| Zenodo `msa_files.tar.gz` | ~46 TB (optional; do not download unless needed) |
+| Zenodo `all_similarity_scores.parquet` only | ~380 MB |
+| Zenodo `ground_truth.tar.gz` | ~414 MB |
+| Zenodo `predictions.tar.gz` | ~48 MB |
+| Zenodo `prediction_files.tar.gz` | ~40 GB (optional) |
+| Zenodo `msa_files.tar.gz` | ~46 GB (optional; do not download unless needed) |
 
 Plan **≥1 TB** free disk for a comfortable full PDB + DB + scratch workflow; **64–128 GB RAM** minimum for large batches, more if unchunked.
 
@@ -30,13 +43,64 @@ Plan **≥1 TB** free disk for a comfortable full PDB + DB + scratch workflow; *
 
 ## 1. Download Zenodo files (no full PDB)
 
+**Download tiers** (record [18366081](https://zenodo.org/records/18366081)):
+
+| Tier | Approx. size | Contents |
+|------|----------------|----------|
+| **light** | ~380 MB | `annotations.csv`, `all_similarity_scores.parquet`, `inputs.json` |
+| **medium** | + ~414 MB | light + `ground_truth.tar.gz` (benchmark structures / ligand files) |
+| **heavy** | + ~48 MB | medium + `predictions.tar.gz` |
+| **full mirror** | tens of GB | add `prediction_files.tar.gz`, `msa_files.tar.gz`, etc. only if required — list keys with `--list-files` |
+
+Presets:
+
 ```bash
 conda run -n genai-tps python scripts/download_runs_n_poses_zenodo.py \
-  --out data/runs_n_poses/zenodo \
-  --files annotations.csv,all_similarity_scores.parquet,inputs.json
+  --out data/runs_n_poses/zenodo --preset light --skip-existing
+
+conda run -n genai-tps python scripts/download_runs_n_poses_zenodo.py \
+  --out data/runs_n_poses/zenodo --preset medium --skip-existing
+
+conda run -n genai-tps python scripts/download_runs_n_poses_zenodo.py \
+  --out data/runs_n_poses/zenodo --preset heavy --skip-existing
 ```
 
-Large archives (`ground_truth.tar.gz`, `prediction_files.tar.gz`, `msa_files.tar.gz`) are opt-in via `--files`.
+Equivalent explicit `--files` lists:
+
+```bash
+# light (default if you omit --preset)
+python scripts/download_runs_n_poses_zenodo.py --out data/runs_n_poses/zenodo \
+  --files annotations.csv,all_similarity_scores.parquet,inputs.json
+
+# medium
+python scripts/download_runs_n_poses_zenodo.py --out data/runs_n_poses/zenodo \
+  --files annotations.csv,all_similarity_scores.parquet,inputs.json,ground_truth.tar.gz
+```
+
+Inspect remote filenames and sizes without downloading:
+
+```bash
+python scripts/download_runs_n_poses_zenodo.py --list-files
+```
+
+**Extract** `ground_truth.tar.gz` for local browsing / SDF harvesting:
+
+```bash
+python scripts/extract_zenodo_runs_n_poses.py \
+  --archive data/runs_n_poses/zenodo/ground_truth.tar.gz \
+  --out data/runs_n_poses/extracted/ground_truth
+```
+
+Optional flat SDF dir for OPES (example):
+
+```bash
+mkdir -p data/runs_n_poses/training_ligands_flat
+find data/runs_n_poses/extracted/ground_truth -name '*.sdf' -type f | head -500 | while read -r f; do
+  ln -sf "$(realpath "$f")" "data/runs_n_poses/training_ligands_flat/$(basename "$f")"
+done
+```
+
+Adjust `head` or use full `find` when you have disk and want the whole set (watch for `basename` collisions).
 
 ## 2. OpenStructure chemical dictionary (for OpenStructure-based scoring in upstream repo)
 
