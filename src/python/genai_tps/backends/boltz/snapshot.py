@@ -214,3 +214,21 @@ def snapshot_frame_numpy_copy(snap: BoltzSnapshot) -> np.ndarray:
     if c.ndim == 3:
         return c[0].copy()
     return c.copy()
+
+
+def snapshot_frame_tensor_view(snap: BoltzSnapshot) -> torch.Tensor:
+    """Return one ``(n_atoms, 3)`` frame as a torch tensor without host readback.
+
+    This accessor is intended for tensor-native CVs that can operate directly on
+    the stored device tensor and therefore avoid the explicit synchronize +
+    GPU->CPU copy used by :func:`snapshot_frame_numpy_copy`.
+    """
+    tc = snap.tensor_coords
+    if tc is not None:
+        if tc.dim() == 3:
+            return tc[0]
+        return tc
+    c = torch.as_tensor(np.asarray(snap.coordinates, dtype=np.float32))
+    if c.dim() == 3:
+        return c[0]
+    return c

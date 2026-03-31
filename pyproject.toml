@@ -59,6 +59,8 @@ enhanced_sampling = [
   # GAFF2 / SMIRNOFF ligand parameterization (scripts/compute_cv_rmsd.py, cofactors).
   "openmmforcefields>=0.14",
   "openff-toolkit>=0.14.0",
+  # Ligand pose quality checks for OPES (--bias-cv posebusters_*).
+  "posebusters==0.6.5",
 ]
 # Pip-only one-shot: PyMOL cartoons, ProDy ensemble analysis, OpenMM+MBAR+ligands.
 # Conda users: environment.yml installs prody, pymol-open-source, openff-toolkit from conda-forge
@@ -71,6 +73,7 @@ full = [
   "pdbfixer>=1.9",
   "openmmforcefields>=0.14",
   "openff-toolkit>=0.14.0",
+  "posebusters==0.6.5",
 ]
 
 [tool.setuptools.packages.find]

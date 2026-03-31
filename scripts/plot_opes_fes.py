@@ -235,6 +235,7 @@ _CV_LABEL_BY_NAME: dict[str, str] = {
     "ligand_pocket_dist": r"Ligand--pocket distance (\AA)",
     "ligand_contacts": r"Protein--ligand contacts",
     "ligand_hbonds": r"H-bond count (proxy)",
+    "posebusters_pass_fraction": r"PoseBusters pass fraction",
 }
 
 
@@ -742,15 +743,15 @@ def plot_opes_fes(
         f_bias,
         color="#2E7D32",
         linewidth=2.0,
-        label=r"Biased: $-\ln\bigl(\hat{\rho}/\hat{\rho}_{\mathrm{max}}\bigr)$",
+        label=r"Biased: $-\ln\left(\hat{\rho}/\hat{\rho}_{\mathrm{max}}\right)$",
     )
-    unb_label = r"Unbiased: $-\ln\bigl(\hat{\rho}/\hat{\rho}_{\mathrm{max}}\bigr)$"
+    unb_label = r"Unbiased: $-\ln\left(\hat{\rho}/\hat{\rho}_{\mathrm{max}}\right)$"
     if abs(scale_u - 1.0) > 1e-12:
         unb_label = rf"{unb_label} ($\times {scale_u:g}$)"
     ax.plot(grid, f_unb_plot, color="#C62828", linewidth=2.0, label=unb_label)
     ax.set_xlabel(cv_label, fontsize=_MPL_LABEL_FS)
     ax.set_ylabel(
-        r"$-\ln\bigl(\hat{\rho}(s)/\hat{\rho}_{\mathrm{max}}\bigr)$",
+        r"$-\ln\left(\hat{\rho}(s)/\hat{\rho}_{\mathrm{max}}\right)$",
         fontsize=_MPL_LABEL_FS,
     )
     _style_axis_math(ax)
@@ -953,7 +954,7 @@ def plot_opes_fes_2d(
             linewidths=0.45,
             alpha=0.38,
         )
-        ln_lbl = r"$-\ln\bigl(\hat{\rho}/\hat{\rho}_{\mathrm{max}}\bigr)$"
+        ln_lbl = r"$-\ln\left(\hat{\rho}/\hat{\rho}_{\mathrm{max}}\right)$"
         ax.set_xlabel(label_x, fontsize=_MPL_LABEL_FS)
         ax.set_ylabel(label_y, fontsize=_MPL_LABEL_FS)
         _style_axis_math(ax)

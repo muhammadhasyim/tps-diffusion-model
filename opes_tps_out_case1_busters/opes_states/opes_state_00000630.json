@@ -1,0 +1,56 @@
+{
+  "ndim": 1,
+  "kbt": 1.0,
+  "barrier": 5.0,
+  "biasfactor": 10.0,
+  "epsilon": 0.006737946999085467,
+  "kernel_cutoff": 3.605551275463989,
+  "compression_threshold": 0.5,
+  "pace": 10,
+  "sigma_min": [
+    0.01
+  ],
+  "fixed_sigma": null,
+  "explore": false,
+  "bias_prefactor": 0.9,
+  "sigma_0": [
+    3.1622776601683795
+  ],
+  "sum_weights": 60.95541579543957,
+  "sum_weights2": 64.31598599299214,
+  "counter": 63,
+  "zed": 139.43309050448948,
+  "kde_norm": 60.95541579543957,
+  "welford_n": 630,
+  "welford_mean": [
+    0.9073486184597295
+  ],
+  "welford_m2": [
+    0.22702114224748113
+  ],
+  "n_merges": 61,
+  "kernels": [
+    {
+      "center": [
+        0.9259259259259255
+      ],
+      "sigma": [
+        0.01185439748166467
+      ],
+      "height": 10790.45542322455
+    },
+    {
+      "center": [
+        0.8888888888888888
+      ],
+      "sigma": [
+        0.011295406471829646
+      ],
+      "height": 6148.513383392364
+    }
+  ],
+  "bias_cv": "posebusters_pass_fraction",
+  "bias_cv_names": [
+    "posebusters_pass_fraction"
+  ]
+}

@@ -138,4 +138,6 @@ dependencies:
     # torch cu121 (nvjitlink version cascade).  Upgrade to jax[cuda12] only
     # on a machine where torch and jax use matching CUDA versions.
     - "jax[cpu]>=0.4"
+    # PoseBusters: ligand pose quality CVs for OPES (--bias-cv posebusters_*).
+    - "posebusters==0.6.5"
     # Pip-only full stack (PyMOL + ProDy + OpenMM ligands): pip install -e ".[boltz,dev,full]"

@@ -72,6 +72,11 @@ from genai_tps.backends.boltz.snapshot import (
 )
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.enhanced_sampling import OPESBias
+from genai_tps.analysis.posebusters_gpu import (
+    POSEBUSTERS_GPU_CV_PREFIX,
+    POSEBUSTERS_GPU_PASS_FRACTION,
+)
+from genai_tps.analysis.posebusters_traj import POSEBUSTERS_CV_PREFIX
 
 # All supported single-CV names for --bias-cv
 _SINGLE_CV_NAMES = [
@@ -92,6 +97,8 @@ _SINGLE_CV_NAMES = [
     "ligand_contacts",
     "ligand_hbonds",
     "training_sucos_pocket_qcov",
+    "posebusters_pass_fraction",
+    POSEBUSTERS_GPU_PASS_FRACTION,
 ]
 
 
@@ -107,6 +114,33 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _bias_cv_string_needs_topo_early(bias_cv_raw: str, list_posebusters_cvs: bool) -> bool:
+    """Whether resolving ``--topo-npz`` must happen before parsing ``--bias-cv``."""
+    if list_posebusters_cvs:
+        return True
+    low = bias_cv_raw.lower()
+    for key in ("openmm", "ligand_", "training_sucos", "posebusters"):
+        if key in low:
+            return True
+    return False
+
+
+def _cv_names_require_topo_npz(cv_names: list[str]) -> bool:
+    static = {
+        "openmm",
+        "openmm_energy",
+        "ligand_rmsd",
+        "ligand_pocket_dist",
+        "ligand_contacts",
+        "ligand_hbonds",
+        "training_sucos_pocket_qcov",
+        "posebusters_pass_fraction",
+    }
+    if static & set(cv_names):
+        return True
+    return any(n.startswith(POSEBUSTERS_CV_PREFIX) for n in cv_names)
+
+
 def _make_cv_function(
     cv_type: str,
     reference_coords: torch.Tensor | None = None,
@@ -120,6 +154,7 @@ def _make_cv_function(
     contact_r0: float = 3.5,
     hbond_cutoff: float = 3.5,
     skrinjar_context: tuple | None = None,
+    posebusters_context: dict | None = None,
 ) -> "Callable[[Trajectory], float]":
     """Build a scalar CV function (single-CV bias, returns float).
 
@@ -131,7 +166,8 @@ def _make_cv_function(
         ``"ca_contact_count"``, ``"shape_kappa2"``, ``"shape_acylindricity"``, ``"lddt"``,
         ``"ramachandran_outlier"``, ``"ligand_rmsd"``,
         ``"ligand_pocket_dist"``, ``"ligand_contacts"``, ``"ligand_hbonds"``,
-        ``"training_sucos_pocket_qcov"``.
+        ``"training_sucos_pocket_qcov"``, ``"posebusters_pass_fraction"``,
+        ``"posebusters_gpu_pass_fraction"``.
     reference_coords:
         Ca coordinates of the initial structure, shape ``(N, 3)``.
         Required for ``"rmsd"``.
@@ -306,6 +342,26 @@ def _make_cv_function(
 
         scorer, structure, n_struct = skrinjar_context
         return make_training_sucos_pocket_qcov_traj_fn(scorer, structure, int(n_struct))
+    elif cv_type == "posebusters_pass_fraction":
+        if posebusters_context is None or posebusters_context.get("evaluator") is None:
+            raise ValueError(
+                "--bias-cv posebusters_pass_fraction requires PoseBusters setup (internal error)."
+            )
+        from genai_tps.analysis.posebusters_traj import (  # noqa: PLC0415
+            make_posebusters_pass_fraction_traj_fn,
+        )
+
+        return make_posebusters_pass_fraction_traj_fn(posebusters_context["evaluator"])
+    elif cv_type == POSEBUSTERS_GPU_PASS_FRACTION:
+        if posebusters_context is None or posebusters_context.get("gpu_evaluator") is None:
+            raise ValueError(
+                "--bias-cv posebusters_gpu_pass_fraction requires GPU PoseBusters setup (internal error)."
+            )
+        from genai_tps.analysis.posebusters_gpu import (  # noqa: PLC0415
+            make_posebusters_gpu_pass_fraction_traj_fn,
+        )
+
+        return make_posebusters_gpu_pass_fraction_traj_fn(posebusters_context["gpu_evaluator"])
     else:
         raise ValueError(
             f"Unknown CV type: {cv_type!r}. "
@@ -321,13 +377,21 @@ def _parse_bias_cv_list(bias_cv_str: str) -> list[str]:
     """
     names = [n.strip() for n in bias_cv_str.split(",") if n.strip()]
     for n in names:
-        if n not in _SINGLE_CV_NAMES:
-            raise ValueError(
-                f"Unknown --bias-cv: {n!r}. "
-                f"Supported: {_SINGLE_CV_NAMES}.  "
-                "Separate multiple CVs with commas, e.g. "
-                "--bias-cv contact_order,clash_count"
-            )
+        if (
+            n in _SINGLE_CV_NAMES
+            or n.startswith(POSEBUSTERS_CV_PREFIX)
+            or n.startswith(POSEBUSTERS_GPU_CV_PREFIX)
+        ):
+            continue
+        raise ValueError(
+            f"Unknown --bias-cv: {n!r}. "
+            f"Supported base names: {_SINGLE_CV_NAMES}.  "
+            "PoseBusters per-check columns use the posebusters__ prefix (see "
+            "--list-posebusters-cvs). GPU-native geometry checks use the "
+            "posebusters_gpu__ prefix.  "
+            "Separate multiple CVs with commas, e.g. "
+            "--bias-cv contact_order,clash_count"
+        )
     return names
 
 
@@ -344,6 +408,7 @@ def _make_multi_cv_function(
     contact_r0: float = 3.5,
     hbond_cutoff: float = 3.5,
     skrinjar_context: tuple | None = None,
+    posebusters_context: dict | None = None,
 ) -> "tuple[Callable[[Trajectory], np.ndarray], int]":
     """Build a vector CV function for multi-dimensional OPES bias.
 
@@ -353,23 +418,67 @@ def _make_multi_cv_function(
     For a single CV name, the returned function still returns a scalar
     (``ndim=1``).
     """
-    scalar_fns = [
-        _make_cv_function(
-            name,
-            reference_coords=reference_coords,
-            atom_mask=atom_mask,
-            topo_npz=topo_npz,
-            openmm_platform=openmm_platform,
-            openmm_max_iter=openmm_max_iter,
-            mol_dir=mol_dir,
-            lddt_reference=lddt_reference,
-            pocket_radius=pocket_radius,
-            contact_r0=contact_r0,
-            hbond_cutoff=hbond_cutoff,
-            skrinjar_context=skrinjar_context if name == "training_sucos_pocket_qcov" else None,
+    pb_cols = [n for n in cv_names if n.startswith(POSEBUSTERS_CV_PREFIX)]
+    gpu_pb_cols = [n for n in cv_names if n.startswith(POSEBUSTERS_GPU_CV_PREFIX)]
+    if pb_cols:
+        if len(pb_cols) != len(cv_names):
+            raise ValueError(
+                "posebusters__* CVs cannot be mixed with other names in one --bias-cv list."
+            )
+        if posebusters_context is None or posebusters_context.get("ordered_columns") is None:
+            raise ValueError("internal error: posebusters_context missing ordered_columns")
+        from genai_tps.analysis.posebusters_traj import (  # noqa: PLC0415
+            make_posebusters_cached_column_scalar_fns,
         )
-        for name in cv_names
-    ]
+
+        ev = posebusters_context["evaluator"]
+        cols: list[str] = posebusters_context["ordered_columns"]
+        if len(cols) != len(cv_names):
+            raise ValueError(
+                f"PoseBusters column count {len(cols)} does not match CV name count {len(cv_names)}."
+            )
+        scalar_fns = make_posebusters_cached_column_scalar_fns(ev, cols)
+    elif gpu_pb_cols:
+        if len(gpu_pb_cols) != len(cv_names):
+            raise ValueError(
+                "posebusters_gpu__* CVs cannot be mixed with other names in one --bias-cv list."
+            )
+        if posebusters_context is None or posebusters_context.get("gpu_ordered_columns") is None:
+            raise ValueError("internal error: posebusters_context missing gpu_ordered_columns")
+        from genai_tps.analysis.posebusters_gpu import (  # noqa: PLC0415
+            make_posebusters_gpu_cached_column_scalar_fns,
+        )
+
+        ev = posebusters_context["gpu_evaluator"]
+        cols = posebusters_context["gpu_ordered_columns"]
+        if len(cols) != len(cv_names):
+            raise ValueError(
+                f"GPU PoseBusters column count {len(cols)} does not match CV name count {len(cv_names)}."
+            )
+        scalar_fns = make_posebusters_gpu_cached_column_scalar_fns(ev, cols)
+    else:
+        scalar_fns = [
+            _make_cv_function(
+                name,
+                reference_coords=reference_coords,
+                atom_mask=atom_mask,
+                topo_npz=topo_npz,
+                openmm_platform=openmm_platform,
+                openmm_max_iter=openmm_max_iter,
+                mol_dir=mol_dir,
+                lddt_reference=lddt_reference,
+                pocket_radius=pocket_radius,
+                contact_r0=contact_r0,
+                hbond_cutoff=hbond_cutoff,
+                skrinjar_context=skrinjar_context if name == "training_sucos_pocket_qcov" else None,
+                posebusters_context=(
+                    posebusters_context
+                    if name in ("posebusters_pass_fraction", POSEBUSTERS_GPU_PASS_FRACTION)
+                    else None
+                ),
+            )
+            for name in cv_names
+        ]
     ndim = len(scalar_fns)
 
     if ndim == 1:
@@ -669,7 +778,15 @@ def main() -> None:
             "training ligands are not rotated by Foldseek (u,t) like runs-n-poses "
             "holo scoring (CPU RDKit + optional Foldseek GPU prefilter on complexes); "
             "requires --topo-npz and --skrinjar-training-complexes-dir and/or "
-            "--skrinjar-training-ligands-dir (see docs/runs_n_poses_reproduction.md)."
+            "--skrinjar-training-ligands-dir (see docs/runs_n_poses_reproduction.md).  "
+            "'posebusters_pass_fraction': mean PoseBusters boolean pass rate in [0,1] "
+            "(pip install posebusters; see docs/posebusters_opes_cv.md).  "
+            "'posebusters_all': expands to all posebusters__* checks (sole token; multi-D OPES).  "
+            "'posebusters_gpu_pass_fraction': mean pass rate over the local tensor-native "
+            "geometry subset.  "
+            "'posebusters_gpu_all': expands to all posebusters_gpu__* checks "
+            "(sole token; multi-D OPES).  "
+            "Use --list-posebusters-cvs to print the expanded names for your selected backend."
         ),
     )
     opes_group.add_argument(
@@ -766,6 +883,78 @@ def main() -> None:
         "--skrinjar-no-cache",
         action="store_true",
         help="Disable coordinate-hash cache for the Skrinjar scorer (recompute every MC step).",
+    )
+    pb = parser.add_argument_group(
+        "PoseBusters CV (exact CPU PoseBusters and tensor-first GPU geometric subset)"
+    )
+    pb.add_argument(
+        "--list-posebusters-cvs",
+        action="store_true",
+        help=(
+            "After the initial trajectory, print comma-separated PoseBusters CV names "
+            "for the selected backend and current reference settings, then exit."
+        ),
+    )
+    pb.add_argument(
+        "--posebusters-backend",
+        type=str,
+        default="cpu_posebusters",
+        choices=["cpu_posebusters", "gpu_fast", "hybrid"],
+        help=(
+            "Backend for PoseBusters-backed CVs. "
+            "'cpu_posebusters' preserves exact upstream PoseBusters via RDKit/files. "
+            "'gpu_fast' runs the local tensor-native geometry subset only. "
+            "'hybrid' uses the GPU subset for OPES CV values and also runs exact CPU "
+            "PoseBusters every --posebusters-cpu-fallback-every evaluations for parity diagnostics."
+        ),
+    )
+    pb.add_argument(
+        "--posebusters-mode",
+        type=str,
+        default="redock_fast",
+        choices=[
+            "dock",
+            "redock",
+            "mol",
+            "gen",
+            "regen",
+            "dock_fast",
+            "redock_fast",
+            "mol_fast",
+            "gen_fast",
+            "regen_fast",
+        ],
+        help="PoseBusters YAML config preset (default: redock_fast for cheaper OPES steps).",
+    )
+    pb.add_argument(
+        "--posebusters-reference-ligand-sdf",
+        type=Path,
+        default=None,
+        help="Reference ligand SDF for redock* modes (optional if --posebusters-use-initial-ligand-ref).",
+    )
+    pb.add_argument(
+        "--posebusters-use-initial-ligand-ref",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "For redock*: build reference ligand from the initial trajectory frame (default: on). "
+            "Disable if you supply --posebusters-reference-ligand-sdf only."
+        ),
+    )
+    pb.add_argument(
+        "--posebusters-ligand-chain",
+        type=str,
+        default=None,
+        help="NONPOLYMER chain id for the ligand (default: first nonpolymer chain).",
+    )
+    pb.add_argument(
+        "--posebusters-cpu-fallback-every",
+        type=int,
+        default=0,
+        help=(
+            "In --posebusters-backend hybrid mode, run exact CPU PoseBusters every N "
+            "evaluations as a parity probe. 0 disables CPU fallback work (default: 0)."
+        ),
     )
     opes_group.add_argument(
         "--save-opes-state-every", type=int, default=100,
@@ -932,27 +1121,242 @@ def main() -> None:
                 file=sys.stderr, flush=True,
             )
 
+    # Resolve --topo-npz early when PoseBusters listing/expansion or other CVs need it.
+    topo_npz = Path(args.topo_npz).expanduser().resolve() if args.topo_npz else None
+    bias_raw = args.bias_cv.strip()
+    if topo_npz is None and _bias_cv_string_needs_topo_early(bias_raw, args.list_posebusters_cvs):
+        struct_candidates = sorted((processed_dir / "structures").glob("*.npz"))
+        if struct_candidates:
+            topo_npz = struct_candidates[0]
+            if len(struct_candidates) > 1:
+                print(
+                    f"[TPS-OPES] Multiple structure npz files; using {topo_npz}",
+                    file=sys.stderr, flush=True,
+                )
+            print(f"[TPS-OPES] Auto-detected topo_npz: {topo_npz}", flush=True)
+        else:
+            print(
+                "[TPS-OPES] ERROR: --bias-cv / PoseBusters listing requires "
+                "--topo-npz or processed/structures/*.npz under the Boltz run.",
+                file=sys.stderr, flush=True,
+            )
+            sys.exit(1)
+
+    posebusters_context: dict | None = None
+    bias_cv_work = bias_raw
+    if args.list_posebusters_cvs or "posebusters" in bias_raw.lower():
+        if topo_npz is None:
+            print(
+                "[TPS-OPES] ERROR: PoseBusters requires --topo-npz (or auto-detected structures npz).",
+                file=sys.stderr,
+                flush=True,
+            )
+            sys.exit(1)
+        from genai_tps.analysis.boltz_npz_export import load_topo  # noqa: PLC0415
+        from genai_tps.analysis.posebusters_gpu import (  # noqa: PLC0415
+            GPUPoseBustersEvaluator,
+            expand_bias_cv_posebusters_gpu_all,
+            expand_posebusters_gpu_all_to_cv_names,
+        )
+        from genai_tps.analysis.posebusters_traj import validate_posebusters_bias_cv_names  # noqa: PLC0415
+
+        structure, n_struct = load_topo(Path(topo_npz))
+        probe = snapshot_frame_numpy_copy(init_traj[-1])[: int(n_struct)].astype(np.float32)
+        scratch_pb = work_root / "posebusters_scratch"
+        ref_sdf = (
+            Path(args.posebusters_reference_ligand_sdf).expanduser().resolve()
+            if args.posebusters_reference_ligand_sdf
+            else None
+        )
+        init_ref = probe if args.posebusters_use_initial_ligand_ref else None
+        if str(args.posebusters_mode).startswith("redock") and ref_sdf is None and init_ref is None:
+            print(
+                "[TPS-OPES] ERROR: redock* PoseBusters modes need "
+                "--posebusters-reference-ligand-sdf and/or --posebusters-use-initial-ligand-ref.",
+                file=sys.stderr,
+                flush=True,
+            )
+            sys.exit(1)
+        pb_kw: dict = {
+            "mode": str(args.posebusters_mode),
+            "reference_ligand_sdf": ref_sdf,
+            "initial_coords_for_reference_ligand": init_ref,
+            "ligand_chain": args.posebusters_ligand_chain,
+        }
+        raw_lower = bias_raw.lower()
+        uses_gpu_posebusters = (
+            "posebusters_gpu" in raw_lower or str(args.posebusters_backend) in ("gpu_fast", "hybrid")
+        )
+        uses_cpu_posebusters = (
+            "posebusters_pass_fraction" in raw_lower
+            or "posebusters_all" in raw_lower
+            or POSEBUSTERS_CV_PREFIX in raw_lower
+            or str(args.posebusters_backend) == "cpu_posebusters"
+        ) and "posebusters_gpu" not in raw_lower
+
+        if uses_gpu_posebusters and uses_cpu_posebusters and not args.list_posebusters_cvs:
+            print(
+                "[TPS-OPES] ERROR: CPU PoseBusters and GPU PoseBusters CV namespaces cannot be mixed.",
+                file=sys.stderr,
+                flush=True,
+            )
+            sys.exit(1)
+
+        if uses_gpu_posebusters:
+            expanded, raw_cols, cv_names_from_all = expand_bias_cv_posebusters_gpu_all(bias_raw)
+            if args.list_posebusters_cvs:
+                names, _ = expand_posebusters_gpu_all_to_cv_names()
+                print(",".join(names), flush=True)
+                sys.exit(0)
+            gpu_ev = GPUPoseBustersEvaluator(
+                structure,
+                int(n_struct),
+                probe,
+                pocket_radius=float(args.pocket_radius),
+                contact_r0=float(args.contact_r0),
+                hbond_cutoff=float(args.hbond_cutoff),
+                ligand_chain=args.posebusters_ligand_chain,
+                backend_mode=str(args.posebusters_backend),
+                cpu_evaluator=None,
+                cpu_fallback_every=int(args.posebusters_cpu_fallback_every),
+            )
+            if str(args.posebusters_backend) == "hybrid":
+                try:
+                    import posebusters  # noqa: F401, PLC0415
+                    from genai_tps.analysis.posebusters_traj import PoseBustersTrajEvaluator  # noqa: PLC0415
+
+                    gpu_ev.cpu_evaluator = PoseBustersTrajEvaluator(
+                        structure,
+                        int(n_struct),
+                        scratch_pb / "hybrid_cpu",
+                        mode=str(args.posebusters_mode),
+                        reference_ligand_sdf=ref_sdf,
+                        initial_coords_for_reference_ligand=init_ref,
+                        ligand_chain=args.posebusters_ligand_chain,
+                    )
+                except ImportError:
+                    print(
+                        "[TPS-OPES] WARNING: hybrid GPU PoseBusters requested but upstream "
+                        "posebusters is unavailable; continuing without CPU fallback.",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+            if raw_cols is not None and cv_names_from_all is not None:
+                bias_cv_work = expanded
+                posebusters_context = {"gpu_evaluator": gpu_ev, "gpu_ordered_columns": raw_cols}
+            elif POSEBUSTERS_GPU_PASS_FRACTION in bias_raw:
+                bias_cv_work = bias_raw
+                posebusters_context = {"gpu_evaluator": gpu_ev}
+            else:
+                bias_cv_work = bias_raw
+                names_chk, raw_chk = expand_posebusters_gpu_all_to_cv_names()
+                parts_chk = [p.strip() for p in bias_cv_work.split(",") if p.strip()]
+                if parts_chk != names_chk:
+                    print(
+                        "[TPS-OPES] ERROR: --bias-cv posebusters_gpu__* list does not match "
+                        "the supported GPU check set. Use --bias-cv posebusters_gpu_all "
+                        "or run with --list-posebusters-cvs.",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    sys.exit(1)
+                posebusters_context = {"gpu_evaluator": gpu_ev, "gpu_ordered_columns": raw_chk}
+        else:
+            try:
+                import posebusters  # noqa: F401, PLC0415
+            except ImportError:
+                print(
+                    "[TPS-OPES] ERROR: PoseBusters CVs require `pip install posebusters` "
+                    "(see environment.yml).",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                sys.exit(1)
+            from genai_tps.analysis.posebusters_traj import (  # noqa: PLC0415
+                PoseBustersTrajEvaluator,
+                expand_bias_cv_posebusters_all,
+                expand_posebusters_all_to_cv_names,
+            )
+
+            expanded, raw_cols, cv_names_from_all = expand_bias_cv_posebusters_all(
+                bias_raw,
+                structure,
+                int(n_struct),
+                scratch_pb,
+                probe,
+                **pb_kw,
+            )
+            if args.list_posebusters_cvs:
+                names, _ = expand_posebusters_all_to_cv_names(
+                    structure, int(n_struct), scratch_pb / "list_probe", probe, **pb_kw
+                )
+                print(",".join(names), flush=True)
+                sys.exit(0)
+            if raw_cols is not None and cv_names_from_all is not None:
+                bias_cv_work = expanded
+                ev = PoseBustersTrajEvaluator(
+                    structure,
+                    int(n_struct),
+                    scratch_pb,
+                    mode=str(args.posebusters_mode),
+                    reference_ligand_sdf=ref_sdf,
+                    initial_coords_for_reference_ligand=init_ref,
+                    ligand_chain=args.posebusters_ligand_chain,
+                )
+                posebusters_context = {"evaluator": ev, "ordered_columns": raw_cols}
+            elif "posebusters_pass_fraction" in bias_raw:
+                bias_cv_work = bias_raw
+                ev = PoseBustersTrajEvaluator(
+                    structure,
+                    int(n_struct),
+                    scratch_pb,
+                    mode=str(args.posebusters_mode),
+                    reference_ligand_sdf=ref_sdf,
+                    initial_coords_for_reference_ligand=init_ref,
+                    ligand_chain=args.posebusters_ligand_chain,
+                )
+                posebusters_context = {"evaluator": ev}
+            else:
+                bias_cv_work = bias_raw
+                names_chk, raw_chk = expand_posebusters_all_to_cv_names(
+                    structure, int(n_struct), scratch_pb / "verify", probe, **pb_kw
+                )
+                parts_chk = [p.strip() for p in bias_cv_work.split(",") if p.strip()]
+                if parts_chk != names_chk:
+                    print(
+                        "[TPS-OPES] ERROR: --bias-cv posebusters__* list does not match "
+                        "current --posebusters-mode / reference settings. "
+                        "Use --bias-cv posebusters_all or run with --list-posebusters-cvs.",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    sys.exit(1)
+                ev = PoseBustersTrajEvaluator(
+                    structure,
+                    int(n_struct),
+                    scratch_pb,
+                    mode=str(args.posebusters_mode),
+                    reference_ligand_sdf=ref_sdf,
+                    initial_coords_for_reference_ligand=init_ref,
+                    ligand_chain=args.posebusters_ligand_chain,
+                )
+                posebusters_context = {"evaluator": ev, "ordered_columns": raw_chk}
+
     # Parse --bias-cv (single name or comma-separated list for multi-D).
     try:
-        bias_cv_names = _parse_bias_cv_list(args.bias_cv)
+        bias_cv_names = _parse_bias_cv_list(bias_cv_work)
+        validate_posebusters_bias_cv_names(bias_cv_names)
+        from genai_tps.analysis.posebusters_gpu import validate_posebusters_gpu_bias_cv_names  # noqa: PLC0415
+
+        validate_posebusters_gpu_bias_cv_names(bias_cv_names)
     except ValueError as exc:
         print(f"[TPS-OPES] ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
 
     ndim = len(bias_cv_names)
 
-    # Auto-detect topo_npz from the processed structures directory if not set.
-    topo_npz = args.topo_npz
-    _needs_topo = {
-        "openmm",
-        "openmm_energy",
-        "ligand_rmsd",
-        "ligand_pocket_dist",
-        "ligand_contacts",
-        "ligand_hbonds",
-        "training_sucos_pocket_qcov",
-    }
-    if topo_npz is None and _needs_topo & set(bias_cv_names):
+    # Auto-detect topo_npz if still unset (e.g. only openmm in bias).
+    if topo_npz is None and _cv_names_require_topo_npz(bias_cv_names):
         struct_candidates = sorted((processed_dir / "structures").glob("*.npz"))
         if struct_candidates:
             topo_npz = struct_candidates[0]
@@ -1030,6 +1434,7 @@ def main() -> None:
         contact_r0=args.contact_r0,
         hbond_cutoff=args.hbond_cutoff,
         skrinjar_context=skrinjar_context,
+        posebusters_context=posebusters_context,
     )
     print(
         f"[TPS-OPES] Bias CV(s): {bias_cv_names}  ndim={ndim}",
