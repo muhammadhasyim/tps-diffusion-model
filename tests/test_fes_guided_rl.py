@@ -8,7 +8,11 @@ import torch
 
 from genai_tps.enhanced_sampling.opes_bias import OPESBias
 from genai_tps.rl.config import BoltzRLConfig, FESTeacherConfig
-from genai_tps.rl.fes_teacher import load_build_md_simulation_from_pdb
+from genai_tps.rl.fes_teacher import (
+    load_build_md_simulation_from_pdb,
+    log_p_target_surrogate_from_opes,
+    log_p_target_surrogate_on_grid,
+)
 from genai_tps.rl.student_distribution import BoltzStudentKDE
 from genai_tps.rl.training import fes_guided_trajectory_loss
 
@@ -41,6 +45,26 @@ def test_openmm_teacher_log_p_target_finite():
     logp_kbt = 2.494
     log_pt = -v / logp_kbt
     assert np.isfinite(log_pt)
+    assert log_p_target_surrogate_from_opes(opes, cv, logp_kbt=logp_kbt) == pytest.approx(log_pt)
+
+
+def test_log_p_target_grid_matches_pointwise():
+    """Diagnostic grid from log_p_target_surrogate_on_grid matches per-point surrogate."""
+    opes = OPESBias(ndim=2, kbt=2.494, barrier=2.0, biasfactor=6.0, pace=1)
+    cv0 = np.array([0.3, -0.2], dtype=np.float64)
+    for t in range(1, 12):
+        opes.update(cv0 + 0.05 * t, t)
+    s1 = np.linspace(-0.5, 1.0, 5)
+    s2 = np.linspace(-0.5, 0.5, 4)
+    logp_kbt = 2.494
+    g1, g2, lp_grid = log_p_target_surrogate_on_grid(
+        opes, s1, s2, logp_kbt=logp_kbt
+    )
+    for ia in range(g1.shape[0]):
+        for jb in range(g2.shape[1]):
+            vec = np.array([g1[ia, jb], g2[ia, jb]], dtype=np.float64)
+            expected = log_p_target_surrogate_from_opes(opes, vec, logp_kbt=logp_kbt)
+            assert lp_grid[ia, jb] == pytest.approx(expected)
 
 
 def test_fes_guided_advantage_clipping():

@@ -22,8 +22,57 @@ __all__ = [
     "OpenMMTeacher",
     "boltz_terminal_pose_cv_numpy",
     "build_openmm_indices_for_boltz_atoms",
+    "fes_bias_on_grid",
     "load_build_md_simulation_from_pdb",
+    "log_p_target_surrogate_from_opes",
+    "log_p_target_surrogate_on_grid",
 ]
+
+
+def log_p_target_surrogate_from_opes(
+    opes: OPESBias,
+    cv: np.ndarray | Sequence[float],
+    *,
+    logp_kbt: float,
+) -> float:
+    """Same scaling as :meth:`OpenMMTeacher.log_p_target`: ``-V(s) / kT`` with *V* from *opes*."""
+    v = float(opes.evaluate(cv))
+    return -v / float(logp_kbt)
+
+
+def fes_bias_on_grid(
+    opes: OPESBias,
+    s1: np.ndarray,
+    s2: np.ndarray,
+    *,
+    i_dim: int = 0,
+    j_dim: int = 1,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Evaluate OPES bias *V* on a 2-D slice; ``V[a,b] = opes.evaluate(vec)`` with other dims zero."""
+    g1, g2 = np.meshgrid(s1, s2, indexing="ij")
+    z = np.zeros_like(g1, dtype=np.float64)
+    for a in range(g1.shape[0]):
+        for b in range(g1.shape[1]):
+            vec = np.zeros(opes.ndim, dtype=np.float64)
+            vec[i_dim] = g1[a, b]
+            vec[j_dim] = g2[a, b]
+            z[a, b] = opes.evaluate(vec)
+    return g1, g2, z
+
+
+def log_p_target_surrogate_on_grid(
+    opes: OPESBias,
+    s1: np.ndarray,
+    s2: np.ndarray,
+    *,
+    i_dim: int = 0,
+    j_dim: int = 1,
+    logp_kbt: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Grid of :func:`log_p_target_surrogate_from_opes` — matches RL advantage ``log p_target`` term."""
+    g1, g2, v = fes_bias_on_grid(opes, s1, s2, i_dim=i_dim, j_dim=j_dim)
+    lp = -v / float(logp_kbt)
+    return g1, g2, lp
 
 
 def load_build_md_simulation_from_pdb() -> Callable[..., tuple[Any, dict]]:
@@ -250,13 +299,23 @@ class OpenMMTeacher:
         i_dim: int = 0,
         j_dim: int = 1,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Evaluate ``-kT * log p`` surrogate (OPES bias *V*) on a 2-D grid (diagnostics)."""
-        g1, g2 = np.meshgrid(s1, s2, indexing="ij")
-        z = np.zeros_like(g1, dtype=np.float64)
-        for a in range(g1.shape[0]):
-            for b in range(g1.shape[1]):
-                vec = np.zeros(self.opes.ndim, dtype=np.float64)
-                vec[i_dim] = g1[a, b]
-                vec[j_dim] = g2[a, b]
-                z[a, b] = self.opes.evaluate(vec)
-        return g1, g2, z
+        """OPES bias *V* on a 2-D CV grid (same values as :meth:`OPESBias.evaluate`).
+
+        For the RL teacher signal, :meth:`log_p_target` uses ``-V / kT``.  Use
+        :func:`log_p_target_surrogate_on_grid` if you need a grid consistent with
+        that surrogate log-density.
+        """
+        return fes_bias_on_grid(self.opes, s1, s2, i_dim=i_dim, j_dim=j_dim)
+
+    def log_p_target_on_grid(
+        self,
+        s1: np.ndarray,
+        s2: np.ndarray,
+        *,
+        i_dim: int = 0,
+        j_dim: int = 1,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Grid of :meth:`log_p_target` over *(s1, s2)* (other CV components set to zero)."""
+        return log_p_target_surrogate_on_grid(
+            self.opes, s1, s2, i_dim=i_dim, j_dim=j_dim, logp_kbt=self.logp_kbt
+        )

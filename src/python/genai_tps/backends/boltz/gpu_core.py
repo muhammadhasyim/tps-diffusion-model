@@ -13,10 +13,41 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
-from boltz.model.loss.diffusionv2 import weighted_rigid_align
-from boltz.model.modules.utils import compute_random_augmentation
-
 logger = logging.getLogger(__name__)
+
+_weighted_rigid_align_fn: Any | None = None
+_compute_random_augmentation_fn: Any | None = None
+
+
+def _get_weighted_rigid_align() -> Any:
+    """Lazy import so unit tests can import :mod:`genai_tps.rl` without a full Boltz install."""
+    global _weighted_rigid_align_fn
+    if _weighted_rigid_align_fn is None:
+        try:
+            from boltz.model.loss.diffusionv2 import weighted_rigid_align as fn
+        except ImportError as exc:
+            raise ImportError(
+                "The Boltz backend needs the `boltz` package (e.g. `pip install -e ./boltz` "
+                "or add `boltz/src` to PYTHONPATH). Original error: "
+                f"{exc}"
+            ) from exc
+        _weighted_rigid_align_fn = fn
+    return _weighted_rigid_align_fn
+
+
+def _get_compute_random_augmentation() -> Any:
+    global _compute_random_augmentation_fn
+    if _compute_random_augmentation_fn is None:
+        try:
+            from boltz.model.modules.utils import compute_random_augmentation as fn
+        except ImportError as exc:
+            raise ImportError(
+                "The Boltz backend needs the `boltz` package (e.g. `pip install -e ./boltz` "
+                "or add `boltz/src` to PYTHONPATH). Original error: "
+                f"{exc}"
+            ) from exc
+        _compute_random_augmentation_fn = fn
+    return _compute_random_augmentation_fn
 
 _NAN_FALLBACK_LOG_COUNT = 0
 _NAN_FALLBACK_LOG_MAX = 5
@@ -281,7 +312,7 @@ class BoltzSamplerCore:
                     network_condition_kwargs=dict(multiplicity=b, **kw),
                 )
             if self.diffusion.alignment_reverse_diff:
-                x_noisy = weighted_rigid_align(
+                x_noisy = _get_weighted_rigid_align()(
                     x_noisy.float(),
                     x_hat.float(),
                     self.atom_mask.float(),
@@ -417,7 +448,7 @@ class BoltzSamplerCore:
             self.build_schedule()
         sch = self.schedule[step_idx]
         b = atom_coords.shape[0]
-        random_r, random_tr = compute_random_augmentation(
+        random_r, random_tr = _get_compute_random_augmentation()(
             b, device=atom_coords.device, dtype=atom_coords.dtype
         )
         center_mean = atom_coords.mean(dim=-2, keepdim=True)
@@ -449,7 +480,7 @@ class BoltzSamplerCore:
             )
 
         if self.diffusion.alignment_reverse_diff:
-            x_noisy = weighted_rigid_align(
+            x_noisy = _get_weighted_rigid_align()(
                 x_noisy.float(),
                 atom_coords_denoised.float(),
                 self.atom_mask.float(),
@@ -531,7 +562,7 @@ class BoltzSamplerCore:
         n_fp = n_fixed_point if n_fixed_point is not None else self.n_fixed_point
         sch = self.schedule[step_idx]
         b = atom_coords.shape[0]
-        random_r, random_tr = compute_random_augmentation(
+        random_r, random_tr = _get_compute_random_augmentation()(
             b, device=atom_coords.device, dtype=atom_coords.dtype
         )
 
