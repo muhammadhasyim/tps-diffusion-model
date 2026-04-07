@@ -76,6 +76,12 @@ python scripts/visualize_cofolding_trajectory.py \
 # PyMOL: open diffusion_traj.pdb, use state slider to scrub frames
 ```
 
+## RLDiff-style offline RL (Boltz-2)
+
+[`scripts/train_rl_boltz.py`](scripts/train_rl_boltz.py) implements an **offline** fine-tuning loop inspired by [RLDiff](https://github.com/oxpig/RLDiff) (DDPO-IS–style clipped surrogate and importance weights), adapted to **Boltz-2** `AtomDiffusion` stepping. Terminal rewards use **GPU-native** PoseBusters-style geometry checks in [`genai_tps/analysis/posebusters_gpu.py`](src/python/genai_tps/analysis/posebusters_gpu.py) (no dependency on the third-party `posebusters` package on the training path). Core helpers live under [`genai_tps/rl/`](src/python/genai_tps/rl/).
+
+**Citation:** Broster *et al.*, *Teaching Diffusion Models Physics: Reinforcement Learning for Physically Valid Diffusion-Based Docking*, bioRxiv (2026), DOI [10.64898/2026.03.25.714128](https://doi.org/10.64898/2026.03.25.714128). See **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)** for the RLDiff MIT license and attribution of derived surrogate code.
+
 ## Relationship to OpenPathSampling
 
 We ship a **snapshot** of upstream OPS inside this repo. To refresh the vendor tree, compare against a tagged upstream release and merge carefully (internal imports stay `openpathsampling.*`). Details: **[docs/vendor_openpathsampling.md](docs/vendor_openpathsampling.md)**.

@@ -394,20 +394,23 @@ class BoltzSamplerCore:
         }
         return eps, meta
 
-    @torch.inference_mode()
-    def single_forward_step(
+    def _single_forward_step_core(
         self,
         atom_coords: torch.Tensor,
         step_idx: int,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
-        """One Boltz-2 reverse step (denoise toward lower sigma).
+        eps: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any], torch.Tensor, torch.Tensor]:
+        """Shared forward-step implementation (with or without autograd).
 
-        Parameters
-        ----------
-        atom_coords
-            (B, M, 3) coordinates before this step (B = multiplicity).
-        step_idx
-            Index into the sampling loop ``0 .. num_sampling_steps - 1``.
+        When ``eps`` is ``None``, samples Gaussian noise with variance ``noise_var``.
+        Otherwise uses the provided noise tensor (trajectory replay for RL).
+
+        Returns
+        -------
+        x_next, eps, random_r, random_tr, meta, atom_coords_denoised, x_noisy
+            ``x_noisy`` is the noisy state fed into the denoiser after any
+            ``alignment_reverse_diff``. ``atom_coords_denoised`` is the network
+            output before the EDM update to ``x_next``.
         """
         self._assert_coords_device(atom_coords)
         if self._schedule is None:
@@ -422,11 +425,14 @@ class BoltzSamplerCore:
         x = torch.einsum("bmd,bds->bms", x, random_r) + random_tr
 
         noise_var = sch.noise_var
-        eps = sqrt(noise_var) * torch.randn(x.shape, device=x.device, dtype=x.dtype)
+        if eps is None:
+            eps = sqrt(noise_var) * torch.randn(x.shape, device=x.device, dtype=x.dtype)
+        else:
+            if eps.shape != x.shape:
+                raise ValueError(f"eps shape {eps.shape} != expected {x.shape}")
         x_noisy = x + eps
 
         t_hat = sch.t_hat
-        atom_coords_denoised = torch.zeros_like(x_noisy)
         sample_ids = torch.arange(b, device=x_noisy.device)
         kw = _kwargs_for_preconditioned_forward(dict(self.network_condition_kwargs))
         kw.pop("multiplicity", None)
@@ -466,7 +472,40 @@ class BoltzSamplerCore:
             "step_scale": float(step_scale),
             "center_mean": center_mean,
         }
+        return x_next, eps, random_r, random_tr, meta, atom_coords_denoised, x_noisy
+
+    @torch.inference_mode()
+    def single_forward_step(
+        self,
+        atom_coords: torch.Tensor,
+        step_idx: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
+        """One Boltz-2 reverse step (denoise toward lower sigma).
+
+        Parameters
+        ----------
+        atom_coords
+            (B, M, 3) coordinates before this step (B = multiplicity).
+        step_idx
+            Index into the sampling loop ``0 .. num_sampling_steps - 1``.
+        """
+        x_next, eps, random_r, random_tr, meta, _, _ = self._single_forward_step_core(
+            atom_coords, step_idx, eps=None
+        )
         return x_next, eps, random_r, random_tr, meta
+
+    def single_forward_step_trainable(
+        self,
+        atom_coords: torch.Tensor,
+        step_idx: int,
+        eps: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any], torch.Tensor, torch.Tensor]:
+        """Forward step with autograd through the score network (RL fine-tuning).
+
+        Callers should run rollout under ``torch.no_grad`` and replay with stored
+        ``eps`` and detached ``x_prev`` as appropriate.
+        """
+        return self._single_forward_step_core(atom_coords, step_idx, eps=eps)
 
     @torch.inference_mode()
     def single_backward_step(

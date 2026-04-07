@@ -16,3 +16,6 @@
 [submodule "papers/runs-n-poses"]
 	path = papers/runs-n-poses
 	url = https://github.com/plinder-org/runs-n-poses.git
+[submodule "RLDiff"]
+	path = RLDiff
+	url = https://github.com/oxpig/RLDiff.git

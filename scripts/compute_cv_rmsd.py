@@ -437,6 +437,259 @@ def _register_ligand_params(
 
 
 # ---------------------------------------------------------------------------
+# Persistent MD simulation (no minimisation) — shared prep with ``minimize_pdb``
+# ---------------------------------------------------------------------------
+
+
+def build_md_simulation_from_pdb(
+    pdb_path: Path,
+    *,
+    platform_name: str = "CUDA",
+    temperature_k: float = 300.0,
+    ligand_smiles: Optional[dict[str, str]] = None,
+) -> tuple[object, dict]:
+    """Build AMBER14 + implicit GBn2 Langevin :class:`openmm.app.Simulation` without minimising.
+
+    Uses the same protonation / GAFF2 / PDBFixer logic as :func:`minimize_pdb`.
+    Intended for persistent OpenMM contexts in FES-guided RL (MD bursts on the
+    hot path avoid re-building the system).
+
+    Parameters
+    ----------
+    pdb_path:
+        Heavy-atom PDB (e.g. Boltz ``npz_to_pdb`` export).
+    platform_name:
+        Preferred OpenMM platform (CUDA / OpenCL / CPU); may fall back.
+    temperature_k:
+        Langevin bath temperature (K).
+    ligand_smiles:
+        Optional chain ID → SMILES mapping for cofactors (same as ``minimize_pdb``).
+
+    Returns
+    -------
+    sim :
+        Configured ``openmm.app.Simulation`` with positions already set.
+    meta :
+        ``platform_used``, ``n_residues``, ``n_ca_atoms``, ``ca_orig_coords``,
+        ``ca_h_idx`` for optional downstream analysis (e.g. Cα RMSD after MD).
+    """
+    import openmm
+    import openmm.app
+    from openmm import unit
+
+    meta: dict = {}
+
+    platform, actual_platform = _get_platform(platform_name)
+    meta["platform_used"] = actual_platform
+
+    pdb_orig = openmm.app.PDBFile(str(pdb_path))
+    orig_topology = pdb_orig.topology
+    orig_positions = pdb_orig.positions
+
+    n_residues = orig_topology.getNumResidues()
+    meta["n_residues"] = n_residues
+
+    ca_orig_idx = select_ca_indices(orig_topology)
+    if not ca_orig_idx:
+        raise ValueError("No Cα atoms found in the original topology.")
+    ca_orig_coords = get_ca_coords_angstrom(orig_positions, ca_orig_idx)
+
+    has_ligand = bool(ligand_smiles)
+    ligand_chain_positions: dict[str, list] = {}
+    if has_ligand and ligand_smiles is not None:
+        ligand_chain_positions = _ligand_positions_by_chain(
+            orig_topology, orig_positions, ligand_smiles
+        )
+
+    ff_paths = ["amber14-all.xml", "implicit/gbn2.xml"]
+    if has_ligand and ligand_smiles and _ligand_smiles_needs_tip3p_xml(
+        ligand_smiles
+    ):
+        ff_paths.append("amber14/tip3p.xml")
+    ff = openmm.app.ForceField(*ff_paths)
+    if has_ligand and ligand_smiles is not None:
+        _register_ligand_params(ff, orig_topology, ligand_smiles)
+
+    h_topology: openmm.app.Topology
+    h_positions: object
+
+    _pdbfixer_ok = False
+    if not has_ligand:
+        try:
+            from pdbfixer import PDBFixer  # noqa: PLC0415
+
+            fixer = PDBFixer(filename=str(pdb_path))
+            fixer.findMissingResidues()
+            fixer.findMissingAtoms()
+            fixer.addMissingAtoms()
+            fixer.addMissingHydrogens(pH=7.0)
+            h_topology = fixer.topology
+            h_positions = fixer.positions
+            _pdbfixer_ok = True
+        except Exception as pdbfixer_exc:
+            warnings.warn(
+                f"{pdb_path.name}: PDBFixer failed ({pdbfixer_exc}); "
+                "falling back to Modeller.addHydrogens.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+    if not _pdbfixer_ok:
+        modeller = openmm.app.Modeller(orig_topology, orig_positions)
+        if has_ligand:
+            non_protein = [
+                atom
+                for atom in modeller.topology.atoms()
+                if atom.residue.name.strip() not in _CANONICAL_AMINO_ACIDS
+            ]
+            if non_protein:
+                modeller.delete(non_protein)
+            _protein_h_ok = False
+            if non_protein:
+                prot_pdb: Path | None = None
+                try:
+                    fd, prot_name = tempfile.mkstemp(
+                        suffix=".pdb", prefix="cv_rmsd_prot_"
+                    )
+                    prot_pdb = Path(prot_name)
+                    os.close(fd)
+                    with prot_pdb.open("w", encoding="utf-8") as tmp_f:
+                        openmm.app.PDBFile.writeFile(
+                            modeller.topology,
+                            modeller.positions,
+                            tmp_f,
+                        )
+                    from pdbfixer import PDBFixer  # noqa: PLC0415
+
+                    fixer_lig = PDBFixer(filename=str(prot_pdb))
+                    fixer_lig.findMissingResidues()
+                    fixer_lig.findMissingAtoms()
+                    fixer_lig.addMissingAtoms()
+                    fixer_lig.addMissingHydrogens(pH=7.0)
+                    modeller = openmm.app.Modeller(
+                        fixer_lig.topology, fixer_lig.positions
+                    )
+                    _protein_h_ok = True
+                except Exception as fixer_lig_exc:
+                    warnings.warn(
+                        f"{pdb_path.name}: PDBFixer on protein-only structure "
+                        f"failed ({fixer_lig_exc}); falling back to "
+                        "Modeller.addHydrogens.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                finally:
+                    if prot_pdb is not None:
+                        prot_pdb.unlink(missing_ok=True)
+                if not _protein_h_ok:
+                    try:
+                        modeller.addHydrogens(forcefield=ff, platform=platform)
+                    except Exception as h_exc:
+                        warnings.warn(
+                            f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
+                            "proceeding with heavy atoms only.",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
+                needs_openff_conformer = False
+                if ligand_smiles:
+                    for _cid, _smi in ligand_smiles.items():
+                        if _smi and tip3p_monoatomic_template(_smi) is None:
+                            needs_openff_conformer = True
+                            break
+                OpenFFMolecule = None
+                if needs_openff_conformer:
+                    try:
+                        from openff.toolkit.topology import (  # noqa: PLC0415
+                            Molecule as OpenFFMolecule,
+                        )
+                    except ImportError as exc:
+                        raise ImportError(
+                            "openff-toolkit is required for ligand protonation after "
+                            "cofactor strip. Install with:\n"
+                            "  conda install -c conda-forge openmmforcefields\n"
+                            f"Original error: {exc}"
+                        ) from exc
+                for chain_id in sorted(ligand_smiles or {}):
+                    smiles = ligand_smiles.get(chain_id) if ligand_smiles else None
+                    if not smiles:
+                        continue
+                    ion_tpl = tip3p_monoatomic_template(smiles)
+                    if ion_tpl is not None:
+                        res_name, atom_name, atomic_number = ion_tpl
+                        saved = ligand_chain_positions.get(chain_id)
+                        if not saved:
+                            warnings.warn(
+                                f"{pdb_path.name}: no PDB positions for tip3p ion "
+                                f"chain '{chain_id}'; placing ion at origin.",
+                                RuntimeWarning,
+                                stacklevel=2,
+                            )
+                            lig_pos = [openmm.Vec3(0.0, 0.0, 0.0) * unit.nanometer]
+                        else:
+                            lig_pos = [saved[0]]
+                        ion_topo = openmm.app.Topology()
+                        ion_chain = ion_topo.addChain()
+                        ion_res = ion_topo.addResidue(res_name, ion_chain)
+                        ion_el = openmm.app.Element.getByAtomicNumber(atomic_number)
+                        ion_topo.addAtom(atom_name, ion_el, ion_res)
+                        modeller.add(ion_topo, lig_pos)
+                        continue
+                    assert OpenFFMolecule is not None
+                    mol = OpenFFMolecule.from_smiles(
+                        smiles, allow_undefined_stereo=True
+                    )
+                    mol.generate_conformers(n_conformers=1, rms_cutoff=None)
+                    lig_topo = mol.to_topology().to_openmm()
+                    conf_ang = mol.conformers[0].magnitude
+                    conf_nm = conf_ang / 10.0
+                    lig_pos = [
+                        openmm.Vec3(
+                            float(conf_nm[i, 0]),
+                            float(conf_nm[i, 1]),
+                            float(conf_nm[i, 2]),
+                        )
+                        * unit.nanometer
+                        for i in range(int(conf_nm.shape[0]))
+                    ]
+                    modeller.add(lig_topo, lig_pos)
+        else:
+            try:
+                modeller.addHydrogens(forcefield=ff, platform=platform)
+            except Exception as h_exc:
+                warnings.warn(
+                    f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
+                    "proceeding with heavy atoms only.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+        h_topology = modeller.topology
+        h_positions = modeller.positions
+
+    ca_h_idx = select_ca_indices(h_topology)
+    meta["n_ca_atoms"] = len(ca_h_idx)
+
+    system = ff.createSystem(
+        h_topology,
+        nonbondedMethod=openmm.app.NoCutoff,
+        constraints=openmm.app.HBonds,
+    )
+
+    integrator = openmm.LangevinIntegrator(
+        temperature_k * unit.kelvin,
+        1.0 / unit.picosecond,
+        2.0 * unit.femtoseconds,
+    )
+
+    sim = openmm.app.Simulation(h_topology, system, integrator, platform)
+    sim.context.setPositions(h_positions)
+
+    meta["ca_orig_coords"] = ca_orig_coords
+    meta["ca_h_idx"] = ca_h_idx
+    return sim, meta
+
+
+# ---------------------------------------------------------------------------
 # Core minimisation function
 # ---------------------------------------------------------------------------
 
@@ -514,270 +767,20 @@ def minimize_pdb(
         "error": None,
     }
     try:
-        import openmm
-        import openmm.app
         from openmm import unit
         from genai_tps.backends.boltz.collective_variables import kabsch_rmsd_aligned
 
-        # Resolve platform before PDBFixer / Modeller: both accept ``platform=``.
-        # Without it, OpenMM picks the fastest platform (often CUDA), which can
-        # fail at runtime with PTX/driver mismatch while ``getPlatformByName``
-        # still "succeeds".
-        platform, actual_platform = _get_platform(platform_name)
-        result["platform_used"] = actual_platform
-
-        # 1. Load original heavy-atom structure to record Cα positions before
-        #    any atom addition (PDBFixer changes atom count).
-        pdb_orig = openmm.app.PDBFile(str(pdb_path))
-        orig_topology = pdb_orig.topology
-        orig_positions = pdb_orig.positions
-
-        n_residues = orig_topology.getNumResidues()
-        result["n_residues"] = n_residues
-
-        ca_orig_idx = select_ca_indices(orig_topology)
-        if not ca_orig_idx:
-            raise ValueError("No Cα atoms found in the original topology.")
-        ca_orig_coords = get_ca_coords_angstrom(orig_positions, ca_orig_idx)
-
-        has_ligand = bool(ligand_smiles)
-        ligand_chain_positions: dict[str, list] = {}
-        if has_ligand and ligand_smiles is not None:
-            ligand_chain_positions = _ligand_positions_by_chain(
-                orig_topology, orig_positions, ligand_smiles
-            )
-
-        # 2. Build the shared ForceField (GAFF2 and/or tip3p ion XML if ligands).
-        #
-        #    A single ForceField instance is used for both addHydrogens and
-        #    createSystem so that the GAFF2 template generator is registered once
-        #    and available at both stages.  Monoatomic ions (e.g. ``[Mg+2]``) use
-        #    ``amber14/tip3p.xml`` templates, not GAFF2 / AM1-BCC.
-        ff_paths = ["amber14-all.xml", "implicit/gbn2.xml"]
-        if has_ligand and ligand_smiles and _ligand_smiles_needs_tip3p_xml(
-            ligand_smiles
-        ):
-            ff_paths.append("amber14/tip3p.xml")
-        ff = openmm.app.ForceField(*ff_paths)
-        if has_ligand and ligand_smiles is not None:
-            _register_ligand_params(ff, orig_topology, ligand_smiles)
-
-        # 3. Prepare the structure (add terminal caps + hydrogens).
-        #
-        #    Strategy A — PDBFixer (preferred, protein-only structures):
-        #      Boltz outputs heavy atoms only; AMBER14 expects terminal residue
-        #      templates (NMET, CALA …).  PDBFixer handles all of that via
-        #      findMissingAtoms / addMissingHydrogens.
-        #      NOTE: PDBFixer must NOT be given the GPU platform — it creates its
-        #      own OpenMM Context internally, which collides with the Boltz GPU
-        #      model and causes clCreateContext (-6).  CPU is always sufficient
-        #      for hydrogen addition.
-        #      Skipped when ligand_smiles is provided because PDBFixer does not
-        #      know the LIG residue template and may strip HETATM atoms.
-        #
-        #    Strategy B — Protein protonation for ligand systems or fallback:
-        #      When has_ligand=True, LIG heavy atoms are removed first, the
-        #      protein-only structure is written to a temp PDB, and PDBFixer
-        #      adds terminal caps + hydrogens (same as Strategy A, but on protein
-        #      only so HETATM LIG does not confuse PDBFixer).  Ligands are then
-        #      re-appended from OpenFF conformers.  If PDBFixer fails, fall back
-        #      to Modeller.addHydrogens (may fail on uncapped Boltz termini).
-        #
-        #    Strategy C — heavy-atoms-only (last resort):
-        #      Sufficient for a Cα-RMSD comparison even if the absolute energy
-        #      is physically unreliable (force field will still relax geometry).
-        h_topology: openmm.app.Topology
-        h_positions: object
-
-        _pdbfixer_ok = False
-        if not has_ligand:
-            try:
-                from pdbfixer import PDBFixer  # noqa: PLC0415
-                # Do NOT pass the GPU platform to PDBFixer — it only adds hydrogens
-                # and terminal caps (CPU work), but internally creates an OpenMM
-                # Context.  Passing OpenCL here causes clCreateContext (-6) because
-                # the GPU is already occupied by the Boltz diffusion model.
-                fixer = PDBFixer(filename=str(pdb_path))
-                fixer.findMissingResidues()
-                fixer.findMissingAtoms()
-                fixer.addMissingAtoms()
-                fixer.addMissingHydrogens(pH=7.0)
-                h_topology = fixer.topology
-                h_positions = fixer.positions
-                _pdbfixer_ok = True
-            except Exception as pdbfixer_exc:
-                warnings.warn(
-                    f"{pdb_path.name}: PDBFixer failed ({pdbfixer_exc}); "
-                    "falling back to Modeller.addHydrogens.",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-
-        if not _pdbfixer_ok:
-            # Strategy B: Modeller fallback (or primary path for ligands).
-            # Use the same ff instance that has GAFF2 registered (if applicable).
-            modeller = openmm.app.Modeller(orig_topology, orig_positions)
-            if has_ligand:
-                # GAFF matches OpenFF templates on full protonated graphs; a
-                # heavy-atom-only cofactor cannot match Molecule.from_smiles().
-                # Strip every non–canonical-amino residue (ATP, MG, LIG, HOH, …),
-                # run PDBFixer on protein-only (terminal caps + H), then append
-                # each chain from ligand_smiles as an OpenFF conformer.
-                non_protein = [
-                    atom
-                    for atom in modeller.topology.atoms()
-                    if atom.residue.name.strip() not in _CANONICAL_AMINO_ACIDS
-                ]
-                if non_protein:
-                    modeller.delete(non_protein)
-                _protein_h_ok = False
-                if non_protein:
-                    prot_pdb: Path | None = None
-                    try:
-                        fd, prot_name = tempfile.mkstemp(
-                            suffix=".pdb", prefix="cv_rmsd_prot_"
-                        )
-                        prot_pdb = Path(prot_name)
-                        os.close(fd)
-                        with prot_pdb.open("w", encoding="utf-8") as tmp_f:
-                            openmm.app.PDBFile.writeFile(
-                                modeller.topology,
-                                modeller.positions,
-                                tmp_f,
-                            )
-                        from pdbfixer import PDBFixer  # noqa: PLC0415
-
-                        fixer_lig = PDBFixer(filename=str(prot_pdb))
-                        fixer_lig.findMissingResidues()
-                        fixer_lig.findMissingAtoms()
-                        fixer_lig.addMissingAtoms()
-                        fixer_lig.addMissingHydrogens(pH=7.0)
-                        modeller = openmm.app.Modeller(
-                            fixer_lig.topology, fixer_lig.positions
-                        )
-                        _protein_h_ok = True
-                    except Exception as fixer_lig_exc:
-                        warnings.warn(
-                            f"{pdb_path.name}: PDBFixer on protein-only structure "
-                            f"failed ({fixer_lig_exc}); falling back to "
-                            "Modeller.addHydrogens.",
-                            RuntimeWarning,
-                            stacklevel=2,
-                        )
-                    finally:
-                        if prot_pdb is not None:
-                            prot_pdb.unlink(missing_ok=True)
-                if not _protein_h_ok:
-                    try:
-                        modeller.addHydrogens(forcefield=ff, platform=platform)
-                    except Exception as h_exc:
-                        warnings.warn(
-                            f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
-                            "proceeding with heavy atoms only.",
-                            RuntimeWarning,
-                            stacklevel=2,
-                        )
-                needs_openff_conformer = False
-                if ligand_smiles:
-                    for _cid, _smi in ligand_smiles.items():
-                        if _smi and tip3p_monoatomic_template(_smi) is None:
-                            needs_openff_conformer = True
-                            break
-                OpenFFMolecule = None
-                if needs_openff_conformer:
-                    try:
-                        from openff.toolkit.topology import (  # noqa: PLC0415
-                            Molecule as OpenFFMolecule,
-                        )
-                    except ImportError as exc:
-                        raise ImportError(
-                            "openff-toolkit is required for ligand protonation after "
-                            "cofactor strip. Install with:\n"
-                            "  conda install -c conda-forge openmmforcefields\n"
-                            f"Original error: {exc}"
-                        ) from exc
-                for chain_id in sorted(ligand_smiles):
-                    smiles = ligand_smiles.get(chain_id) if ligand_smiles else None
-                    if not smiles:
-                        continue
-                    ion_tpl = tip3p_monoatomic_template(smiles)
-                    if ion_tpl is not None:
-                        res_name, atom_name, atomic_number = ion_tpl
-                        saved = ligand_chain_positions.get(chain_id)
-                        if not saved:
-                            warnings.warn(
-                                f"{pdb_path.name}: no PDB positions for tip3p ion "
-                                f"chain '{chain_id}'; placing ion at origin.",
-                                RuntimeWarning,
-                                stacklevel=2,
-                            )
-                            lig_pos = [openmm.Vec3(0.0, 0.0, 0.0) * unit.nanometer]
-                        else:
-                            lig_pos = [saved[0]]
-                        ion_topo = openmm.app.Topology()
-                        ion_chain = ion_topo.addChain()
-                        ion_res = ion_topo.addResidue(res_name, ion_chain)
-                        ion_el = openmm.app.Element.getByAtomicNumber(atomic_number)
-                        ion_topo.addAtom(atom_name, ion_el, ion_res)
-                        modeller.add(ion_topo, lig_pos)
-                        continue
-                    assert OpenFFMolecule is not None
-                    mol = OpenFFMolecule.from_smiles(
-                        smiles, allow_undefined_stereo=True
-                    )
-                    mol.generate_conformers(n_conformers=1, rms_cutoff=None)
-                    lig_topo = mol.to_topology().to_openmm()
-                    conf_ang = mol.conformers[0].magnitude
-                    conf_nm = conf_ang / 10.0
-                    lig_pos = [
-                        openmm.Vec3(
-                            float(conf_nm[i, 0]),
-                            float(conf_nm[i, 1]),
-                            float(conf_nm[i, 2]),
-                        )
-                        * unit.nanometer
-                        for i in range(int(conf_nm.shape[0]))
-                    ]
-                    modeller.add(lig_topo, lig_pos)
-            else:
-                try:
-                    modeller.addHydrogens(forcefield=ff, platform=platform)
-                except Exception as h_exc:
-                    warnings.warn(
-                        f"{pdb_path.name}: addHydrogens also failed ({h_exc}); "
-                        "proceeding with heavy atoms only.",
-                        RuntimeWarning,
-                        stacklevel=2,
-                    )
-            h_topology = modeller.topology
-            h_positions = modeller.positions
-
-        # 4. Cα indices in the fully protonated topology.
-        ca_h_idx = select_ca_indices(h_topology)
-        result["n_ca_atoms"] = len(ca_h_idx)
-
-        # 5. Build AMBER14 + GBn2 implicit solvent system (NoCutoff, no periodic box).
-        #    Force field: amber14-all.xml + implicit/gbn2.xml (GBn2, igb=8).
-        #    GBn2 is the highest-accuracy GB model in OpenMM and the one recommended
-        #    in the OpenMM user guide for AMBER14 force fields.
-        #    Ref: docs.openmm.org §3.2 Implicit Solvent.
-        #    NOTE: do NOT pass implicitSolvent= to createSystem() — that kwarg is
-        #    only for AMBER prmtop files.  The GB parameters come from the XML.
-        #    NOTE: ff may include GAFF2 (multi-atom ligands) and tip3p ion XML.
-        system = ff.createSystem(
-            h_topology,
-            nonbondedMethod=openmm.app.NoCutoff,
-            constraints=openmm.app.HBonds,
+        sim, meta = build_md_simulation_from_pdb(
+            pdb_path,
+            platform_name=platform_name,
+            temperature_k=temperature_k,
+            ligand_smiles=ligand_smiles,
         )
-
-        integrator = openmm.LangevinIntegrator(
-            temperature_k * unit.kelvin,
-            1.0 / unit.picosecond,
-            2.0 * unit.femtoseconds,
-        )
-
-        sim = openmm.app.Simulation(h_topology, system, integrator, platform)
-        sim.context.setPositions(h_positions)
+        result["platform_used"] = meta["platform_used"]
+        result["n_residues"] = meta["n_residues"]
+        result["n_ca_atoms"] = meta["n_ca_atoms"]
+        ca_orig_coords = meta["ca_orig_coords"]
+        ca_h_idx = meta["ca_h_idx"]
 
         # 6. Minimise
         sim.minimizeEnergy(maxIterations=max_iter)
