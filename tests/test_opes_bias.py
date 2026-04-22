@@ -309,6 +309,19 @@ class TestStateSaveLoad:
         assert loaded.saved_bias_cv == "openmm"
         assert loaded.saved_bias_cv_names == ["openmm"]
 
+    def test_load_state_sigma_0_fallback_matches_init_formula(self, tmp_path):
+        """Old saves without ``sigma_0`` must use sqrt(2*barrier/kbt), not sqrt(2*barrier)."""
+        bias = OPESBias(kbt=2.494, barrier=5.0, biasfactor=10.0, pace=1, fixed_sigma=1.0)
+        bias.update(cv_accepted=1.0, mc_step=1)
+        save_path = tmp_path / "no_sigma0.json"
+        bias.save_state(save_path)
+        state = json.loads(save_path.read_text())
+        del state["sigma_0"]
+        save_path.write_text(json.dumps(state))
+        loaded = OPESBias.load_state(save_path)
+        expected = math.sqrt(2.0 * 5.0 / 2.494)
+        assert float(loaded.sigma_0[0]) == pytest.approx(expected, rel=1e-9)
+
     def test_load_preserves_config(self, tmp_path):
         bias = OPESBias(kbt=2.0, barrier=8.0, biasfactor=20.0, epsilon=0.01,
                         kernel_cutoff=4.0, compression_threshold=0.5, pace=3,

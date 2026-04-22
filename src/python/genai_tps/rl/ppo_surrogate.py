@@ -11,12 +11,19 @@ __all__ = ["compute_ppo_loss", "normalize_rewards_per_trajectory"]
 
 
 def normalize_rewards_per_trajectory(raw_rewards: list[float], eps: float = 1e-6) -> tuple[list[float], float, float]:
-    """Z-score rewards for one trajectory (RLDiff ``_normalize_with_baseline`` pattern)."""
+    """Z-score rewards for one trajectory (RLDiff ``_normalize_with_baseline`` pattern).
+
+    With a single reward, sample variance is zero; z-scoring would yield
+    ``(r - r) / eps == 0`` and kill the training signal. In that case we return
+    the raw value unchanged (identity scaling, ``std`` reported as ``1.0``).
+    """
     if not raw_rewards:
         return [], 0.0, 1.0
     import numpy as np
 
     arr = np.asarray(raw_rewards, dtype=np.float64)
+    if arr.size == 1:
+        return [float(arr[0])], 0.0, 1.0
     mean = float(arr.mean())
     std = max(float(arr.std()), eps)
     z = ((arr - mean) / std).tolist()

@@ -642,6 +642,12 @@ def run_tps_path_sampling(
 
             cv_val: "float | np.ndarray | None" = None
             if enhanced_bias is not None and cv_function is not None:
+                # OPES kernel deposition uses the CV of the *currently accepted* path
+                # (``sampler.sample_set``), after each MC step. On a rejected move the
+                # accepted path is unchanged, so the same CV may be passed again; this
+                # follows the chain marginal (extra kernels at sticky states). If
+                # strict "deposit only on acceptance" semantics are required, gate
+                # ``update`` on ``accepted`` here.
                 cur_traj = _rep0_trajectory(sampler.sample_set)
                 if cur_traj is not None:
                     try:

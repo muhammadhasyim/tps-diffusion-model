@@ -8,7 +8,23 @@ import torch
 from genai_tps.backends.boltz.path_probability import forward_step_meta
 from genai_tps.rl.boltz_likelihood import denoiser_velocity_importance_weight, forward_step_meta_tensor
 from genai_tps.rl.config import BoltzRLConfig
-from genai_tps.rl.ppo_surrogate import compute_ppo_loss
+from genai_tps.rl.ppo_surrogate import compute_ppo_loss, normalize_rewards_per_trajectory
+
+
+def test_normalize_rewards_single_preserves_signal():
+    """One reward: avoid (r-mean)/eps == 0; return raw value with unit std."""
+    z, mean, std = normalize_rewards_per_trajectory([0.73])
+    assert z[0] == pytest.approx(0.73)
+    assert mean == 0.0
+    assert std == 1.0
+
+
+def test_normalize_rewards_multi_zscore():
+    z, mean, std = normalize_rewards_per_trajectory([0.0, 2.0])
+    assert mean == pytest.approx(1.0)
+    assert std == pytest.approx(1.0)
+    assert z[0] == pytest.approx(-1.0)
+    assert z[1] == pytest.approx(1.0)
 
 
 def test_compute_ppo_loss_reference_scalar():

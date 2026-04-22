@@ -75,8 +75,12 @@ from genai_tps.enhanced_sampling import OPESBias
 from genai_tps.analysis.posebusters_gpu import (
     POSEBUSTERS_GPU_CV_PREFIX,
     POSEBUSTERS_GPU_PASS_FRACTION,
+    validate_posebusters_gpu_bias_cv_names,
 )
-from genai_tps.analysis.posebusters_traj import POSEBUSTERS_CV_PREFIX
+from genai_tps.analysis.posebusters_traj import (
+    POSEBUSTERS_CV_PREFIX,
+    validate_posebusters_bias_cv_names,
+)
 
 # All supported single-CV names for --bias-cv
 _SINGLE_CV_NAMES = [
@@ -1158,7 +1162,6 @@ def main() -> None:
             expand_bias_cv_posebusters_gpu_all,
             expand_posebusters_gpu_all_to_cv_names,
         )
-        from genai_tps.analysis.posebusters_traj import validate_posebusters_bias_cv_names  # noqa: PLC0415
 
         structure, n_struct = load_topo(Path(topo_npz))
         probe = snapshot_frame_numpy_copy(init_traj[-1])[: int(n_struct)].astype(np.float32)
@@ -1346,8 +1349,6 @@ def main() -> None:
     try:
         bias_cv_names = _parse_bias_cv_list(bias_cv_work)
         validate_posebusters_bias_cv_names(bias_cv_names)
-        from genai_tps.analysis.posebusters_gpu import validate_posebusters_gpu_bias_cv_names  # noqa: PLC0415
-
         validate_posebusters_gpu_bias_cv_names(bias_cv_names)
     except ValueError as exc:
         print(f"[TPS-OPES] ERROR: {exc}", file=sys.stderr)

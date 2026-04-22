@@ -687,7 +687,13 @@ class OPESBias:
         bias._n_merges = state.get("n_merges", 0)
 
         # sigma_0 override from saved state
-        s0 = _load_array("sigma_0", [math.sqrt(2.0 * state["barrier"]) for _ in range(ndim)])
+        s0 = _load_array(
+            "sigma_0",
+            [
+                math.sqrt(2.0 * float(state["barrier"]) / float(state["kbt"]))
+                for _ in range(ndim)
+            ],
+        )
         bias.sigma_0 = np.array(s0, dtype=np.float64)
 
         # Kernels: center / sigma may be scalar (old 1-D) or list (new)

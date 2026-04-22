@@ -8,9 +8,7 @@ use
 
 .. math::
 
-    \\log w = \\frac{1}{2\\tau^2}\\left(\\|v_{\\mathrm{old}} - v_{\\mathrm{old}}\\|^2
-    - \\|v_{\\mathrm{old}} - v_{\\mathrm{new}}\\|^2\\right)
-    = -\\frac{1}{2\\tau^2}\\|v_{\\mathrm{old}} - v_{\\mathrm{new}}\\|^2.
+    \\log w = -\\frac{1}{2\\tau^2}\\|v_{\\mathrm{old}} - v_{\\mathrm{new}}\\|^2.
 
 At :math:`v_{\\mathrm{new}} = v_{\\mathrm{old}}`, :math:`w = 1`. This is a **surrogate**
 for the true induced density of :math:`x_{t+1}` given :math:`x_t`; it provides a
