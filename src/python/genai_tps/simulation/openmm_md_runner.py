@@ -85,6 +85,23 @@ def main() -> None:
     parser.add_argument("--opes-biasfactor", type=float, default=10.0)
     parser.add_argument("--opes-sigma", type=str, default="0.3,0.5", help="Per-dim kernel sigma (Angstrom)")
     parser.add_argument("--opes-restart", type=Path, default=None, help="Resume OPES from saved state")
+    parser.add_argument(
+        "--opes-mode",
+        type=str,
+        default="plumed",
+        choices=["plumed", "observer"],
+        help=(
+            "OPES implementation: 'plumed' applies real bias forces through "
+            "openmm-plumed; 'observer' preserves the legacy Python-side "
+            "reweighting-only bookkeeping."
+        ),
+    )
+    parser.add_argument(
+        "--plumed-force-group",
+        type=int,
+        default=30,
+        help="OpenMM force group used for the PLUMED bias energy.",
+    )
     parser.add_argument("--temperature", type=float, default=300.0, help="Langevin temperature (K)")
     parser.add_argument("--pocket-radius", type=float, default=6.0)
     parser.add_argument("--platform", type=str, default="CUDA", choices=["CUDA", "OpenCL", "CPU"])
@@ -97,8 +114,8 @@ def main() -> None:
 
     from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
     from genai_tps.io.boltz_npz_export import coords_frame_from_npz, load_topo, npz_to_pdb
-    from genai_tps.simulation import OPESBias
     from genai_tps.simulation.openmm_boltz_bridge import (
+        boltz_to_plumed_indices,
         build_openmm_indices_for_boltz_atoms,
         load_build_md_simulation_from_pdb,
     )
@@ -143,33 +160,137 @@ def main() -> None:
 
     kbt_kjmol = 8.314e-3 * args.temperature
     sigma = [float(s) for s in args.opes_sigma.split(",")]
+    if len(sigma) != 2:
+        raise ValueError("--opes-sigma must contain two comma-separated values.")
 
-    if args.opes_restart:
-        print(f"[MD-OPES] Restarting OPES from {args.opes_restart}", flush=True)
-        opes = OPESBias.load_state(args.opes_restart)
-    else:
-        opes = OPESBias(
-            ndim=2,
-            kbt=kbt_kjmol,
-            barrier=args.opes_barrier,
-            biasfactor=args.opes_biasfactor,
-            pace=args.deposit_pace,
-            fixed_sigma=np.array(sigma),
+    opes = None
+    if args.opes_mode == "observer":
+        from genai_tps.simulation import OPESBias
+
+        if args.opes_restart:
+            print(f"[MD-OPES] Restarting observer OPES from {args.opes_restart}", flush=True)
+            opes = OPESBias.load_state(args.opes_restart)
+        else:
+            opes = OPESBias(
+                ndim=2,
+                kbt=kbt_kjmol,
+                barrier=args.opes_barrier,
+                biasfactor=args.opes_biasfactor,
+                pace=args.deposit_pace,
+                fixed_sigma=np.array(sigma),
+            )
+        print(
+            f"[MD-OPES] Observer OPES: barrier={opes.barrier:.1f} "
+            f"biasfactor={opes.biasfactor:.1f} kbt={opes.kbt:.3f} kJ/mol "
+            f"sigma={sigma}",
+            flush=True,
         )
-
-    print(
-        f"[MD-OPES] OPES: barrier={opes.barrier:.1f} biasfactor={opes.biasfactor:.1f} "
-        f"kbt={opes.kbt:.3f} kJ/mol sigma={sigma}",
-        flush=True,
-    )
+    else:
+        print(
+            f"[MD-OPES] PLUMED OPES: barrier={args.opes_barrier:.1f} "
+            f"biasfactor={args.opes_biasfactor:.1f} kbt={kbt_kjmol:.3f} kJ/mol "
+            f"sigma={sigma}",
+            flush=True,
+        )
 
     print(f"[MD-OPES] Building OpenMM simulation (AMBER14/GBn2, {args.platform})...", flush=True)
     build_md = load_build_md_simulation_from_pdb()
+    plumed_context: dict[str, object] = {}
+
+    def _add_plumed_force(system, h_topology, h_positions, meta):
+        """Build atom selections after hydrogenation and inject PLUMED force."""
+        import openmm.unit as u
+
+        from genai_tps.simulation.plumed_opes import (
+            add_plumed_opes_to_system,
+            generate_plumed_opes_script,
+            write_rmsd_reference_pdb,
+        )
+
+        h_pos_nm = np.asarray(h_positions.value_in_unit(u.nanometer), dtype=np.float64)
+        omm_idx_cb = build_openmm_indices_for_boltz_atoms(
+            structure,
+            h_topology,
+            ref_coords_angstrom=ref_coords,
+            omm_positions_nm=h_pos_nm,
+        )
+        if int(np.min(omm_idx_cb)) < 0:
+            raise RuntimeError(
+                "[MD-OPES] Invalid Boltz→OpenMM index map before PLUMED setup "
+                f"(min={int(np.min(omm_idx_cb))})."
+            )
+
+        rmsd_align_boltz = (
+            indexer.pocket_ca_idx
+            if len(indexer.pocket_ca_idx) >= 3
+            else indexer.protein_ca_idx
+        )
+        if len(rmsd_align_boltz) < 3:
+            raise RuntimeError(
+                "[MD-OPES] PLUMED ligand RMSD requires at least three protein "
+                "C-alpha alignment atoms."
+            )
+        if len(indexer.pocket_ca_idx) == 0:
+            raise RuntimeError(
+                "[MD-OPES] PLUMED ligand-pocket distance requires at least one "
+                "pocket C-alpha atom."
+            )
+
+        ligand_plumed_idx = boltz_to_plumed_indices(indexer.ligand_idx, omm_idx_cb)
+        pocket_plumed_idx = boltz_to_plumed_indices(indexer.pocket_ca_idx, omm_idx_cb)
+        align_plumed_idx = boltz_to_plumed_indices(rmsd_align_boltz, omm_idx_cb)
+        ref_pdb = out / "plumed_rmsd_reference.pdb"
+        script_path = out / "plumed_opes.dat"
+        write_rmsd_reference_pdb(
+            h_topology,
+            h_positions,
+            ligand_plumed_idx,
+            align_plumed_idx,
+            ref_pdb,
+        )
+        script = generate_plumed_opes_script(
+            ligand_plumed_idx=ligand_plumed_idx,
+            pocket_ca_plumed_idx=pocket_plumed_idx,
+            rmsd_reference_pdb=ref_pdb,
+            sigma=sigma,
+            pace=args.deposit_pace,
+            barrier=args.opes_barrier,
+            biasfactor=args.opes_biasfactor,
+            temperature=args.temperature,
+            save_opes_every=args.save_opes_every,
+            progress_every=args.progress_every,
+            out_dir=opes_dir,
+            state_rfile=args.opes_restart,
+        )
+        script_path.write_text(script, encoding="utf-8")
+        force, force_index = add_plumed_opes_to_system(
+            system,
+            script,
+            temperature=args.temperature,
+            force_group=args.plumed_force_group,
+            restart=args.opes_restart is not None,
+        )
+        plumed_context.update(
+            {
+                "omm_idx": omm_idx_cb,
+                "force": force,
+                "force_index": force_index,
+                "force_group": int(args.plumed_force_group),
+                "script_path": script_path,
+                "reference_pdb": ref_pdb,
+            }
+        )
+        meta["plumed_force_index"] = force_index
+        meta["plumed_force_group"] = int(args.plumed_force_group)
+        meta["plumed_script"] = str(script_path)
+        meta["plumed_reference_pdb"] = str(ref_pdb)
+
     sim, meta = build_md(
         pdb_path,
         platform_name=args.platform,
         temperature_k=args.temperature,
         ligand_smiles=ligand_smiles,
+        extra_forces=_add_plumed_force if args.opes_mode == "plumed" else None,
     )
     print(f"[MD-OPES] Platform: {meta['platform_used']}", flush=True)
 
@@ -178,12 +299,17 @@ def main() -> None:
     _log_coord_stats_np("checkpoint_after_build_set_positions", pos_nm, unit_label="nm")
     _diagnostic_energy_and_large_forces(sim, "after_build_set_positions")
 
-    omm_idx = build_openmm_indices_for_boltz_atoms(
-        structure,
-        sim.topology,
-        ref_coords_angstrom=ref_coords,
-        omm_positions_nm=pos_nm,
-    )
+    if args.opes_mode == "plumed":
+        if "omm_idx" not in plumed_context:
+            raise RuntimeError("[MD-OPES] PLUMED setup did not produce an atom map.")
+        omm_idx = np.asarray(plumed_context["omm_idx"], dtype=np.int64)
+    else:
+        omm_idx = build_openmm_indices_for_boltz_atoms(
+            structure,
+            sim.topology,
+            ref_coords_angstrom=ref_coords,
+            omm_positions_nm=pos_nm,
+        )
     if int(np.min(omm_idx)) < 0:
         raise RuntimeError(
             "[MD-OPES] Invalid Boltz→OpenMM index map (negative OpenMM index). "
@@ -205,12 +331,15 @@ def main() -> None:
         _log_coord_stats_np("checkpoint_skip_minimize", pos_post_nm, unit_label="nm")
         _require_finite_positions(pos_post_nm, context_msg="initial context (minimize_steps=0)")
 
-    def get_coords_boltz_order():
-        state = sim.context.getState(getPositions=True)
-        pos = state.getPositions(asNumpy=True)
+    def get_coords_boltz_order(state=None):
+        import openmm.unit as u
+
+        if state is None:
+            state = sim.context.getState(getPositions=True)
+        pos = state.getPositions(asNumpy=True).value_in_unit(u.angstrom)
         coords = np.zeros((n_boltz, 3), dtype=np.float32)
         for i in range(n_boltz):
-            coords[i] = pos[int(omm_idx[i])] * 10.0
+            coords[i] = pos[int(omm_idx[i])]
         return coords
 
     _probe_boltz = get_coords_boltz_order()
@@ -242,18 +371,82 @@ def main() -> None:
     n_saved = 0
     t0 = time.time()
 
-    for step in range(1, args.n_steps + 1):
-        sim.step(1)
+    if args.opes_mode == "observer":
+        if opes is None:
+            raise RuntimeError("[MD-OPES] Observer mode did not initialize OPESBias.")
+        for step in range(1, args.n_steps + 1):
+            sim.step(1)
 
-        if step % args.deposit_pace == 0:
-            coords = get_coords_boltz_order()
-            cv = compute_cv(coords)
-            opes.update(cv, step)
+            if step % args.deposit_pace == 0:
+                coords = get_coords_boltz_order()
+                cv = compute_cv(coords)
+                opes.update(cv, step)
 
-        if step % args.save_every == 0:
-            coords = get_coords_boltz_order()
+            if step % args.save_every == 0:
+                coords = get_coords_boltz_order()
+                cv = compute_cv(coords)
+                logw = float(opes.evaluate(cv)) / opes.kbt
+
+                n_saved += 1
+                npz_path = wdsm_dir / f"wdsm_step_{n_saved:08d}.npz"
+                np.savez_compressed(
+                    str(npz_path),
+                    coords=coords,
+                    cv=cv,
+                    logw=np.float64(logw),
+                    md_step=np.int64(step),
+                )
+                cv_log.append({"step": step, "cv": cv.tolist(), "logw": logw})
+
+            if step % args.save_opes_every == 0:
+                opes.save_state(
+                    opes_dir / f"opes_state_{step:010d}.json",
+                    bias_cv="ligand_rmsd,ligand_pocket_dist",
+                    bias_cv_names=["ligand_rmsd", "ligand_pocket_dist"],
+                )
+
+            if step % args.progress_every == 0:
+                elapsed = time.time() - t0
+                rate = step / elapsed
+                eta = (args.n_steps - step) / rate
+                coords = get_coords_boltz_order()
+                cv = compute_cv(coords)
+                print(
+                    f"[MD-OPES] step {step:>10,}/{args.n_steps:,} | "
+                    f"{rate:.0f} steps/s | ETA {eta/60:.1f}min | "
+                    f"CV=[{cv[0]:.3f}, {cv[1]:.3f}] | "
+                    f"kernels={opes.n_kernels} | saved={n_saved}",
+                    flush=True,
+                )
+
+        opes.save_state(
+            out / "opes_state_final.json",
+            bias_cv="ligand_rmsd,ligand_pocket_dist",
+            bias_cv_names=["ligand_rmsd", "ligand_pocket_dist"],
+        )
+    else:
+        import openmm.unit as u
+
+        force_group = int(plumed_context["force_group"])
+        groups = {force_group}
+        step = 0
+        next_progress = int(args.progress_every)
+        while step < args.n_steps:
+            chunk = min(int(args.save_every), args.n_steps - step)
+            sim.step(chunk)
+            step += chunk
+
+            state = sim.context.getState(
+                getPositions=True,
+                getEnergy=True,
+                groups=groups,
+            )
+            coords = get_coords_boltz_order(state)
             cv = compute_cv(coords)
-            logw = float(opes.evaluate(cv)) / opes.kbt
+            bias_energy_kj = float(
+                state.getPotentialEnergy().value_in_unit(u.kilojoule_per_mole)
+            )
+            logw = bias_energy_kj / kbt_kjmol
 
             n_saved += 1
             npz_path = wdsm_dir / f"wdsm_step_{n_saved:08d}.npz"
@@ -263,35 +456,30 @@ def main() -> None:
                 cv=cv,
                 logw=np.float64(logw),
                 md_step=np.int64(step),
+                bias_energy_kj_mol=np.float64(bias_energy_kj),
             )
-            cv_log.append({"step": step, "cv": cv.tolist(), "logw": logw})
-
-        if step % args.save_opes_every == 0:
-            opes.save_state(
-                opes_dir / f"opes_state_{step:010d}.json",
-                bias_cv="ligand_rmsd,ligand_pocket_dist",
-                bias_cv_names=["ligand_rmsd", "ligand_pocket_dist"],
-            )
-
-        if step % args.progress_every == 0:
-            elapsed = time.time() - t0
-            rate = step / elapsed
-            eta = (args.n_steps - step) / rate
-            coords = get_coords_boltz_order()
-            cv = compute_cv(coords)
-            print(
-                f"[MD-OPES] step {step:>10,}/{args.n_steps:,} | "
-                f"{rate:.0f} steps/s | ETA {eta/60:.1f}min | "
-                f"CV=[{cv[0]:.3f}, {cv[1]:.3f}] | "
-                f"kernels={opes.n_kernels} | saved={n_saved}",
-                flush=True,
+            cv_log.append(
+                {
+                    "step": step,
+                    "cv": cv.tolist(),
+                    "logw": logw,
+                    "bias_energy_kj_mol": bias_energy_kj,
+                }
             )
 
-    opes.save_state(
-        out / "opes_state_final.json",
-        bias_cv="ligand_rmsd,ligand_pocket_dist",
-        bias_cv_names=["ligand_rmsd", "ligand_pocket_dist"],
-    )
+            if step >= next_progress or step == args.n_steps:
+                elapsed = time.time() - t0
+                rate = step / elapsed
+                eta = (args.n_steps - step) / rate
+                print(
+                    f"[MD-OPES] step {step:>10,}/{args.n_steps:,} | "
+                    f"{rate:.0f} steps/s | ETA {eta/60:.1f}min | "
+                    f"CV=[{cv[0]:.3f}, {cv[1]:.3f}] | "
+                    f"bias={bias_energy_kj:.3f} kJ/mol | saved={n_saved}",
+                    flush=True,
+                )
+                while next_progress <= step:
+                    next_progress += int(args.progress_every)
 
     with open(out / "cv_log.json", "w") as f:
         json.dump(cv_log, f)
@@ -301,10 +489,20 @@ def main() -> None:
         "total_steps": args.n_steps,
         "total_time_s": elapsed,
         "n_saved": n_saved,
-        "n_kernels": opes.n_kernels,
+        "opes_mode": args.opes_mode,
+        "n_kernels": opes.n_kernels if opes is not None else None,
         "temperature_k": args.temperature,
-        "opes_barrier": opes.barrier,
-        "opes_biasfactor": opes.biasfactor,
+        "opes_barrier": opes.barrier if opes is not None else args.opes_barrier,
+        "opes_biasfactor": (
+            opes.biasfactor if opes is not None else args.opes_biasfactor
+        ),
+        "plumed_force_group": plumed_context.get("force_group"),
+        "plumed_script": str(plumed_context.get("script_path"))
+        if "script_path" in plumed_context
+        else None,
+        "plumed_reference_pdb": str(plumed_context.get("reference_pdb"))
+        if "reference_pdb" in plumed_context
+        else None,
     }
     with open(out / "md_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
@@ -314,7 +512,10 @@ def main() -> None:
         f"  MD Complete: {args.n_steps:,} steps in {elapsed:.0f}s ({args.n_steps/elapsed:.0f} steps/s)"
     )
     print(f"  Saved {n_saved} structures to {wdsm_dir}")
-    print(f"  OPES: {opes.n_kernels} kernels, {opes.counter} depositions")
+    if opes is not None:
+        print(f"  OPES: {opes.n_kernels} kernels, {opes.counter} depositions")
+    else:
+        print(f"  OPES: PLUMED force group {plumed_context.get('force_group')}")
     print(f"{'='*60}", flush=True)
 
 

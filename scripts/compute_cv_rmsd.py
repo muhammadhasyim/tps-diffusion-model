@@ -58,7 +58,7 @@ import sys
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -784,6 +784,7 @@ def build_md_simulation_from_pdb(
     platform_name: str = "CUDA",
     temperature_k: float = 300.0,
     ligand_smiles: Optional[dict[str, str]] = None,
+    extra_forces: Optional[Any] = None,
 ) -> tuple[object, dict]:
     """Build AMBER14 + implicit GBn2 Langevin :class:`openmm.app.Simulation` without minimising.
 
@@ -801,6 +802,11 @@ def build_md_simulation_from_pdb(
         Langevin bath temperature (K).
     ligand_smiles:
         Optional chain ID → SMILES mapping for cofactors (same as ``minimize_pdb``).
+    extra_forces:
+        Optional OpenMM ``Force`` objects to add before the ``Simulation`` is
+        created.  May be an iterable of forces or a callable
+        ``f(system, topology, positions, meta)`` that either adds forces itself
+        and returns ``None`` or returns an iterable of forces to add.
 
     Returns
     -------
@@ -1011,6 +1017,14 @@ def build_md_simulation_from_pdb(
         nonbondedMethod=openmm.app.NoCutoff,
         constraints=openmm.app.HBonds,
     )
+    if extra_forces is not None:
+        if callable(extra_forces):
+            maybe_forces = extra_forces(system, h_topology, h_positions, meta)
+        else:
+            maybe_forces = extra_forces
+        if maybe_forces is not None:
+            for force in maybe_forces:
+                system.addForce(force)
 
     integrator = openmm.LangevinIntegrator(
         temperature_k * unit.kelvin,

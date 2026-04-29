@@ -31,6 +31,12 @@ Example::
         --out outputs/campaign \\
         --epochs 5 --batch-size 2 --device cpu --loss-types cartesian
 
+    # Minimal VRAM on GPU (e.g. share card with Stage 00 MD): batch size 1
+    python scripts/campaign/02_finetune_boltz2.py \\
+        --out outputs/00_generate/run_YYYYMMDD_HHMMSS \\
+        --cases 1 --epochs 50 --batch-size 1 --device cuda \\
+        --diffusion-steps 8 --recycling-steps 1
+
     # Production run (both loss types, GPU):
     python scripts/campaign/02_finetune_boltz2.py \\
         --out outputs/campaign \\
@@ -157,7 +163,12 @@ def main() -> None:
 
     # Training hyperparameters
     parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=4,
+        help="Per-step batch size (minimum 1). Use 1 to minimize VRAM when sharing the GPU.",
+    )
     parser.add_argument("--learning-rate", type=float, default=3e-6)
     parser.add_argument("--beta", type=float, default=0.01,
                         help="KL regularisation weight vs frozen baseline.")
@@ -176,6 +187,8 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true",
                         help="Skip training if the final checkpoint already exists.")
     args = parser.parse_args()
+    if args.batch_size < 1:
+        parser.error("--batch-size must be >= 1")
 
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
     out_root = _resolve_campaign_out_root(args.out)

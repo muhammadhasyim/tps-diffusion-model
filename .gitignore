@@ -6,6 +6,8 @@ __pycache__/
 
 opes*case2/
 muhammad*/
+openmm-plumed*
+plumed2*
 
 # ── Python packaging / build artifacts ────────────────────────────────────────
 *.egg-info/

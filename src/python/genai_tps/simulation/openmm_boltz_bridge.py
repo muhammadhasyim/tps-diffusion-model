@@ -14,6 +14,7 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 __all__ = [
+    "boltz_to_plumed_indices",
     "build_openmm_indices_for_boltz_atoms",
     "load_build_md_simulation_from_pdb",
 ]
@@ -67,6 +68,36 @@ def _boltz_atom_pdb_key(structure: Any, atom_idx: int) -> tuple[str, int, str]:
                 aname = str(atoms[atom_idx]["name"]).strip().upper()
                 return chain_name, pdb_resnum, aname
     raise ValueError(f"atom_idx {atom_idx} not found in Boltz structure.")
+
+
+def boltz_to_plumed_indices(
+    boltz_idx_array: Any,
+    omm_idx_map: np.ndarray,
+) -> list[int]:
+    """Convert Boltz-order atom indices to PLUMED 1-based OpenMM atom indices.
+
+    Parameters
+    ----------
+    boltz_idx_array:
+        Iterable of Boltz atom indices (0-based, heavy-atom order).
+    omm_idx_map:
+        Array mapping every Boltz atom index to the corresponding OpenMM
+        particle index (0-based).
+
+    Returns
+    -------
+    list[int]
+        PLUMED atom indices, i.e. OpenMM particle indices plus one.
+    """
+    boltz_indices = np.asarray(boltz_idx_array, dtype=np.int64)
+    omm_indices = np.asarray(omm_idx_map, dtype=np.int64)[boltz_indices]
+    if np.any(omm_indices < 0):
+        bad = boltz_indices[np.where(omm_indices < 0)[0]]
+        raise ValueError(
+            "Cannot convert Boltz atoms with negative OpenMM atom index "
+            f"to PLUMED indices; bad Boltz indices: {bad.tolist()}"
+        )
+    return [int(i) + 1 for i in omm_indices]
 
 
 def build_openmm_indices_for_boltz_atoms(

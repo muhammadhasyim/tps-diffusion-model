@@ -3,9 +3,9 @@
 
 Ground-truth reference data MUST come from independent physical simulations.
 This script drives ``genai_tps.simulation.openmm_md_runner`` (AMBER14 + GBn2
-implicit solvent, Langevin 300 K, 2 fs timestep, OPES adaptive bias on
-ligand-pose RMSD and ligand-pocket distance) for each of the three diagnostic
-systems defined in ``inputs/tps_diagnostic/``.
+implicit solvent, Langevin 300 K, 2 fs timestep, real PLUMED OPES_METAD bias
+forces on ligand-pose RMSD and ligand-pocket distance) for each of the three
+diagnostic systems defined in ``inputs/tps_diagnostic/``.
 
 Boltz ``processed/structures/*.npz`` files supply **topology** (atom ordering for
 the OpenMM bridge) but typically contain **placeholder coordinates**.  After
@@ -31,8 +31,10 @@ Outputs (one subdirectory per system)::
     outputs/campaign/case{1,2,3}/openmm_opes_md/
         wdsm_samples/wdsm_step_*.npz   # per-frame coordinate + logw shards
         cv_log.json                    # step / cv / logw time series
-        opes_states/                   # periodic OPES state JSON files
-        opes_state_final.json          # converged OPES state for reweighting
+        opes_states/COLVAR             # PLUMED CV / bias time series
+        opes_states/KERNELS            # OPES kernel history
+        opes_states/STATE              # periodic compressed OPES state
+        plumed_opes.dat                # PLUMED input deck used by OpenMM
         md_summary.json                # timing and hyperparameter record
 
 Example::
@@ -151,6 +153,7 @@ def _run_openmm_md(
     progress_every: int,
     save_opes_every: int,
     opes_restart: Path | None,
+    opes_mode: str,
 ) -> None:
     """Invoke the OpenMM OPES-MD runner via subprocess for isolation."""
     md_script = _REPO_ROOT / "scripts" / "run_openmm_opes_md.py"
@@ -170,6 +173,7 @@ def _run_openmm_md(
         "--minimize-steps", str(minimize_steps),
         "--progress-every", str(progress_every),
         "--save-opes-every", str(save_opes_every),
+        "--opes-mode", opes_mode,
         "--mol-dir", str(mol_dir),
     ]
     if opes_restart is not None:
@@ -246,8 +250,19 @@ def main() -> None:
                         help="Energy minimisation steps before MD.")
     parser.add_argument("--progress-every", type=int, default=10_000)
     parser.add_argument("--save-opes-every", type=int, default=50_000)
+    parser.add_argument(
+        "--opes-mode",
+        type=str,
+        default="plumed",
+        choices=["plumed", "observer"],
+        help=(
+            "OPES mode for the OpenMM MD runner. 'plumed' applies real bias "
+            "forces through openmm-plumed; 'observer' preserves the legacy "
+            "Python-side reweighting-only path."
+        ),
+    )
     parser.add_argument("--resume", action="store_true",
-                        help="If the OPES state final JSON already exists, skip that system.")
+                        help="If final OPES outputs already exist, skip that system.")
     args = parser.parse_args()
 
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
@@ -271,7 +286,11 @@ def main() -> None:
         system_out.mkdir(parents=True, exist_ok=True)
 
         # Check for existing OPES state (resume logic)
-        final_state = system_out / "opes_state_final.json"
+        final_state = (
+            system_out / "opes_states" / "STATE"
+            if args.opes_mode == "plumed"
+            else system_out / "opes_state_final.json"
+        )
         if args.resume and final_state.is_file():
             print(f"  [00] Found existing OPES state at {final_state}; skipping.", flush=True)
             campaign_log.append({"case": sys_def["name"], "status": "skipped_resume"})
@@ -313,7 +332,11 @@ def main() -> None:
 
         # Step 2: Run OpenMM OPES-MD
         opes_restart = None
-        restart_path = system_out / "opes_states" / "opes_state_latest.json"
+        restart_path = (
+            system_out / "opes_states" / "STATE"
+            if args.opes_mode == "plumed"
+            else system_out / "opes_states" / "opes_state_latest.json"
+        )
         if args.resume and restart_path.is_file():
             opes_restart = restart_path
             print(f"  [00] Resuming OPES from {opes_restart}", flush=True)
@@ -337,6 +360,7 @@ def main() -> None:
             progress_every=args.progress_every,
             save_opes_every=args.save_opes_every,
             opes_restart=opes_restart,
+            opes_mode=args.opes_mode,
         )
 
         # Count output shards

@@ -48,7 +48,12 @@ def main() -> None:
     parser.add_argument("--recycling-steps", type=int, default=1)
     parser.add_argument("--kernels", action="store_true")
     parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=4,
+        help="DataLoader batch size (minimum 1). Batch 1 minimizes GPU memory at the cost of throughput.",
+    )
     parser.add_argument("--learning-rate", type=float, default=3e-6)
     parser.add_argument("--beta", type=float, default=0.01, help="Regularization strength.")
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
@@ -70,6 +75,8 @@ def main() -> None:
                         help="Loss: 'cartesian' (plain DSM), 'quotient' (AF3-style alignment, deprecated), "
                              "or 'true-quotient' (principled quotient-space, arXiv:2604.21809).")
     args = parser.parse_args()
+    if args.batch_size < 1:
+        parser.error("--batch-size must be >= 1")
 
     from genai_tps.training.config import WeightedDSMConfig
     from genai_tps.training.dataset import ReweightedStructureDataset
