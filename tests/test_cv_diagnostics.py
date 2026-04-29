@@ -390,9 +390,13 @@ def _make_mock_indexer(
     else:
         indexer.ligand_no_idx = np.array([], dtype=np.int64)
 
-    # Reference coordinates
+    # Reference coordinates (match PoseCVIndexer: pocket Cα ref for Kabsch in ligand_pose_rmsd)
     indexer.ref_protein_ca = protein_ca_coords.copy().astype(np.float64)
     indexer.ref_ligand = ligand_coords.copy().astype(np.float64)
+    if len(indexer.pocket_ca_idx) > 0:
+        indexer.ref_pocket_ca = protein_ca_coords[indexer.pocket_ca_idx].copy().astype(np.float64)
+    else:
+        indexer.ref_pocket_ca = np.empty((0, 3), dtype=np.float64)
 
     return indexer
 

@@ -305,9 +305,7 @@ def tip3p_monoatomic_template(
         fc = int(ra.GetFormalCharge())
     except ImportError:
         try:
-            from openff.toolkit.topology import (  # noqa: PLC0415
-                Molecule as OpenFFMolecule,
-            )
+            from openff.toolkit import Molecule as OpenFFMolecule  # noqa: PLC0415
 
             mol = OpenFFMolecule.from_smiles(s, allow_undefined_stereo=True)
         except ImportError:
@@ -350,6 +348,203 @@ def _ligand_positions_by_chain(
             continue
         out[chain_id] = [positions[a.index] for a in atoms]
     return out
+
+
+def _extract_pdb_chain_block(pdb_path: Path, chain_id: str) -> str:
+    """Return ATOM/HETATM lines for *chain_id* plus CONECT lines linking only those atoms."""
+    text = pdb_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    chain_id = chain_id.strip()
+    atom_lines: list[str] = []
+    serials: set[int] = set()
+    for line in text:
+        if not (line.startswith("ATOM") or line.startswith("HETATM")):
+            continue
+        if len(line) < 22:
+            continue
+        ch = line[21:22].strip() or " "
+        if ch != chain_id:
+            continue
+        atom_lines.append(line)
+        try:
+            serials.add(int(line[6:11]))
+        except ValueError:
+            continue
+    conect_lines: list[str] = []
+    for line in text:
+        if not line.startswith("CONECT"):
+            continue
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        try:
+            involved = [int(parts[k]) for k in range(1, len(parts))]
+        except ValueError:
+            continue
+        if involved and all(s in serials for s in involved):
+            conect_lines.append(line)
+    return "\n".join(atom_lines + conect_lines) + "\n"
+
+
+def _ligand_topology_relabeled_chain(lig_topo: object, chain_id: str) -> object:
+    """Copy ligand ``Topology`` so the sole chain id matches YAML/PDB *chain_id*."""
+    import openmm.app as app
+
+    cid = chain_id.strip()
+    new_top = app.Topology()
+    nch = new_top.addChain(id=cid)
+    old_to_new: dict = {}
+    for old_ch in lig_topo.chains():
+        for old_res in old_ch.residues():
+            new_res = new_top.addResidue(old_res.name, nch)
+            for old_atom in old_res.atoms():
+                na = new_top.addAtom(old_atom.name, old_atom.element, new_res)
+                old_to_new[old_atom] = na
+    for bond in lig_topo.bonds():
+        a1, a2 = bond
+        if a1 in old_to_new and a2 in old_to_new:
+            new_top.addBond(old_to_new[a1], old_to_new[a2])
+    return new_top
+
+
+def _rmsd_heavy_aligned_angstrom(p_xyz: np.ndarray, q_xyz: np.ndarray) -> float:
+    """Centroid-removed RMSD (Å) for two N×3 coordinate sets of equal length."""
+    p = np.asarray(p_xyz, dtype=np.float64)
+    q = np.asarray(q_xyz, dtype=np.float64)
+    p0 = p - p.mean(axis=0, keepdims=True)
+    q0 = q - q.mean(axis=0, keepdims=True)
+    return float(np.sqrt(np.mean((p0 - q0) ** 2) + 1e-24))
+
+
+def _rdkit_ligand_positions_nm_from_pdb(
+    pdb_path: Path,
+    chain_id: str,
+    mol_off: object,
+    lig_topo: object,
+    conf_nm: np.ndarray,
+) -> list | None:
+    """Map OpenFF/OpenMM ligand atoms to PDB coordinates via RDKit substructure match.
+
+    Returns a list of ``openmm.Vec3 * nanometer`` in ``lig_topo`` atom order, or
+    ``None`` if RDKit cannot align the PDB ligand fragment to the OpenFF graph.
+    """
+    try:
+        from rdkit import Chem  # noqa: PLC0415
+    except ImportError:
+        return None
+
+    import openmm
+    from openmm import unit as mm_unit
+
+    block = _extract_pdb_chain_block(pdb_path, chain_id)
+    if not block.strip():
+        return None
+
+    pdb_mol = Chem.MolFromPDBBlock(block, sanitize=False, removeHs=False)
+    if pdb_mol is None or pdb_mol.GetNumAtoms() == 0:
+        return None
+    try:
+        Chem.SanitizeMol(pdb_mol)
+    except Exception:
+        try:
+            Chem.SanitizeMol(
+                pdb_mol,
+                sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL
+                ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES,
+            )
+        except Exception:
+            return None
+
+    rd_ref = mol_off.to_rdkit()
+    try:
+        Chem.SanitizeMol(rd_ref)
+    except Exception:
+        pass
+
+    pdb_nh = Chem.RemoveHs(pdb_mol, implicitOnly=False)
+    rd_nh = Chem.RemoveHs(rd_ref, implicitOnly=False)
+    if pdb_nh.GetNumAtoms() == 0 or rd_nh.GetNumAtoms() == 0:
+        return None
+    if pdb_nh.GetNumAtoms() != rd_nh.GetNumAtoms():
+        logger.warning(
+            "RDKit ligand map: heavy-atom count mismatch PDB=%d OpenFF=%d "
+            "(chain '%s'); skipping graph map.",
+            pdb_nh.GetNumAtoms(),
+            rd_nh.GetNumAtoms(),
+            chain_id,
+        )
+        return None
+
+    matches = list(
+        pdb_nh.GetSubstructMatches(
+            rd_nh,
+            uniquify=True,
+            useChirality=True,
+        )
+    )
+    if not matches:
+        matches = list(
+            pdb_nh.GetSubstructMatches(rd_nh, uniquify=True, useChirality=False)
+        )
+    if not matches:
+        return None
+
+    pdb_conf = pdb_nh.GetConformer()
+    rd_conf = rd_nh.GetConformer()
+    best_m: tuple[int, ...] | None = None
+    best_score = float("inf")
+    for m in matches:
+        p_xyz = np.zeros((len(m), 3), dtype=np.float64)
+        q_xyz = np.zeros((len(m), 3), dtype=np.float64)
+        for k in range(len(m)):
+            pp = pdb_conf.GetAtomPosition(int(m[k]))
+            qq = rd_conf.GetAtomPosition(k)
+            p_xyz[k] = (float(pp.x), float(pp.y), float(pp.z))
+            q_xyz[k] = (float(qq.x), float(qq.y), float(qq.z))
+        score = _rmsd_heavy_aligned_angstrom(p_xyz, q_xyz)
+        if score < best_score:
+            best_score = score
+            best_m = m
+    if best_m is None:
+        return None
+
+    nh_to_rd_full: list[int] = []
+    for a in rd_ref.GetAtoms():
+        if a.GetAtomicNum() > 1:
+            nh_to_rd_full.append(int(a.GetIdx()))
+    if len(nh_to_rd_full) != rd_nh.GetNumAtoms():
+        return None
+
+    atoms_omm = list(lig_topo.atoms())
+    conf_nm = np.asarray(conf_nm, dtype=np.float64)
+    out_nm = np.zeros((len(atoms_omm), 3), dtype=np.float64)
+    pdb_conf = pdb_nh.GetConformer()
+    for i, atom in enumerate(atoms_omm):
+        el = atom.element
+        if el is None or el.symbol == "H":
+            out_nm[i] = conf_nm[i]
+            continue
+        # Ligand-local atom index *i* matches OpenFF / RDKit parent mol atom index.
+        try:
+            j = nh_to_rd_full.index(i)
+        except ValueError:
+            out_nm[i] = conf_nm[i]
+            continue
+        p_at = pdb_conf.GetAtomPosition(int(best_m[j]))
+        out_nm[i] = (float(p_at.x) * 0.1, float(p_at.y) * 0.1, float(p_at.z) * 0.1)
+
+    lig_pos = [
+        openmm.Vec3(float(out_nm[i, 0]), float(out_nm[i, 1]), float(out_nm[i, 2]))
+        * mm_unit.nanometer
+        for i in range(len(atoms_omm))
+    ]
+    logger.info(
+        "RDKit ligand pose: chain '%s' mapped %d heavy atoms via substructure "
+        "(alignment RMSD≈%.4f Å on matched heavy atoms).",
+        chain_id,
+        rd_nh.GetNumAtoms(),
+        best_score,
+    )
+    return lig_pos
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +598,7 @@ def _register_ligand_params(
         return
 
     try:
-        from openff.toolkit.topology import Molecule as OpenFFMolecule  # noqa: PLC0415
+        from openff.toolkit import Molecule as OpenFFMolecule  # noqa: PLC0415
         from openmmforcefields.generators import GAFFTemplateGenerator  # noqa: PLC0415
     except ImportError as exc:
         raise ImportError(
@@ -447,14 +642,19 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
     orig_positions: object,
     lig_topo: object,
     conf_nm: np.ndarray,
+    *,
+    pdb_path: Path | None = None,
+    mol_off: object | None = None,
 ) -> tuple[list, bool]:
     """Build OpenMM position list for a GAFF ligand, preferring PDB heavy-atom coords.
 
     OpenFF ``from_smiles`` + ``generate_conformers`` places the ligand in an
     arbitrary gas-phase pose (near the origin).  For protein–ligand complexes we
-    instead take **heavy-atom** coordinates from the original PDB (same chain)
-    when atom **names** match OpenMM/OpenFF atom names; hydrogens and any heavy
-    atom without a PDB name match keep the conformer coordinates.
+    first merge **heavy-atom** coordinates from the original PDB when atom
+    **names** match OpenMM/OpenFF names.  If too few names match (Boltz/CCD
+    labels vs RDKit labels), we fall back to an **RDKit** substructure map between
+    the PDB ligand fragment (with ``CONECT``) and the OpenFF molecule graph;
+    hydrogens always keep the OpenFF conformer coordinates.
 
     Parameters
     ----------
@@ -467,14 +667,18 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
     conf_nm
         Conformer coordinates in **nanometres**, shape ``(n_atoms, 3)``, same atom
         order as *lig_topo*.
+    pdb_path, mol_off
+        When both are given and name-based matching is insufficient, RDKit graph
+        alignment is attempted against the ligand ``HETATM``/``CONECT`` block for
+        *chain_id* in *pdb_path*.
 
     Returns
     -------
     positions, used_pdb_merge
         ``positions`` is a list of ``openmm.Vec3 * nanometer`` in lig_topo atom
-        order.  *used_pdb_merge* is True when enough heavy atoms matched PDB
-        names to trust the merged pose; otherwise a pure gas-phase conformer list
-        is returned.
+        order.  *used_pdb_merge* is True when the pose is trusted from PDB-heavy
+        placement (name merge or RDKit map); otherwise a pure gas-phase conformer
+        list is returned.
     """
     import openmm
     from openmm import unit as mm_unit
@@ -523,6 +727,16 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
 
     min_match = max(1, (min(len(pdb_by_name), n_omm_heavy) + 1) // 2)
     used_pdb_merge = n_matched >= min_match
+    if used_pdb_merge:
+        return lig_pos, used_pdb_merge
+
+    if pdb_path is not None and mol_off is not None:
+        rdk_pos = _rdkit_ligand_positions_nm_from_pdb(
+            pdb_path, chain_id, mol_off, lig_topo, conf_nm
+        )
+        if rdk_pos is not None:
+            return rdk_pos, True
+
     if not used_pdb_merge and n_matched > 0:
         warnings.warn(
             f"{chain_id}: only {n_matched}/{n_omm_heavy} heavy atoms matched PDB "
@@ -561,7 +775,7 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
             for i in range(len(atoms_omm))
         ]
 
-    return lig_pos, used_pdb_merge
+    return lig_pos, False
 
 
 def build_md_simulation_from_pdb(
@@ -723,9 +937,7 @@ def build_md_simulation_from_pdb(
                 OpenFFMolecule = None
                 if needs_openff_conformer:
                     try:
-                        from openff.toolkit.topology import (  # noqa: PLC0415
-                            Molecule as OpenFFMolecule,
-                        )
+                        from openff.toolkit import Molecule as OpenFFMolecule  # noqa: PLC0415
                     except ImportError as exc:
                         raise ImportError(
                             "openff-toolkit is required for ligand protonation after "
@@ -752,7 +964,7 @@ def build_md_simulation_from_pdb(
                         else:
                             lig_pos = [saved[0]]
                         ion_topo = openmm.app.Topology()
-                        ion_chain = ion_topo.addChain()
+                        ion_chain = ion_topo.addChain(id=chain_id.strip())
                         ion_res = ion_topo.addResidue(res_name, ion_chain)
                         ion_el = openmm.app.Element.getByAtomicNumber(atomic_number)
                         ion_topo.addAtom(atom_name, ion_el, ion_res)
@@ -763,7 +975,9 @@ def build_md_simulation_from_pdb(
                         smiles, allow_undefined_stereo=True
                     )
                     mol.generate_conformers(n_conformers=1, rms_cutoff=None)
-                    lig_topo = mol.to_topology().to_openmm()
+                    lig_topo = _ligand_topology_relabeled_chain(
+                        mol.to_topology().to_openmm(), chain_id
+                    )
                     conf_ang = mol.conformers[0].magnitude
                     conf_nm = conf_ang / 10.0
                     lig_pos, _pdb_pose = _ligand_openmm_positions_from_pdb_heavy_atoms(
@@ -772,6 +986,8 @@ def build_md_simulation_from_pdb(
                         orig_positions,
                         lig_topo,
                         conf_nm,
+                        pdb_path=pdb_path,
+                        mol_off=mol,
                     )
                     modeller.add(lig_topo, lig_pos)
         else:
@@ -851,7 +1067,8 @@ def minimize_pdb(
     strips non–protein residues, runs PDBFixer on the protein-only structure,
     then re-inserts each ligand.  Multi-atom ligands use OpenFF for topology and
     GAFF parameters, but **heavy-atom coordinates are merged from the original
-    PDB** when atom names match (hydrogens use the OpenFF conformer).  Monoatomic
+    PDB** when atom names match, or via **RDKit** substructure mapping when names
+    differ (hydrogens use the OpenFF conformer).  Monoatomic
     tip3p ions use the
     original PDB position of that chain.  Cα-RMSD compares original vs
     minimised **protein** Cα only.

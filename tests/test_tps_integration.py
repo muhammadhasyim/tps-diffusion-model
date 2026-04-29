@@ -26,6 +26,7 @@ from tests.mock_boltz_diffusion import MockDiffusion
 
 @pytest.fixture
 def core_engine_and_traj():
+    torch.manual_seed(42)
     diff = MockDiffusion()
     b, m = 1, 4
     atom_mask = torch.ones(b, m)
@@ -78,7 +79,9 @@ def test_run_tps_path_sampling_accepts_moves(core_engine_and_traj):
     _, engine, traj = core_engine_and_traj
     with tempfile.TemporaryDirectory() as td:
         log = Path(td) / "s.log"
-        final_traj, log_entries = run_tps_path_sampling(engine, traj, n_rounds=5, log_path=log)
+        final_traj, log_entries = run_tps_path_sampling(
+            engine, traj, n_rounds=5, log_path=log, reshuffle_probability=0.0
+        )
     assert len(final_traj) == len(traj)
     assert len(log_entries) == 5
     for e in log_entries:
@@ -99,7 +102,9 @@ def test_tps_long_run_backward_shoot_not_always_rejected(core_engine_and_traj):
     _, engine, traj = core_engine_and_traj
     with tempfile.TemporaryDirectory() as td:
         log = Path(td) / "s.log"
-        _, log_entries = run_tps_path_sampling(engine, traj, n_rounds=120, log_path=log)
+        _, log_entries = run_tps_path_sampling(
+            engine, traj, n_rounds=120, log_path=log, reshuffle_probability=0.0
+        )
     assert any(e["accepted"] for e in log_entries)
 
 
@@ -107,7 +112,9 @@ def test_shooting_log_written(core_engine_and_traj):
     _, engine, traj = core_engine_and_traj
     with tempfile.TemporaryDirectory() as td:
         log = Path(td) / "s.log"
-        run_tps_path_sampling(engine, traj, n_rounds=2, log_path=log)
+        run_tps_path_sampling(
+            engine, traj, n_rounds=2, log_path=log, reshuffle_probability=0.0
+        )
         text = log.read_text()
     assert "step" in text
     assert "accepted" in text
@@ -129,6 +136,7 @@ def test_periodic_callback_every(core_engine_and_traj):
             log_path=log,
             periodic_callback=cb,
             periodic_every=2,
+            reshuffle_probability=0.0,
         )
     assert seen == [(2, len(traj)), (4, len(traj))]
 
@@ -155,6 +163,7 @@ def test_periodic_callbacks_second_interval(core_engine_and_traj):
             periodic_callback=cb_main,
             periodic_every=2,
             periodic_callbacks=[(cb_extra, 3)],
+            reshuffle_probability=0.0,
         )
     assert seen_main == [2, 4, 6]
     assert seen_extra == [3, 6]
@@ -176,6 +185,7 @@ def test_periodic_step_callbacks_receive_step_entry(core_engine_and_traj):
             n_rounds=5,
             log_path=log,
             periodic_step_callbacks=[(cb_step, 2)],
+            reshuffle_probability=0.0,
         )
     assert len(captured) == 2
     assert captured[0][0] == 2 and captured[1][0] == 4
@@ -210,5 +220,6 @@ def test_non_finite_cv_skips_enhanced_bias_update(core_engine_and_traj):
             log_path=log,
             enhanced_bias=bias,
             cv_function=lambda _t: float("nan"),
+            reshuffle_probability=0.0,
         )
     assert bias.updates == []

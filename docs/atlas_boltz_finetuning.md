@@ -32,11 +32,17 @@ Recommended layout:
 
 ## Important Limitation
 
-The current WDSM trainer builds one Boltz-2 inference bundle from one input YAML
-and checks that the training coordinates have the same atom count/order. That
-means this path supports fine-tuning **per ATLAS target/YAML**. A mixed
-multi-protein ATLAS trainer would require a larger data-loader change so each
-batch item carries its own Boltz conditioning features.
+The original `train_weighted_dsm.py` path builds one Boltz-2 inference bundle
+from one input YAML and checks that the training coordinates have the same atom
+count/order. That path supports fine-tuning **per ATLAS target/YAML**.
+
+For mixed ATLAS training, use the multi-protein path:
+
+- `scripts/atlas/01_prepare_atlas_wdsm.py --boltz-processed-dir ...` writes a
+  combined Boltz-processed dataset with multi-frame `StructureV2` files.
+- `scripts/atlas/03_finetune_boltz2_multi_protein.py` loads that combined
+  manifest/frame map, reuses Boltz-2's v2 tokenizer/featurizer/collate code,
+  runs the frozen trunk per batch, and applies WDSM to the diffusion head.
 
 ## Pilot Workflow
 
@@ -65,6 +71,7 @@ python scripts/atlas/01_prepare_atlas_wdsm.py \
   --raw-dir data/atlas/raw \
   --extract-dir data/atlas/extracted \
   --processed-dir data/atlas/processed/pilot \
+  --boltz-processed-dir data/atlas/boltz_processed/pilot \
   --yaml-dir data/atlas/yamls \
   --cache ~/.boltz \
   --stride 20 \
@@ -89,6 +96,22 @@ python scripts/atlas/02_finetune_boltz2_atlas.py \
 For multiple IDs, use `--ids-file`, `--prepared-dir`, and a JSON `--yaml-map`
 that maps ATLAS IDs to YAML paths. The script will run independent per-target
 fine-tunes under the output directory.
+
+Multi-protein fine-tuning across the combined processed dataset:
+
+```bash
+python scripts/atlas/03_finetune_boltz2_multi_protein.py \
+  --manifest data/atlas/boltz_processed/pilot/manifest.json \
+  --frame-map data/atlas/boltz_processed/pilot/frame_map.json \
+  --target-dir data/atlas/boltz_processed/pilot/structures \
+  --msa-dir data/atlas/boltz_processed/pilot/msa \
+  --mol-dir ~/.boltz/mols \
+  --out outputs/atlas_finetune/multi_pilot \
+  --loss-type true-quotient \
+  --epochs 10 \
+  --batch-size 1 \
+  --device cuda
+```
 
 ## Scientific Defaults
 

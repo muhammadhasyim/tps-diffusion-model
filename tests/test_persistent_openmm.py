@@ -202,7 +202,7 @@ class TestOpenMMEnergyAttributes:
             "run_opes_tps", scripts_dir / "run_opes_tps.py"
         )
         # Read the file to check for the string
-        src = (scripts_dir / "run_opes_tps.py").read_text()
+        src = (scripts_dir / "run_opes_tps.py").read_text(encoding="utf-8")
         assert '"openmm_energy"' in src, "openmm_energy must be in _SINGLE_CV_NAMES"
 
 

@@ -1,0 +1,63 @@
+\documentclass[11pt]{letter}
+\usepackage[margin=1in]{geometry}
+\usepackage[colorlinks=true,urlcolor=blue]{hyperref}
+
+\signature{Muhammad R.~Hasyim\\
+Simons Center for Computational Physical Chemistry\\
+New York University\\
+\href{mailto:mh7373@nyu.edu}{mh7373@nyu.edu}}
+
+\address{Muhammad R.~Hasyim\\
+Simons Center for Computational Physical Chemistry\\
+New York University\\
+New York, NY 10003}
+
+\begin{document}
+
+\begin{letter}{Editors\\
+\textit{Nature Computational Science}}
+
+\opening{Dear Editors,}
+
+Please consider the enclosed Brief Communication, ``Path Sampling Diagnoses
+Protein Diffusion Models,'' for publication in \textit{Nature Computational
+Science}.
+
+This manuscript introduces a path-sampling diagnostic for explicit-noise
+generative structure models. Because the random variables used during reverse
+diffusion can be recorded and assigned exact prior probabilities, the full
+denoising trajectory can be sampled with transition path sampling. The
+manuscript then combines this trajectory ensemble with on-the-fly probability
+enhanced sampling to expose rare ligand-pose basins that ordinary single-seed
+inference misses.
+
+The Brief Communication format fits the scope: one rare-event sampling
+framework, one high-profile generative model and one protein--ligand case
+study. The biological demonstration uses Boltz-2 on the MEK1--FZC complex, a
+system that connects directly to current debates about memorization and
+generalization in protein--ligand co-folding models. The TPS+OPES ensemble
+contains a dominant native-like basin together with persistent secondary
+ligand-pose basins above 1~\AA\ RMSD, showing that model uncertainty and
+alternative denoising outcomes can be characterized at the path level.
+
+The manuscript should interest readers working at the boundary of statistical
+mechanics, enhanced sampling, generative modeling and computational structural
+biology.
+The main text is intentionally compact, while the Supplementary Information
+contains the path-probability derivations, quotient-space diffusion context,
+evaluation metrics and reproducible computational workflow needed by specialist
+readers.
+
+The work is not under consideration elsewhere. Related manuscript and software
+materials are available in the accompanying
+\href{https://github.com/muhammadhasyim/tps-diffusion-model}{project repository}.
+I have had no prior discussions with a \textit{Nature Computational Science}
+editor about this work. Large language model assistance was used for manuscript
+restructuring and prose drafting; all scientific claims, analysis choices and
+final text were reviewed by the author.
+
+\closing{Sincerely,}
+
+\end{letter}
+
+\end{document}

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from torch.optim import Adam
 from torch.utils.data import DataLoader
 
 from genai_tps.backends.boltz.inference import BoltzInferenceBundle

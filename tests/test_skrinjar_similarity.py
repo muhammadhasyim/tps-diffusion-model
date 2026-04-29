@@ -176,6 +176,8 @@ def test_foldseek_easy_search_smoke(tmp_path: Path) -> None:
         check=True,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     out = sk.foldseek_easy_search(
         q,
@@ -309,11 +311,13 @@ def test_download_zenodo_manifest_only(tmp_path: Path) -> None:
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     assert r.returncode == 0, r.stderr
     man = out / "manifest.json"
     assert man.is_file()
-    assert "files" in man.read_text()
+    assert "files" in man.read_text(encoding="utf-8")
 
 
 def test_batch_wrapper_dry_run() -> None:
@@ -327,6 +331,8 @@ def test_batch_wrapper_dry_run() -> None:
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=str(root),
     )
     assert r.returncode == 0, r.stderr

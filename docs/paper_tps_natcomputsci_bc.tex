@@ -27,59 +27,57 @@ New York University, New York, NY~10003}
 \date{\today}
 
 \begin{abstract}
-Diffusion models now generate protein--ligand structures routinely, but a
-single prediction gives little information about the stochastic landscape that
-produced it. Here I adapt transition path sampling to explicit-noise
-structure diffusion and combine it with on-the-fly probability enhanced
-sampling to map ligand-pose landscapes. The method records the random
-variables used by Boltz-2 reverse diffusion, assigns exact path weights, and
-resamples whole denoising trajectories rather than isolated structures. For a
-held-out MEK1--FZC complex, the biased trajectory ensemble reveals a dominant
-native-like pose and persistent secondary basins with ligand RMSD above
-1~\AA. These rare basins are invisible to single forward passes but stable
-over tens to hundreds of Monte Carlo steps, providing a path-level diagnostic
-for memorization, ambiguity and physical plausibility in generative structure
-models.
+Diffusion models can generate protein--ligand structures in seconds, but one
+prediction does not reveal the stochastic denoising paths that led to it. I
+adapt transition path sampling to explicit-noise structure diffusion and add
+on-the-fly probability enhanced sampling to map ligand-pose denoising
+landscapes. The method records the random variables used by Boltz-2 reverse
+diffusion, assigns exact path weights and resamples complete denoising
+trajectories. For a held-out MEK1--FZC complex, the biased trajectory ensemble
+contains a dominant native-like pose and persistent secondary basins with
+ligand RMSD above 1~\AA. These rare basins do not appear in single forward
+passes but remain stable over tens to hundreds of Monte Carlo steps. The
+result is a path-level test for memorization, ambiguity and physical
+plausibility in generative structure models.
 \end{abstract}
 
 \maketitle
 
-Diffusion-based structure models such as AlphaFold~3 and Boltz-2 can produce
-protein complexes and ligand poses in seconds~\cite{alphafold3,boltz2}. Their
-speed is transformative for computational biology, yet it also sharpens an old
-question: when a generated pose looks chemically plausible, has the model
-sampled a physically meaningful binding mode, or has it returned a memorized
-training-set attractor? Recent protein--ligand benchmarks report strong
+Diffusion-based structure models such as AlphaFold~3 and Boltz-2 now produce
+protein complexes and ligand poses quickly enough to be used as routine
+screening tools~\cite{alphafold3,boltz2}. That speed leaves a diagnostic gap.
+When a generated pose looks chemically plausible, it is hard to tell whether
+the model sampled a physically meaningful binding mode or returned a memorized
+training-set attractor. Recent protein--ligand benchmarks report strong
 dependence on similarity to known complexes and adversarial failures in which
 co-folding models preserve ligand placement after binding-site mutations
-remove the expected interactions~\cite{masters2024,skrinjar2025}. These
-findings motivate diagnostics that interrogate the distribution of denoising
-trajectories for a fixed input, not only the final structure from one random
-seed.
+remove the expected interactions~\cite{masters2024,skrinjar2025}. A useful
+test should interrogate the distribution of denoising trajectories for a fixed
+input, not just the final structure from one random seed.
 
-Transition path sampling (TPS) provides such a diagnostic. Classical TPS
-samples rare dynamical trajectories connecting two state volumes rather than
-configurations drawn independently~\cite{dellago1998,bolhuis2002}. A reverse
-diffusion sampler has the same minimal ingredients when its random variables
-are explicit. At denoising step $i$, Boltz-2 draws an SE(3) augmentation and
-Gaussian churn noise, then maps the current coordinates deterministically to
-the next coordinates. Recording these draws gives a path density that
-factorizes over known priors. Forward shooting resamples the suffix of a
-denoising path; backward shooting proposes a new prefix with a Hastings
-correction; global reshuffling draws a fresh trajectory from the prior. The
-full derivation, including Jacobian cancellations, non-reversible proposals and
-the relation to quotient-space diffusion, is given in Supplementary Notes 1,
-2 and 5.
+Transition path sampling (TPS) is built for that kind of question. Classical
+TPS samples rare dynamical trajectories connecting two state volumes rather
+than configurations drawn independently~\cite{dellago1998,bolhuis2002}. A
+reverse diffusion sampler has the same minimal ingredients when its random
+variables are explicit. At denoising step $i$, Boltz-2 draws an SE(3)
+augmentation and Gaussian churn noise, then maps the current coordinates
+deterministically to the next coordinates. Recording these draws gives a path
+density that factorizes over known priors. Forward shooting resamples the
+suffix of a denoising path; backward shooting proposes a new prefix with a
+Hastings correction; global reshuffling draws a fresh trajectory from the
+prior. Supplementary Notes 1, 2 and 5 give the derivation, including Jacobian
+cancellations, non-reversible proposals and the relation to quotient-space
+diffusion.
 
-Plain TPS samples the unbiased reactive ensemble and therefore remains
-concentrated in whichever basin dominates the denoising landscape. To reveal
-rare terminal poses, I coupled TPS to on-the-fly probability enhanced sampling
+Plain TPS samples the unbiased reactive ensemble, so it stays near whichever
+basin dominates the denoising landscape. To reach rare terminal poses, I
+coupled TPS to on-the-fly probability enhanced sampling
 (OPES)~\cite{invernizzi2020,invernizzi2022}. OPES builds an adaptive bias on
 terminal collective variables, here ligand heavy-atom RMSD $s_1$ and
-ligand--pocket distance $s_2$, and penalizes already visited regions while
-preserving a reweightable path ensemble. The result is a controlled exploration
-of a projected denoising landscape rather than a collection of unrelated
-Boltz-2 predictions.
+ligand--pocket distance $s_2$, and penalizes regions the chain has already
+visited while preserving a reweightable path ensemble. This produces one
+biased trajectory ensemble on a projected denoising landscape, not a set of
+unconnected Boltz-2 predictions.
 
 \begin{figure}[t]
 \centering
@@ -93,7 +91,7 @@ The two-dimensional collective variable combines ligand pose RMSD $s_1$ and
 ligand--pocket distance $s_2$. In the MEK1--FZC case study, the run comprised
 11,590 Monte Carlo steps, 3,184 accepted moves and a 27.5\% acceptance rate.
 The projected landscape contains a dominant native-like basin near
-$(0.07~\mathrm{\AA}, 5.37~\mathrm{\AA})$ and secondary high-RMSD regions
+$(0.07~\text{\AA}, 5.37~\text{\AA})$ and secondary high-RMSD regions
 around larger pocket distances. Numerical definitions and OPES reweighting are
 reported in Supplementary Notes 3 and 4.}
 \label{fig:landscape}
@@ -105,9 +103,9 @@ co-folding analyses as lying in the low-similarity regime where memorized
 ligand placement is expected to be least reliable~\cite{masters2024}. A
 one-dimensional TPS+OPES run using only $s_1$ already showed a broad tail:
 4,180 Monte Carlo steps sampled ligand RMSD from near zero to 1.3~\AA, with
-approximately 47\% of accepted paths above 0.5~\AA. This indicated that the
-terminal denoising landscape was not a single rigid pose, but the RMSD
-coordinate alone could not identify how the ligand moved.
+approximately 47\% of accepted paths above 0.5~\AA. The terminal denoising
+landscape therefore was not a single rigid pose. The RMSD coordinate alone,
+however, could not identify how the ligand moved.
 
 The two-dimensional run resolves this ambiguity (Fig.~\ref{fig:landscape}).
 With biasfactor $\gamma=10$, 11,590 Monte Carlo steps produced 3,184 accepted
@@ -142,22 +140,22 @@ interpretation (Fig.~\ref{fig:basins}). B$_0$ retains the compact binding pose,
 B$_1$ slips along the pocket axis with the protein fold intact, B$_2$ changes
 side-chain contact patterns, and B$_3$ partially exposes the ligand at the
 pocket rim. These configurations should not be interpreted immediately as
-physical alternative binding modes: the free-energy surface is projected onto
-two collective variables, OPES convergence is finite, and independent energy
-or geometry checks remain necessary. Instead, they demonstrate what the
-diagnostic is designed to expose: a generative model may be highly focused in
-ordinary sampling while still containing rare, stable denoising basins that
-matter for uncertainty, memorization and downstream drug-discovery decisions.
+physical alternative binding modes. The free-energy surface is projected onto
+two collective variables, OPES convergence is finite, and independent energy or
+geometry checks remain necessary. The point is narrower: a model may look
+highly focused under ordinary sampling while still containing rare, stable
+denoising basins that matter for uncertainty, memorization and downstream
+drug-discovery decisions.
 
-This path-level view complements standard confidence scores and direct
-multi-seed sampling. It applies whenever a generator can expose its stochastic
-inputs and evaluate their densities, including score-based diffusion and
-closely related generative samplers. The same framework can therefore compare
-models, MSA depths or ligand scaffolds by asking how the reactive trajectory
-ensemble changes, rather than only whether the top-ranked pose is close to a
-reference. The 228-residue co-folding control, additional diagnostics,
-evaluation metrics and computational workflow are reported in the
-Supplementary Information.
+Standard confidence scores and direct multi-seed sampling still matter, but
+they do not ask which denoising paths connect noise to structure. The TPS
+formulation does. It applies whenever a generator exposes its stochastic
+inputs and their densities, including score-based diffusion and related
+generative samplers. The framework can compare models, MSA depths or ligand
+scaffolds by measuring how the reactive trajectory ensemble changes, rather
+than only whether the top-ranked pose matches a reference. The 228-residue
+co-folding control, additional diagnostics, evaluation metrics and
+computational workflow are reported in the Supplementary Information.
 
 \section*{Methods}
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from genai_tps.data.atlas import cache_zip_path, read_ids_file  # noqa: E402
 from genai_tps.data.atlas_convert import (  # noqa: E402
     concatenate_wdsm_arrays,
     convert_mdtraj_trajectory_to_wdsm,
+    dump_structure_with_coordinate_ensemble,
     extract_atlas_zip,
     find_atlas_trajectory_files,
     load_mdtraj_frames,
@@ -39,6 +41,8 @@ def main() -> None:
     parser.add_argument("--raw-dir", type=Path, default=Path("data/atlas/raw"))
     parser.add_argument("--extract-dir", type=Path, default=Path("data/atlas/extracted"))
     parser.add_argument("--processed-dir", type=Path, default=Path("data/atlas/processed/pilot"))
+    parser.add_argument("--boltz-processed-dir", type=Path, default=None,
+                        help="Optional combined Boltz-processed output for multi-protein WDSM.")
     parser.add_argument("--yaml-dir", type=Path, default=None,
                         help="Directory containing one Boltz YAML per ID named {atlas_id}.yaml.")
     parser.add_argument("--yaml-map", type=Path, default=None,
@@ -63,6 +67,8 @@ def main() -> None:
     yaml_map = _load_yaml_map(args.yaml_map)
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
     device = torch.device(args.device)
+    combined_records = []
+    frame_samples = []
 
     for atlas_id in atlas_ids:
         print(f"\n[prepare] {atlas_id}", flush=True)
@@ -72,7 +78,7 @@ def main() -> None:
             args.extract_dir / atlas_id,
             overwrite=args.overwrite_extract,
         )
-        boltz_structure = _load_boltz_structure(
+        boltz_structure, topo_npz, source_processed_dir = _load_boltz_structure(
             atlas_id=atlas_id,
             args=args,
             yaml_map=yaml_map,
@@ -132,6 +138,29 @@ def main() -> None:
                 seed=args.seed,
             )
 
+        if args.boltz_processed_dir is not None:
+            record_id, records = _write_boltz_processed_atlas_target(
+                atlas_id=atlas_id,
+                structure=boltz_structure,
+                coords=coords,
+                source_processed_dir=source_processed_dir,
+                topo_npz=topo_npz,
+                output_root=args.boltz_processed_dir,
+            )
+            combined_records.extend(records)
+            frame_samples.extend(
+                {"record_id": record_id, "frame_idx": idx, "logw": float(logw[idx])}
+                for idx in range(len(logw))
+            )
+
+    if args.boltz_processed_dir is not None:
+        _write_combined_manifest_and_frame_map(
+            args.boltz_processed_dir,
+            combined_records=combined_records,
+            frame_samples=frame_samples,
+            cache=cache,
+        )
+
 
 def _load_yaml_map(path: Path | None) -> dict[str, Path]:
     if path is None:
@@ -142,6 +171,7 @@ def _load_yaml_map(path: Path | None) -> dict[str, Path]:
 
 def _load_boltz_structure(*, atlas_id: str, args, yaml_map: dict[str, Path], cache: Path, device: torch.device):
     topo_npz = None
+    source_processed_dir = None
     if args.topo_npz_dir is not None:
         candidate = Path(args.topo_npz_dir).expanduser() / f"{atlas_id}.npz"
         if candidate.is_file():
@@ -160,11 +190,12 @@ def _load_boltz_structure(*, atlas_id: str, args, yaml_map: dict[str, Path], cac
         topo_npz = bundle.topo_npz
         if topo_npz is None:
             raise RuntimeError(f"Boltz preprocessing did not produce a topology NPZ for {atlas_id}.")
+        source_processed_dir = bundle.processed_dir
         del bundle
         if device.type == "cuda":
             torch.cuda.empty_cache()
     structure, _n_struct = load_topo(Path(topo_npz))
-    return structure
+    return structure, Path(topo_npz), source_processed_dir
 
 
 def _yaml_path_for_id(atlas_id: str, yaml_dir: Path | None, yaml_map: dict[str, Path]) -> Path:
@@ -180,6 +211,94 @@ def _yaml_path_for_id(atlas_id: str, yaml_dir: Path | None, yaml_map: dict[str, 
     if not path.is_file():
         raise FileNotFoundError(f"Boltz YAML not found for {atlas_id}: {path}")
     return path
+
+
+def _write_boltz_processed_atlas_target(
+    *,
+    atlas_id: str,
+    structure,
+    coords: np.ndarray,
+    source_processed_dir: Path | None,
+    topo_npz: Path,
+    output_root: Path,
+) -> tuple[str, list]:
+    """Write one ATLAS target in Boltz-processed multi-protein layout."""
+    from boltz.data.types import Manifest, Record  # noqa: PLC0415
+
+    output_root = Path(output_root).expanduser()
+    structures_dir = output_root / "structures"
+    structures_dir.mkdir(parents=True, exist_ok=True)
+
+    records = []
+    record_id = atlas_id
+    if source_processed_dir is not None and (source_processed_dir / "manifest.json").is_file():
+        manifest = Manifest.load(source_processed_dir / "manifest.json")
+        records = list(manifest.records)
+        if records:
+            record_id = records[0].id
+    else:
+        # The dataset can still consume this if the caller provides a matching manifest later.
+        records = []
+
+    dump_structure_with_coordinate_ensemble(
+        structure,
+        coords,
+        structures_dir / f"{record_id}.npz",
+    )
+
+    if source_processed_dir is not None:
+        for dirname in ("msa", "constraints", "templates", "mols"):
+            src = source_processed_dir / dirname
+            dst = output_root / dirname
+            if not src.exists():
+                continue
+            dst.mkdir(parents=True, exist_ok=True)
+            for path in src.iterdir():
+                if path.is_file():
+                    shutil.copy2(path, dst / path.name)
+        if not records:
+            raise RuntimeError(
+                f"No manifest records found in {source_processed_dir}; cannot build combined manifest."
+            )
+    elif not records:
+        raise RuntimeError(
+            "--boltz-processed-dir requires YAML-based Boltz preprocessing so the combined "
+            "manifest/MSA files can be copied. A bare --topo-npz-dir is insufficient."
+        )
+
+    print(
+        f"[prepare]   wrote multi-protein StructureV2 {structures_dir / (record_id + '.npz')} "
+        f"with {coords.shape[0]} frames",
+        flush=True,
+    )
+    return record_id, records
+
+
+def _write_combined_manifest_and_frame_map(
+    output_root: Path,
+    *,
+    combined_records: list,
+    frame_samples: list[dict[str, object]],
+    cache: Path,
+) -> None:
+    from boltz.data.types import Manifest  # noqa: PLC0415
+
+    output_root = Path(output_root).expanduser()
+    output_root.mkdir(parents=True, exist_ok=True)
+    Manifest(records=combined_records).dump(output_root / "manifest.json")
+    (output_root / "frame_map.json").write_text(
+        json.dumps({"samples": frame_samples}, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    mol_src = Path(cache).expanduser() / "mols"
+    mol_dst = output_root / "mols"
+    if mol_src.is_dir() and not mol_dst.exists():
+        try:
+            mol_dst.symlink_to(mol_src, target_is_directory=True)
+        except OSError:
+            shutil.copytree(mol_src, mol_dst, dirs_exist_ok=True)
+    print(f"[prepare] Combined manifest: {output_root / 'manifest.json'}", flush=True)
+    print(f"[prepare] Combined frame map: {output_root / 'frame_map.json'}", flush=True)
 
 
 if __name__ == "__main__":

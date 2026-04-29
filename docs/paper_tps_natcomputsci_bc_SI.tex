@@ -1,0 +1,450 @@
+%% Supplementary Information for Nature Computational Science Brief Communication
+%% Heavy theory, metrics and computational workflow live here by design.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\geometry{margin=2.5cm}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{remark}{Remark}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Haar}{\mu_{\mathrm{Haar}}}
+\newcommand{\HAB}{H_{AB}}
+\newcommand{\Xnew}{X^{\mathrm{n}}}
+\newcommand{\Xold}{X^{\mathrm{o}}}
+\newcommand{\pacc}{p_{\mathrm{acc}}}
+\newcommand{\Dtheta}{D_\theta}
+\newcommand{\ftheta}{f_\theta}
+\newcommand{\that}{\hat t}
+\newcommand{\xnoisy}{x^{\mathrm{noisy}}}
+\newcommand{\xtilde}{\tilde x}
+\newcommand{\cskip}{c_{\mathrm{skip}}}
+\newcommand{\cout}{c_{\mathrm{out}}}
+\newcommand{\cin}{c_{\mathrm{in}}}
+\newcommand{\sigmaD}{\sigma_{\mathrm{data}}}
+
+\title{\textbf{Supplementary Information}\\[4pt]
+Path Sampling Diagnoses Protein Diffusion Models}
+\author{Muhammad R.~Hasyim\\
+\small Simons Center for Computational Physical Chemistry,
+New York University, New York, NY~10003}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Supplementary Note 1: Path Probabilities and TPS Ratios}
+\label{sec:path-prob}
+
+\subsection{Extended state for Boltz-2 reverse diffusion}
+
+Boltz-2 reverse diffusion is treated as an inhomogeneous discrete-time Markov
+chain. Let $x_i \in \R^{M \times 3}$ be the atom-coordinate tensor at
+denoising step $i$, and let $L$ be the number of denoising steps. The extended
+state records every random input used by the sampler:
+\begin{equation}
+  \mathcal{S}_i = (x_i, R_i, \tau_i, \varepsilon_i, i),
+\end{equation}
+where $R_i \in \mathrm{SO}(3)$ is drawn from Haar measure, $\tau_i$ is a
+translation drawn from $\N(0,s_{\mathrm{trans}}^2 I)$, and
+$\varepsilon_i$ is Gaussian churn noise. The reverse step is deterministic
+once these random variables are fixed.
+
+For the MEK1--FZC case study, state A denotes the high-noise initial state and
+state B denotes the terminal structured state produced by the sampler. More
+selective B definitions, such as pLDDT or RMSD thresholds, can be substituted
+without changing the path-probability derivation.
+
+\subsection{One-step transition kernel}
+
+Each denoising step consists of SE(3) augmentation, noise injection and a
+deterministic EDM-preconditioned update~\cite{karras2022}. Written in compact
+form,
+\begin{align}
+  \xtilde_i &= R_i (x_i-\bar x_i) + \tau_i,\\
+  \xnoisy_i &= \xtilde_i + \varepsilon_i,\\
+  x_{i+1} &= T_i(x_i;R_i,\tau_i,\varepsilon_i),
+\end{align}
+where $\bar x_i$ is the atom centroid and $T_i$ includes the Boltz-2 denoiser.
+The corresponding kernel is
+\begin{align}
+  p(&x_{i+1}, R_i,\tau_i,\varepsilon_i \mid x_i) \nonumber\\
+  &=
+  \Haar(R_i)\,
+  \N(\tau_i;0,s_{\mathrm{trans}}^2I)\,
+  \N(\varepsilon_i;0,v_iI)\,
+  \delta\!\left(x_{i+1}-T_i(x_i;R_i,\tau_i,\varepsilon_i)\right),
+  \label{eq:transition-kernel}
+\end{align}
+with churn variance $v_i$ determined by the EDM noise schedule.
+
+\subsection{Extended path density}
+
+For a complete path
+$\mathcal{X}_{\mathrm{ext}}=\{x_0,(R_i,\tau_i,\varepsilon_i)_{i=0}^{L-1},x_L\}$,
+the density in random-variable coordinates is
+\begin{equation}
+  \log P_{\mathrm{ext}}(\mathcal{X}_{\mathrm{ext}})
+  =
+  \log \rho(x_0)
+  +
+  \sum_{i=0}^{L-1}
+  \left[
+    \log \Haar(R_i)
+    + \log \N(\tau_i;0,s_{\mathrm{trans}}^2I)
+    + \log \N(\varepsilon_i;0,v_iI)
+  \right].
+  \label{eq:log-path}
+\end{equation}
+This is the key simplification: no neural-network likelihood is needed, because
+the coordinates are deterministic functions of explicit random draws.
+
+\subsection{Jacobian diagnostics}
+
+Equation~\eqref{eq:log-path} is the target density for paths expressed in the
+extended random-variable parameterization. If one instead reports a
+coordinate-density diagnostic for the map
+$\varepsilon_i \mapsto x_{i+1}$, a change-of-variables term appears:
+\begin{equation}
+  -\log |\det J_i|,\qquad
+  J_i = \frac{\partial x_{i+1}}{\partial \varepsilon_i}.
+\end{equation}
+For an EDM-preconditioned denoiser,
+\begin{equation}
+  J_i =
+  \beta_i I
+  +
+  \mu_i \nabla_z \ftheta(z)\big|_{z=\cin(\that_i)\xnoisy_i},
+\end{equation}
+where $\beta_i=1+\alpha_i(1-\cskip(\that_i))$ and
+$\mu_i=-\alpha_i\cout(\that_i)\cin(\that_i)$. The implementation may log a
+scalar schedule-only approximation for diagnostics, but this approximation is
+not a calibrated neural-map determinant and should not be mixed into a
+Hastings ratio unless the proposal density is derived in the same coordinates.
+
+\subsection{Reactive path ensemble}
+
+The fixed-length reactive ensemble is
+\begin{equation}
+  \pi(\mathcal{X}) \propto
+  H_A(x_0)\,P_{\mathrm{ext}}(\mathcal{X})\,H_B(x_L),
+\end{equation}
+where $H_A$ and $H_B$ are indicator functions for the endpoint state volumes.
+The Monte Carlo chain samples this ensemble with three proposal classes.
+
+\subsubsection*{Forward shooting}
+
+Select a shooting index $k$, keep the prefix $x_0,\ldots,x_k$, draw fresh
+$(R_i,\tau_i,\varepsilon_i)$ from the prior for $i\ge k$, and integrate
+forward. The proposal density for the new suffix is exactly the same product
+of priors appearing in the target density. Hence
+\begin{equation}
+  \Delta_{\mathrm{fwd}}=0,\qquad
+  \pacc^{\mathrm{fwd}}=\HAB(\Xnew).
+\end{equation}
+The same cancellation applies to Haar and translation terms. Scalar
+schedule-only Jacobians also cancel for fixed-length paths, because their
+values depend only on $i$.
+
+\subsubsection*{Backward shooting}
+
+Backward shooting proposes a new prefix by approximately inverting the denoiser
+from $x_{k+1}$ to $x_k$. The fixed-point inversion solves
+\begin{equation}
+  x_{i+1}=(1+\alpha_i)\xnoisy_i-\alpha_i\Dtheta(\xnoisy_i,\that_i).
+\end{equation}
+Because this proposal is not the time reversal of the forward kernel, the
+Hastings correction is explicit:
+\begin{equation}
+  \Delta_{\mathrm{bwd}}
+  =
+  [\log p_{\mathrm{fwd}}(X'_{0:k})-\log p_{\mathrm{fwd}}(X_{0:k})]
+  +
+  [\log q_{\mathrm{bwd}}(X_{0:k})-\log q_{\mathrm{bwd}}(X'_{0:k})]
+  +
+  \log\rho(x'_0)-\log\rho(x_0).
+  \label{eq:delta-bwd}
+\end{equation}
+The move is accepted with
+$\min(1,\exp(\Delta_{\mathrm{bwd}}))$ if the endpoint tests are satisfied.
+
+\subsubsection*{Global reshuffle}
+
+Global reshuffling draws a fresh $x_0$ and all random variables from their
+priors, then integrates the entire denoising trajectory. The proposal is the
+target prior over complete paths, so the Metropolis ratio is again unity after
+endpoint checks. This move decorrelates the chain and ensures that disconnected
+reactive regions can be reached.
+
+\begin{theorem}[Ergodic move set]
+The combination of forward shooting, backward shooting and global reshuffling
+is irreducible on the fixed-length reactive path ensemble, provided every
+reactive path has nonzero prior probability under the sampler.
+\end{theorem}
+\begin{proof}
+Forward and backward shooting update suffixes and prefixes while satisfying
+Metropolis--Hastings balance. Global reshuffling can propose any complete
+reactive path directly from the prior with nonzero probability. Thus every
+reactive path communicates with every other through the reshuffle move, and
+the endpoint-restricted chain is irreducible.
+\end{proof}
+
+\section{Supplementary Note 2: Quotient-Space Diffusion Context}
+\label{sec:quotient}
+
+Molecular structures are naturally defined modulo global rigid motions:
+coordinates $x$ and $g\cdot x$ represent the same intrinsic structure for
+$g\in \mathrm{SE}(3)$. Recent quotient-space diffusion theory formalizes this
+idea by treating samples as elements of $\mathcal{M}/\mathcal{G}$ rather than
+the ambient coordinate space~\cite{xu2026}. For a projection
+$\pi:\mathcal{M}\rightarrow\mathcal{M}/\mathcal{G}$, directions tangent to the
+group orbit are vertical degrees of freedom, while orthogonal directions form
+a horizontal subspace that changes the intrinsic molecular shape.
+
+The manuscript uses this perspective to specify the path state for the
+implemented Boltz-2 sampler; it does not introduce a new quotient-space
+sampler. Boltz-2's random rotations and translations are not physical
+conformational changes, but they are random variables used by the code.
+Recording $(R_i,\tau_i)$ preserves the exact random-variable density and makes
+no assumption that the neural network is perfectly equivariant. When these
+variables are resampled from the same priors in proposal and target, their
+density factors cancel in the TPS acceptance ratio.
+
+The relation can be summarized as follows:
+\begin{itemize}[leftmargin=*]
+  \item Quotient-space diffusion removes redundant movement within an
+  equivalence class by construction.
+  \item Boltz-2 uses SE(3) augmentation inside an ambient-coordinate sampler.
+  \item TPS on the implemented Boltz-2 sampler must therefore operate on the
+  extended random-variable path, not only on quotient coordinates.
+  \item Observables such as ligand RMSD and ligand--pocket distance are
+  computed after consistent alignment or using invariant distances, so they
+  probe structural variation rather than arbitrary global motion.
+\end{itemize}
+
+\section{Supplementary Note 3: Evaluation Metrics}
+\label{sec:metrics}
+
+\subsection{Biased collective variables}
+
+The primary OPES collective variable is
+$\mathbf{s}=(s_1,s_2)$.
+
+\paragraph{Ligand pose RMSD.}
+$s_1$ is the Kabsch-aligned heavy-atom RMSD of the terminal ligand coordinates
+to a reference pose:
+\begin{equation}
+  s_1(x)=
+  \sqrt{\frac{1}{N_{\mathrm{lig}}}
+  \sum_{a=1}^{N_{\mathrm{lig}}}
+  \|R^\star x_a+t^\star-x^{\mathrm{ref}}_a\|^2},
+\end{equation}
+where $(R^\star,t^\star)$ is the optimal rigid alignment.
+
+\paragraph{Ligand--pocket distance.}
+$s_2$ is the distance between the ligand center of mass and the pocket
+C$\alpha$ centroid or nearest-pocket C$\alpha$ summary used by the analysis
+script:
+\begin{equation}
+  s_2(x)=\left\|r_{\mathrm{COM}}^{\mathrm{lig}}(x)-
+  r_{\mathrm{pocket}}^{C\alpha}(x)\right\|.
+\end{equation}
+Together, $s_1$ distinguishes pose deviation and $s_2$ distinguishes pocket
+engagement.
+
+\subsection{Diagnostic structural metrics}
+
+\begin{description}[leftmargin=!,labelwidth=1.55in]
+  \item[Contact order]
+  Fraction of long-range C$\alpha$ contacts:
+  \[
+    \mathrm{CO}(x)=
+    \frac{|\{(i,j): |i-j|\ge 6,\ d_{ij}<8~\text{\AA}\}|}
+    {|\{(i,j): |i-j|\ge 6\}|}.
+  \]
+  \item[Steric clashes]
+  Count of non-bonded atom pairs below a distance threshold, typically
+  $3.0~\text{\AA}$ for coarse screening.
+  \item[lDDT]
+  Alignment-free local distance difference test~\cite{mariani2013lddt}.
+  High lDDT to a reference may indicate local structural agreement or
+  memorization depending on the experimental design.
+  \item[Ramachandran outliers]
+  Fraction of residues outside allowed backbone $(\phi,\psi)$ regions.
+  \item[Radius of gyration]
+  $R_g=\sqrt{M^{-1}\sum_m\|x_m-\bar x\|^2}$.
+  \item[Boltz pLDDT]
+  Mean confidence score from the model confidence head. High pLDDT coupled
+  with large geometric deviation is treated as an overconfidence warning.
+\end{description}
+
+\subsection{PoseBusters-style ligand diagnostics}
+
+The implementation can evaluate PoseBusters-style ligand checks using either
+the upstream CPU PoseBusters package or a tensor-native GPU subset. Exposed
+checks include ligand RMSD thresholds, ligand--pocket distance thresholds,
+contact counts, hydrogen-bond counts, clash counts, ligand maximum extent and
+bounding-box volume. These are useful OPES diagnostics but were not used as
+the primary two-dimensional bias in the main MEK1--FZC result.
+
+\subsection{Ensemble-distribution metrics}
+
+For comparing TPS-derived ensembles to molecular-dynamics or generative
+ensemble baselines, the repository includes torsion Jensen--Shannon distance,
+one-dimensional Wasserstein distance, per-residue RMSF correlation/RMSE,
+per-atom Gaussian Wasserstein-2 distance, interaction fingerprint
+Wasserstein distance, pairwise RMSD correlation, PCA Wasserstein-2,
+transient contact Jaccard index and SASA correlation. These
+metrics are documented in \path{docs/evaluation_metrics.md}; they are
+secondary to the Brief Communication's path-sampling claim but are needed for
+broader model comparison.
+
+\section{Supplementary Note 4: Computational Workflow}
+\label{sec:workflow}
+
+\subsection{Inputs}
+
+The main run uses PDB 7XLP, protein MEK1/MAP2K1 and ligand FZC. The pipeline
+prepares the Boltz input YAML, processes structures into Boltz-compatible NPZ
+topology files and initializes one accepted denoising trajectory.
+
+\subsection{Execution pipeline}
+
+\begin{enumerate}[leftmargin=*]
+  \item Run Boltz-2 inference with random-number capture enabled. Store terminal
+  coordinates and per-step random variables.
+  \item Wrap the Boltz sampler as an OpenPathSampling-compatible engine. The
+  snapshot includes coordinates, diffusion step index and recorded SE(3)/noise
+  variables.
+  \item Run TPS with forward shooting, backward shooting and global reshuffle
+  moves. Save terminal frames and path metadata.
+  \item Evaluate CVs on each terminal frame. The OPES run writes
+  \texttt{cv\_values.json}, saved kernels and trajectory checkpoints.
+  \item Update the OPES bias every \texttt{pace} steps, compute the biased
+  Metropolis rule and log accepted/rejected moves.
+  \item Post-process the terminal ensemble into marginal statistics,
+  persistence/run-length summaries, basin assignments and structural renders.
+\end{enumerate}
+
+\subsection{Run parameters}
+
+The one-dimensional MEK1--FZC run used ligand RMSD $s_1$ as the OPES CV,
+4,180 Monte Carlo steps and biasfactor $\gamma=10$. The two-dimensional run
+used $(s_1,s_2)$, 11,590 Monte Carlo steps, 3,184 accepted moves, acceptance
+rate $27.5\%$, biasfactor $\gamma=10$, barrier $5\,k_BT$, 1,159 OPES
+depositions and 82 surviving kernels after compression.
+
+\subsection{Output artifacts}
+
+Key artifacts are \texttt{cv\_values.json}, OPES kernel checkpoints,
+\texttt{trajectory\_checkpoints/}, basin-assignment tables and rendered
+terminal structures. The saved random variables allow the path probability to
+be recomputed after the run.
+
+\section{Supplementary Note 5: Algorithms}
+\label{sec:algorithms}
+
+\subsection*{Algorithm S1: TPS for explicit-noise diffusion}
+
+\begin{enumerate}[leftmargin=*]
+  \item Input: forward kernel $G$, random-variable priors
+  $p(\xi_i)$, endpoint indicators $H_A,H_B$ and an initial reactive path.
+  \item Select a move: forward shooting, backward shooting or global reshuffle.
+  \item For forward shooting, choose $k$, keep the prefix, resample all
+  $\xi_i$ for $i\ge k$ and integrate forward.
+  \item For backward shooting, choose $k$, construct a new prefix using the
+  backward proposal $q_{\mathrm{bwd}}$ and compute
+  Eq.~\eqref{eq:delta-bwd}.
+  \item For global reshuffle, draw a fresh $x_0$ and all $\xi_i$ from their
+  priors and integrate the entire path.
+  \item Reject immediately if endpoint indicators fail. Otherwise apply the
+  relevant Metropolis probability.
+  \item Save the accepted path, terminal frame, random variables and CVs.
+\end{enumerate}
+
+\subsection*{Algorithm S2: TPS+OPES}
+
+\begin{enumerate}[leftmargin=*]
+  \item Initialize the TPS path and an empty OPES kernel list.
+  \item At Monte Carlo step $n$, propose a TPS move and evaluate
+  $\mathbf{s}^{\mathrm{n}}=\mathbf{s}(x_L^{\mathrm{n}})$ and
+  $\mathbf{s}^{\mathrm{o}}=\mathbf{s}(x_L^{\mathrm{o}})$.
+  \item Compute the OPES-bias difference
+  $\Delta V=V_{n-1}(\mathbf{s}^{\mathrm{n}})-V_{n-1}(\mathbf{s}^{\mathrm{o}})$.
+  \item Accept with
+  \[
+    \HAB(\Xnew)\min\left[1,
+    \exp(\Delta_{\mathrm{TPS}}-\Delta V/k_BT)\right].
+  \]
+  \item Every \texttt{pace} steps, deposit or merge a kernel centered at the
+  accepted terminal CV.
+  \item Continue until the target number of Monte Carlo steps is reached; use
+  the saved OPES state for reweighted marginal summaries.
+\end{enumerate}
+
+\section{Supplementary Note 6: Secondary Results and Controls}
+\label{sec:secondary}
+
+A separate 228-residue two-chain co-folding control was run without MSA
+information to test whether TPS detects a sharply funneled denoising
+landscape. The system used $M=1792$ padded atoms, $L=32$ denoising steps and
+initial noise scale $\sigma_0=2560~\text{\AA}$. A 100-step TPS run produced a
+shooting acceptance rate of approximately 53\%. Terminal C$\alpha$ RMSD values
+sampled every 10 Monte Carlo steps spanned $0.48$--$0.69~\text{\AA}$, with
+mean $0.59\pm0.06~\text{\AA}$, while OpenMM-minimized energies ranged from
+$-42{,}201$ to $-41{,}653$ kJ mol$^{-1}$.
+
+This control supports the interpretation that TPS can detect when stochastic
+freedom in the sampler collapses to a narrow structural attractor. It is not
+used as the main Brief Communication result because the MEK1--FZC case more
+directly addresses protein--ligand memorization and rare terminal basins.
+
+\begin{table}[h]
+\centering
+\caption{Summary of the MEK1--FZC two-dimensional TPS+OPES run.}
+\begin{tabular}{lcc}
+\toprule
+Quantity & Value & Note\\
+\midrule
+Monte Carlo steps & 11,590 & all logged proposals\\
+Accepted moves & 3,184 & 27.5\% acceptance\\
+OPES depositions & 1,159 & before compression\\
+Surviving kernels & 82 & after compression\\
+$s_1>1.0~\text{\AA}$ & 8.8\% & all logged steps\\
+Mean high-RMSD dwell & $\sim 73$ steps & threshold $s_1>1.0~\text{\AA}$\\
+Maximum high-RMSD dwell & 196 steps & threshold $s_1>1.0~\text{\AA}$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section*{References}
+
+\begin{thebibliography}{99}
+
+\bibitem{karras2022}
+T.~Karras, M.~Aittala, T.~Aila and S.~Laine,
+\textit{Adv.~Neural Inf.~Process.~Syst.} \textbf{35}, 26565 (2022).
+
+\bibitem{xu2026}
+Y.~Xu, Y.~Wang, S.~Luo, K.~Gao, T.~He, D.~He and C.~Liu,
+\textit{ICLR} (2026), arXiv:2604.21809.
+
+\bibitem{mariani2013lddt}
+V.~Mariani, M.~Biasini, A.~Barbato and T.~Schwede,
+\textit{Bioinformatics} \textbf{29}, 2722 (2013).
+
+\end{thebibliography}
+
+\end{document}

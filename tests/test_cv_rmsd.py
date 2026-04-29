@@ -228,14 +228,6 @@ class TestMinimizePDB:
 
 
 # ---------------------------------------------------------------------------
-# openmmforcefields availability guard
-# ---------------------------------------------------------------------------
-
-from openff.toolkit.topology import Molecule as _OpenFFMolecule  # noqa: F401
-from openmmforcefields.generators import GAFFTemplateGenerator as _GAFF  # noqa: F401
-
-
-# ---------------------------------------------------------------------------
 # Minimal aspirin PDB (13 heavy atoms, chain B)
 # ---------------------------------------------------------------------------
 # Benzene ring centred at (20, 0, 0) Å, well clear of the ALA-ALA chain.
@@ -311,7 +303,7 @@ def _skip_if_openmmff_broken() -> None:
     pytest.importorskip("openmm", reason="openmm not installed")
     try:
         from openmmforcefields.generators import GAFFTemplateGenerator  # noqa: F401, PLC0415
-        from openff.toolkit.topology import Molecule as _OMol  # noqa: F401, PLC0415
+        from openff.toolkit import Molecule as _OMol  # noqa: F401, PLC0415
     except Exception as exc:
         pytest.skip(f"openmmforcefields / openff-toolkit stack unavailable: {exc}")
 
@@ -402,6 +394,92 @@ _ALA_ALA_MG_PDB = textwrap.dedent("""\
     HETATM   13  MG  MG  C   1      15.000   0.000   0.000  1.00  0.00          MG
     END
 """)
+
+
+class TestLigandRdkitGraphAlignment:
+    """PDB↔OpenFF graph mapping when CCD-style names do not match RDKit labels."""
+
+    def test_rdkit_maps_mismatched_pdb_atom_names(self, tmp_path):
+        """Ethanol: PDB uses XX/YY/ZZ; OpenFF uses different names; graph map succeeds."""
+        _skip_if_openmmff_broken()
+        pytest.importorskip("rdkit", reason="RDKit required for graph mapping")
+        import openmm.app
+
+        from openff.toolkit import Molecule as OpenFFMolecule  # noqa: PLC0415
+
+        from compute_cv_rmsd import (  # type: ignore[import]
+            _ligand_openmm_positions_from_pdb_heavy_atoms,
+            _ligand_topology_relabeled_chain,
+        )
+
+        pdb_text = textwrap.dedent("""\
+            CRYST1   50.000   50.000   50.000  90.00  90.00  90.00 P 1           1
+            HETATM   10  XX  LIG B   1      10.000   0.000   0.000  1.00  0.00           C
+            HETATM   11  YY  LIG B   1      12.000   0.000   0.000  1.00  0.00           C
+            HETATM   12  ZZ  LIG B   1      11.000   1.000   0.000  1.00  0.00           O
+            CONECT   10   11
+            CONECT   11   10   12
+            CONECT   12   11
+            END
+        """)
+        pdb_path = tmp_path / "ethanol_ligand.pdb"
+        pdb_path.write_text(pdb_text)
+        pdb = openmm.app.PDBFile(str(pdb_path))
+        mol = OpenFFMolecule.from_smiles("CCO", allow_undefined_stereo=True)
+        mol.generate_conformers(n_conformers=1, rms_cutoff=None)
+        lig_topo = _ligand_topology_relabeled_chain(
+            mol.to_topology().to_openmm(), "B"
+        )
+        conf_nm = np.asarray(mol.conformers[0].magnitude) / 10.0
+        pos, used = _ligand_openmm_positions_from_pdb_heavy_atoms(
+            "B",
+            pdb.topology,
+            pdb.positions,
+            lig_topo,
+            conf_nm,
+            pdb_path=pdb_path,
+            mol_off=mol,
+        )
+        assert used, "expected PDB heavy-atom pose via RDKit graph map"
+        atoms = list(lig_topo.atoms())
+        expected_nm = [
+            (1.0, 0.0, 0.0),
+            (1.2, 0.0, 0.0),
+            (1.1, 0.1, 0.0),
+        ]
+        hi = 0
+        for i, atom in enumerate(atoms):
+            if atom.element is None or atom.element.symbol == "H":
+                continue
+            v = pos[i]
+            ex, ey, ez = expected_nm[hi]
+            assert float(v.x) == pytest.approx(ex, abs=1e-4)
+            assert float(v.y) == pytest.approx(ey, abs=1e-4)
+            assert float(v.z) == pytest.approx(ez, abs=1e-4)
+            hi += 1
+        assert hi == 3
+
+    def test_build_md_simulation_no_gas_phase_ligand_warning(self, tmp_path):
+        """ALA-ALA + aspirin: ligand pose from PDB graph map, not gas-phase fallback."""
+        _skip_if_openmmff_broken()
+        import warnings
+
+        from compute_cv_rmsd import build_md_simulation_from_pdb  # type: ignore[import]
+
+        pdb_path = tmp_path / "ala_ala_aspirin_warn.pdb"
+        pdb_path.write_text(_ALA_ALA_ASPIRIN_PDB)
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            sim, _meta = build_md_simulation_from_pdb(
+                pdb_path,
+                platform_name="CPU",
+                ligand_smiles={"B": _ASPIRIN_SMILES},
+            )
+        msgs = [str(w.message) for w in rec]
+        gas = [m for m in msgs if "gas-phase" in m.lower() or "gas phase" in m.lower()]
+        assert not gas, f"unexpected gas-phase ligand warnings: {gas}"
+        chain_ids = {c.id.strip() for c in sim.topology.chains()}
+        assert "B" in chain_ids
 
 
 class TestMinimizePDBWithMonoatomicIon:

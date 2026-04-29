@@ -62,6 +62,32 @@ def _find_topo_npz(md_out_dir: Path) -> Path:
     return candidates[0]
 
 
+def _resolve_campaign_out_root(raw: Path) -> Path:
+    """Resolve ``--out`` for relative paths without doubling ``scripts/campaign/``.
+
+    If the shell cwd is ``scripts/campaign/`` and the user passes
+    ``--out scripts/campaign/outputs/...`` (meant as repo-relative), naive
+    ``Path.cwd() / out`` becomes ``.../scripts/campaign/scripts/campaign/...``.
+    We pick the first candidate that looks like a Stage-0 output tree.
+    """
+    expanded = raw.expanduser()
+    if expanded.is_absolute():
+        return expanded.resolve()
+    cwd_root = (Path.cwd() / expanded).resolve()
+    repo_root = (_REPO_ROOT / expanded).resolve()
+
+    def _looks_like_stage0_root(p: Path) -> bool:
+        if not p.is_dir():
+            return False
+        return any((p / name / "openmm_opes_md").is_dir() for name in _CASE_NAMES)
+
+    if _looks_like_stage0_root(cwd_root):
+        return cwd_root
+    if _looks_like_stage0_root(repo_root):
+        return repo_root
+    return cwd_root
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Stage 1: Assemble OPES-MD shards into training NPZ files.",
@@ -82,7 +108,8 @@ def main() -> None:
     from genai_tps.simulation.dataset_assembly import assemble_wdsm_from_directory, save_assembled_npz
     from genai_tps.training.diagnostics import effective_sample_size, weight_statistics
 
-    out_root = args.out.expanduser().resolve()
+    out_root = _resolve_campaign_out_root(args.out)
+    print(f"[01] Campaign output root: {out_root}", flush=True)
     selected_cases = {int(c.strip()) for c in args.cases.split(",")}
     assembly_log = []
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from dataclasses import replace
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Sequence
@@ -163,6 +164,72 @@ def write_wdsm_npz(
         logw=np.asarray(logw, dtype=np.float64),
         atom_mask=np.asarray(atom_mask, dtype=np.float32),
     )
+
+
+def structure_with_coordinate_ensemble(structure, coords: np.ndarray):
+    """Return a ``StructureV2`` copy whose coordinate ensemble is ``coords``.
+
+    Parameters
+    ----------
+    structure:
+        Boltz ``StructureV2``-like object.
+    coords:
+        ``(T, N, 3)`` coordinates in Angstrom, already ordered like
+        ``structure.atoms``.
+    """
+    coords_array = np.asarray(coords, dtype=np.float32)
+    if coords_array.ndim != 3 or coords_array.shape[2] != 3:
+        raise ValueError(f"coords must be (T, N, 3), got {coords_array.shape}")
+    n_frames, n_atoms, _ = coords_array.shape
+    if n_atoms != len(structure.atoms):
+        raise ValueError(
+            f"Coordinate atom count ({n_atoms}) does not match StructureV2 atoms "
+            f"({len(structure.atoms)})."
+        )
+    coord_dtype = structure.coords.dtype
+    ensemble_dtype = structure.ensemble.dtype
+    flat_coords = np.array([(xyz,) for xyz in coords_array.reshape(-1, 3)], dtype=coord_dtype)
+    ensemble = np.array(
+        [(frame_idx * n_atoms, n_atoms) for frame_idx in range(n_frames)],
+        dtype=ensemble_dtype,
+    )
+    atoms = structure.atoms.copy()
+    atoms["coords"] = coords_array[0]
+    atoms["is_present"] = True
+    return replace(structure, atoms=atoms, coords=flat_coords, ensemble=ensemble)
+
+
+def dump_structure_with_coordinate_ensemble(
+    structure,
+    coords: np.ndarray,
+    output_npz: Path,
+) -> None:
+    """Write a Boltz ``StructureV2`` NPZ with ATLAS frames as conformers."""
+    updated = structure_with_coordinate_ensemble(structure, coords)
+    output_npz = Path(output_npz).expanduser()
+    output_npz.parent.mkdir(parents=True, exist_ok=True)
+    updated.dump(output_npz)
+
+
+def write_frame_map(
+    path: Path,
+    *,
+    record_id: str,
+    n_frames: int,
+    logw: Sequence[float] | None = None,
+) -> None:
+    """Write a JSON frame map consumed by multi-protein WDSM datasets."""
+    weights = [0.0] * n_frames if logw is None else [float(x) for x in logw]
+    if len(weights) != n_frames:
+        raise ValueError("logw length must match n_frames.")
+    payload = {
+        "samples": [
+            {"record_id": record_id, "frame_idx": idx, "logw": weights[idx]}
+            for idx in range(n_frames)
+        ]
+    }
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def write_conversion_metadata(path: Path, payload: dict[str, object]) -> None:

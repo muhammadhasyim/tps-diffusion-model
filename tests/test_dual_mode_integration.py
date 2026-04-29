@@ -33,6 +33,7 @@ from tests.mock_boltz_diffusion import MockDiffusion
 # ---------------------------------------------------------------------------
 
 def _build_engine_traj(n_fixed_point: int = 4, compile_model: bool = False):
+    torch.manual_seed(42)
     diff = MockDiffusion()
     atom_mask = torch.ones(1, 4)
     core = BoltzSamplerCore(
@@ -107,6 +108,7 @@ class TestDiagnosticCVLogging:
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,
+            reshuffle_probability=0.0,
             diagnostic_cv_functions=diag_fns,
         )
         assert len(log) == 5
@@ -124,6 +126,7 @@ class TestDiagnosticCVLogging:
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,
+            reshuffle_probability=0.0,
             enhanced_bias=bias,
             cv_function=_simple_cv,
             diagnostic_cv_functions=diag_fns,
@@ -147,6 +150,7 @@ class TestDiagnosticCVLogging:
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,
+            reshuffle_probability=0.0,
             diagnostic_cv_functions=diag_fns,
         )
         # All steps should be accepted under forward_only
@@ -170,6 +174,7 @@ class TestDiagnosticCVLogging:
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,
+            reshuffle_probability=0.0,
             enhanced_bias=bias,
             cv_function=_always_finite_cv,
             diagnostic_cv_functions=diag_fns,
@@ -195,6 +200,7 @@ class TestFullStackDualMode:
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,
+            reshuffle_probability=0.0,
             diagnostic_cv_functions=diag_fns,
         )
         assert len(log) == 5
@@ -211,6 +217,7 @@ class TestFullStackDualMode:
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,
+            reshuffle_probability=0.0,
             enhanced_bias=bias,
             cv_function=_simple_cv,
             diagnostic_cv_functions=diag_fns,
@@ -235,6 +242,7 @@ class TestNFixedPointDualMode:
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,
+            reshuffle_probability=0.0,
         )
         assert len(log) == 5
 
@@ -246,6 +254,7 @@ class TestNFixedPointDualMode:
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,
+            reshuffle_probability=0.0,
             enhanced_bias=bias,
             cv_function=_simple_cv,
         )
