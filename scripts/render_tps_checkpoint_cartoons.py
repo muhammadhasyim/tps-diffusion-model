@@ -77,7 +77,7 @@ def discover_topo_npz(ckpt_dir: Path, explicit: Path | None) -> Path:
 
 def main() -> None:
     _ensure_paths()
-    from genai_tps.analysis.boltz_npz_export import batch_export  # noqa: PLC0415
+    from genai_tps.io.boltz_npz_export import batch_export  # noqa: PLC0415
 
     ap = argparse.ArgumentParser(
         description=__doc__,

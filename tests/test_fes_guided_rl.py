@@ -6,7 +6,9 @@ import numpy as np
 import pytest
 import torch
 
-from genai_tps.enhanced_sampling.opes_bias import OPESBias
+pytest.importorskip("genai_tps.rl.config", reason="optional genai_tps.rl not in this checkout")
+
+from genai_tps.simulation import OPESBias
 from genai_tps.rl.config import BoltzRLConfig, FESTeacherConfig
 from genai_tps.rl.fes_teacher import load_build_md_simulation_from_pdb
 from genai_tps.rl.student_distribution import BoltzStudentKDE

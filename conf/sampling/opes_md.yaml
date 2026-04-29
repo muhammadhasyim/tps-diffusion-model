@@ -1,0 +1,5 @@
+# OpenMM OPES-MD data collection defaults (see genai_tps.simulation.openmm_md_runner).
+n_steps: 5000000
+save_every: 1000
+deposit_pace: 500
+temperature_k: 300.0

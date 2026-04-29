@@ -1,0 +1,11 @@
+# Root Hydra config (compose groups for system, sampling, training, evaluation).
+# Use with ``hydra.compose`` or wire into the Typer CLI in a follow-up.
+
+defaults:
+  - system: mek1_fzc
+  - sampling: opes_tps
+  - training: cartesian
+  - evaluation: default
+  - _self_
+
+output_dir: outputs/run

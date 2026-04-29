@@ -26,7 +26,7 @@ installing ``boltz[cuda]``.
 Example::
 
     python scripts/run_cofolding_tps_demo.py \\
-      --out ./cofolding_tps_out \\
+      --out ./artifacts/cofolding/cofolding_tps_out \\
       --diffusion-steps 32 \\
       --shoot-rounds 5
 
@@ -69,13 +69,13 @@ import torch
 from openpathsampling.engines.trajectory import Trajectory
 
 from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
-from genai_tps.backends.boltz.bridge import snapshot_from_gpu
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.snapshot import BoltzSnapshot
 from genai_tps.backends.boltz.snapshot import boltz_snapshot_descriptor
 from genai_tps.backends.boltz.snapshot import snapshot_frame_numpy_copy
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
+from genai_tps.evaluation.tps_runner import initial_trajectory
 
 
 def _repo_root() -> Path:
@@ -142,29 +142,6 @@ def _cartoon_checkpoint_callback(
         )
 
     return cb
-
-
-def _initial_trajectory(core: BoltzSamplerCore, n_steps: int | None = None) -> Trajectory:
-    """One full forward diffusion path (noise → coordinates)."""
-    x = core.sample_initial_noise()
-    n = n_steps if n_steps is not None else core.num_sampling_steps
-    snaps = []
-    sig0 = float(core.schedule[0].sigma_tm)
-    snaps.append(snapshot_from_gpu(x, 0, None, None, None, sig0, center_mean_before_step=None))
-    for step in range(n):
-        x, eps, rr, tr, meta = core.single_forward_step(x, step)
-        snaps.append(
-            snapshot_from_gpu(
-                x,
-                step + 1,
-                eps,
-                rr,
-                tr,
-                float(meta["sigma_t"]),
-                center_mean_before_step=meta.get("center_mean"),
-            )
-        )
-    return Trajectory(snaps)
 
 
 _npz_all_nonfinite_error_count = 0
@@ -398,7 +375,7 @@ def main() -> None:
     parser.add_argument(
         "--out",
         type=Path,
-        default=Path("cofolding_tps_out"),
+        default=Path("artifacts/cofolding/cofolding_tps_out"),
         help="Output directory for work and artifacts",
     )
     parser.add_argument("--cache", type=Path, default=None, help="Boltz cache (~/.boltz)")
@@ -666,7 +643,7 @@ def main() -> None:
     n_atoms = int(atom_mask.shape[1])
 
     torch.manual_seed(0)
-    init_traj = _initial_trajectory(core)
+    init_traj = initial_trajectory(core)
 
     # ------------------------------------------------------------------
     # Optional: exact Jacobian diagnostic (--exact-jacobian)

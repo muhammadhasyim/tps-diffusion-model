@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from genai_tps.enhanced_sampling.opes_bias import OPESBias, Kernel
+from genai_tps.simulation.bias.opes import OPESBias, Kernel
 
 
 class TestKernelEvaluation:
@@ -206,7 +206,7 @@ class TestAcceptanceFactor:
 
     def test_protocol_compliance(self):
         """OPESBias satisfies the EnhancedSamplingBias protocol."""
-        from genai_tps.enhanced_sampling import EnhancedSamplingBias
+        from genai_tps.simulation import EnhancedSamplingBias
 
         bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0)
         assert isinstance(bias, EnhancedSamplingBias)

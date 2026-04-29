@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch
 
-from genai_tps.analysis.posebusters_gpu import (
+from genai_tps.evaluation.posebusters import (
     GPUPoseBustersEvaluator,
     POSEBUSTERS_GPU_CV_PREFIX,
     POSEBUSTERS_GPU_PASS_FRACTION,

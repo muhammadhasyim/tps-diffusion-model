@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import torch
 
-from genai_tps.analysis.posebusters_traj import (
+from genai_tps.evaluation.posebusters import (
     POSEBUSTERS_CV_PREFIX,
     cv_name_for_column,
     expand_bias_cv_posebusters_all,
@@ -80,7 +80,7 @@ def test_validate_posebusters_bias_cv_names_pb_cols_mixed() -> None:
 
 
 def test_expand_bias_cv_posebusters_all(monkeypatch: pytest.MonkeyPatch) -> None:
-    import genai_tps.analysis.posebusters_traj as mod
+    import genai_tps.evaluation.posebusters as mod
 
     def _fake_expand(*_a, **_k):
         return [f"{POSEBUSTERS_CV_PREFIX}a", f"{POSEBUSTERS_CV_PREFIX}b"], ["col_a", "col_b"]
@@ -157,9 +157,9 @@ def test_make_posebusters_cached_column_scalar_fns_single_bust_per_frame() -> No
     assert calls["n"] == 2
 
 
-@patch("genai_tps.analysis.posebusters_traj.PoseBustersTrajEvaluator")
+@patch("genai_tps.evaluation.posebusters.PoseBustersTrajEvaluator")
 def test_probe_column_names_uses_evaluator(mock_ev_cls, tmp_path: Path) -> None:
-    from genai_tps.analysis.posebusters_traj import probe_column_names
+    from genai_tps.evaluation.posebusters import probe_column_names
 
     inst = mock_ev_cls.return_value
     inst.bust_row.return_value = _PbRow({"chk": True})

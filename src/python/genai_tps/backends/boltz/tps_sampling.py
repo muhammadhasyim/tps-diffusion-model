@@ -33,7 +33,7 @@ from genai_tps.backends.boltz.states import state_volume_high_sigma, state_volum
 if TYPE_CHECKING:
     from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
     from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
-    from genai_tps.enhanced_sampling import EnhancedSamplingBias
+    from genai_tps.simulation import EnhancedSamplingBias
 
 _tps_logger = logging.getLogger(__name__)
 
@@ -172,6 +172,19 @@ class BoltzDiffusionForwardShootMover(_NaNRejectingShootMixin, ForwardShootMover
 
 class BoltzDiffusionBackwardShootMover(_NaNRejectingShootMixin, BackwardShootMover):
     """Backward shooting with re-noising (``direction=-1``) and diffusion Hastings bias."""
+
+    def __init__(self, *args, **kwargs):
+        engine = kwargs.get("engine")
+        if engine is None and len(args) >= 3:
+            engine = args[2]
+        core = getattr(engine, "core", None)
+        if bool(getattr(core, "quotient_space_sampling", False)):
+            raise NotImplementedError(
+                "Quotient-space backward shooting is disabled until its "
+                "Hastings correction has been fully validated. Use "
+                "forward_only=True or global reshuffle moves for quotient-space TPS."
+            )
+        super().__init__(*args, **kwargs)
 
     def _make_backward_trajectory(self, trajectory, shooting_index):
         initial_snapshot = trajectory[shooting_index].reversed
@@ -332,9 +345,10 @@ class BoltzDiffusionOneWayShootingMover(OneWayShootingMover):
     Parameters
     ----------
     forward_only
-        When ``True``, only forward shooting moves are used (no backward re-noising).
-        Forward shooting always accepts reactive paths (uniform selector, path weight
-        ratio = 1 for identical suffix), making it a guaranteed-correct baseline.
+        When ``True``, no backward re-noising move is constructed. The mover
+        contains forward shooting plus optional global reshuffle, which is the
+        quotient-compatible scheme while backward quotient Hastings remains
+        disabled.
     reshuffle_probability
         Fraction of MC steps that use a global reshuffle move (resample ``x_0`` and
         all noise draws fresh, then forward-integrate the full path).  The reshuffle
@@ -351,9 +365,17 @@ class BoltzDiffusionOneWayShootingMover(OneWayShootingMover):
         reshuffle_probability: float = 0.1,
     ):
         fwd = BoltzDiffusionForwardShootMover(ensemble=ensemble, selector=selector, engine=engine)
-        reshuffle_prob = 0.0 if forward_only else max(0.0, min(1.0, float(reshuffle_probability)))
+        reshuffle_prob = max(0.0, min(1.0, float(reshuffle_probability)))
 
-        if reshuffle_prob > 0.0 and engine is not None:
+        if forward_only:
+            if reshuffle_prob > 0.0 and engine is not None:
+                rsh = GlobalReshuffleMover(ensemble=ensemble, engine=engine)
+                movers = [fwd, rsh]
+                weights = [1.0 - reshuffle_prob, reshuffle_prob]
+                SpecializedRandomChoiceMover.__init__(self, movers=movers, weights=weights)
+            else:
+                SpecializedRandomChoiceMover.__init__(self, movers=[fwd])
+        elif reshuffle_prob > 0.0 and engine is not None:
             bwd = BoltzDiffusionBackwardShootMover(ensemble=ensemble, selector=selector, engine=engine)
             rsh = GlobalReshuffleMover(ensemble=ensemble, engine=engine)
             # forward + backward + reshuffle
@@ -361,8 +383,6 @@ class BoltzDiffusionOneWayShootingMover(OneWayShootingMover):
             movers = [fwd, bwd, rsh]
             weights = [shooting_weight, shooting_weight, reshuffle_prob]
             SpecializedRandomChoiceMover.__init__(self, movers=movers, weights=weights)
-        elif forward_only:
-            SpecializedRandomChoiceMover.__init__(self, movers=[fwd])
         else:
             bwd = BoltzDiffusionBackwardShootMover(ensemble=ensemble, selector=selector, engine=engine)
             SpecializedRandomChoiceMover.__init__(self, movers=[fwd, bwd])
@@ -524,19 +544,20 @@ def run_tps_path_sampling(
         when enhanced sampling is active).  Keep callbacks lightweight or use ``every_n_steps > 1``.
     log_path_prob_every
         If ``> 0``, compute ``trajectory_log_path_prob`` (expensive on long paths) only
-        every this many MC steps for diagnostics. If ``0``, skip path log-probabilities
+        every this many MC steps for diagnostics. This value is a reduced path
+        score (initial prior, churn priors, optional scalar Jacobian), not a
+        calibrated absolute density. If ``0``, skip path log-probabilities
         entirely (much faster for long runs; ``min_1_r`` in the step log will be ``na``).
     forward_only
-        When ``True``, use only forward shooting moves (no backward re-noising).
-        Forward shooting always accepts reactive paths (acceptance = 1) so this is a
-        guaranteed-correct baseline useful for validating that the TPS ensemble and engine
-        are correctly wired before enabling the full Metropolis-Hastings correction.
+        When ``True``, use forward shooting plus optional global reshuffle, with
+        no backward re-noising mover. This is the supported quotient-space mode
+        while backward quotient Hastings remains disabled.
     reshuffle_probability
         Fraction of MC steps that use a global reshuffle move (draw a completely fresh
         path from the prior; always accepts when reactive).  Default ``0.1``.
         Set to ``0`` to disable.
     enhanced_bias
-        Optional :class:`~genai_tps.enhanced_sampling.EnhancedSamplingBias` object
+        Optional :class:`~genai_tps.simulation.EnhancedSamplingBias` object
         that modifies the Metropolis acceptance probability.  When set alongside
         ``cv_function``, each mover multiplies ``trial.bias`` by the enhanced
         sampling acceptance factor, and the bias is updated after each MC step.
@@ -615,10 +636,10 @@ def run_tps_path_sampling(
             )
             if do_lp:
                 path_lp_old = (
-                    trajectory_log_path_prob(old_traj, core) if old_traj is not None else None
+                    trajectory_log_path_prob(old_traj, core, strict=False) if old_traj is not None else None
                 )
                 path_lp_new = (
-                    trajectory_log_path_prob(new_traj, core) if new_traj is not None else None
+                    trajectory_log_path_prob(new_traj, core, strict=False) if new_traj is not None else None
                 )
                 if path_lp_old is not None and path_lp_new is not None:
                     min_1_r = min_metropolis_acceptance_path(

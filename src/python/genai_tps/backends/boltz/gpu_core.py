@@ -16,26 +16,51 @@ import torch.nn.functional as F
 from boltz.model.loss.diffusionv2 import weighted_rigid_align
 from boltz.model.modules.utils import compute_random_augmentation
 
+from genai_tps.training.quotient_projection import horizontal_projection
+
 logger = logging.getLogger(__name__)
 
 _NAN_FALLBACK_LOG_COUNT = 0
 _NAN_FALLBACK_LOG_MAX = 5
 
 
-def _nan_fallback(x_next: torch.Tensor, x_fallback: torch.Tensor, *, label: str) -> torch.Tensor:
-    """Replace non-finite elements in *x_next* with *x_fallback*, log once.
+def _nan_fallback_enabled() -> bool:
+    """Check env var at call time so tests can toggle it dynamically."""
+    return os.environ.get("GENAI_TPS_NAN_FALLBACK", "0").lower() in ("1", "true", "yes")
 
-    Prevents a single NaN frame from cascading through all subsequent
-    diffusion steps, which would poison the entire trajectory irreversibly.
+
+def _nan_fallback(
+    x_next: torch.Tensor,
+    x_fallback: torch.Tensor,
+    *,
+    label: str,
+    allow_fallback: bool | None = None,
+) -> torch.Tensor:
+    """Check for non-finite elements in *x_next*.
+
+    By default (strict mode), raises ``RuntimeError`` when NaN/Inf values
+    are detected.  Set ``allow_fallback=True`` or the environment variable
+    ``GENAI_TPS_NAN_FALLBACK=1`` to replace non-finite values with
+    *x_fallback* instead (useful for exploratory runs).
     """
     global _NAN_FALLBACK_LOG_COUNT
     bad = ~torch.isfinite(x_next)
     if not bad.any():
         return x_next
+
+    do_fallback = allow_fallback if allow_fallback is not None else _nan_fallback_enabled()
+    n_bad = int(bad.sum().item())
+    n_tot = int(x_next.numel())
+
+    if not do_fallback:
+        raise RuntimeError(
+            f"{label}: {n_bad}/{n_tot} non-finite values detected in diffusion step. "
+            "This indicates numerical instability in the score network or schedule. "
+            "Set GENAI_TPS_NAN_FALLBACK=1 to replace with fallback coords (exploratory mode)."
+        )
+
     _NAN_FALLBACK_LOG_COUNT += 1
     if _NAN_FALLBACK_LOG_COUNT <= _NAN_FALLBACK_LOG_MAX:
-        n_bad = int(bad.sum().item())
-        n_tot = int(x_next.numel())
         logger.warning(
             "%s: %d/%d non-finite values replaced with fallback coords "
             "(NaN-cascade guard #%d)",
@@ -117,6 +142,12 @@ class BoltzSamplerCore:
     An explicit :meth:`build_schedule` length is preserved until :meth:`build_schedule`
     is called again; :meth:`sample_initial_noise` does not reset the step count to
     the checkpoint default.
+
+    ``quotient_space_sampling=True`` applies the horizontal projection in a
+    mask-centered coordinate frame, removing rotational vertical motion.  The
+    Boltz random translation is kept as an auxiliary stochastic draw in the
+    extended path state rather than projected out as a CoM-free SE(3)
+    coordinate.
     """
 
     def __init__(
@@ -128,10 +159,12 @@ class BoltzSamplerCore:
         compile_model: bool = False,
         n_fixed_point: int = 4,
         inference_dtype: "torch.dtype | None" = None,
+        quotient_space_sampling: bool = False,
     ) -> None:
         self.compile_model = compile_model
         self.n_fixed_point = n_fixed_point
         self.inference_dtype = inference_dtype
+        self.quotient_space_sampling = quotient_space_sampling
         self.diffusion = diffusion_module
         if compile_model:
             # torch.compile → inductor → Triton compiles driver.c with #include "cuda.h".
@@ -206,6 +239,20 @@ class BoltzSamplerCore:
                 f"atom_coords must be on diffusion device {expected}, got {atom_coords.device}"
             )
 
+    def _masked_center(self, atom_coords: torch.Tensor) -> torch.Tensor:
+        """Center real atoms with the mask-normalized COM and zero padded atoms."""
+        mask = self.atom_mask.to(device=atom_coords.device, dtype=atom_coords.dtype)
+        mask_3 = mask.unsqueeze(-1)
+        center = self._masked_center_of_mass(atom_coords)
+        return (atom_coords - center) * mask_3
+
+    def _masked_center_of_mass(self, atom_coords: torch.Tensor) -> torch.Tensor:
+        """Mask-normalized center of mass over real atoms."""
+        mask = self.atom_mask.to(device=atom_coords.device, dtype=atom_coords.dtype)
+        mask_3 = mask.unsqueeze(-1)
+        denom = mask.sum(dim=1, keepdim=True).clamp(min=1.0).unsqueeze(-1)
+        return (atom_coords * mask_3).sum(dim=1, keepdim=True) / denom
+
     def sample_initial_noise(self) -> torch.Tensor:
         """Gaussian noise scaled by σ at schedule start (uses current schedule if set)."""
         if self._schedule is None:
@@ -227,6 +274,11 @@ class BoltzSamplerCore:
 
             x_out = (1 + α) x_noisy − α D(x_noisy, t̂)
 
+        In quotient-space mode the denoiser term is replaced by its horizontal
+        projection, matching the forward sampler:
+
+            x_out = (1 + α) x_noisy − α P_x(D(x_noisy, t̂))
+
         where α = step_scale · (σ_t − t̂) / t̂.  The naive iteration
         x ← (x_out + α D(x)) / (1 + α) diverges at low noise levels because
         the denoiser's skip connection D(x) ≈ c_skip · x makes the Jacobian
@@ -245,7 +297,9 @@ class BoltzSamplerCore:
         and small at all noise levels.
 
         When ``alignment_reverse_diff`` is enabled, the rigid alignment is
-        applied inside the loop to match the forward sampling kernel.
+        applied inside the loop to match the forward sampling kernel.  The
+        quotient-space sampler has its own projected branch and does not use
+        the alignment branch.
         """
         n_fp = n_fixed_point if n_fixed_point is not None else self.n_fixed_point
         sch = self.schedule[step_idx]
@@ -280,13 +334,20 @@ class BoltzSamplerCore:
                     t_hat,
                     network_condition_kwargs=dict(multiplicity=b, **kw),
                 )
-            if self.diffusion.alignment_reverse_diff:
+            if self.diffusion.alignment_reverse_diff and not self.quotient_space_sampling:
                 x_noisy = weighted_rigid_align(
                     x_noisy.float(),
                     x_hat.float(),
                     self.atom_mask.float(),
                     self.atom_mask.float(),
                 ).to(x_hat)
+            if self.quotient_space_sampling:
+                x_noisy_c = self._masked_center(x_noisy)
+                x_hat = horizontal_projection(
+                    x_noisy_c.float(),
+                    x_hat.float(),
+                    self.atom_mask.float(),
+                ).to(x_hat.dtype)
             x_noisy = (x_out + alpha * (x_hat - c_skip * x_noisy)) / gamma_eff
         return x_noisy
 
@@ -420,8 +481,8 @@ class BoltzSamplerCore:
         random_r, random_tr = compute_random_augmentation(
             b, device=atom_coords.device, dtype=atom_coords.dtype
         )
-        center_mean = atom_coords.mean(dim=-2, keepdim=True)
-        x = atom_coords - center_mean
+        center_mean = self._masked_center_of_mass(atom_coords)
+        x = self._masked_center(atom_coords)
         x = torch.einsum("bmd,bds->bms", x, random_r) + random_tr
 
         noise_var = sch.noise_var
@@ -448,7 +509,22 @@ class BoltzSamplerCore:
                 x_noisy, t_hat, network_condition_kwargs=kwargs
             )
 
-        if self.diffusion.alignment_reverse_diff:
+        if self.quotient_space_sampling:
+            # Quotient-space ODE sampler (arXiv:2604.21809, Eq. 13):
+            # Project the velocity (denoised_over_sigma) through P_x to
+            # remove rotational vertical components in the centered shape
+            # frame. Boltz's random translation is retained as auxiliary noise
+            # in the extended path state.
+            step_scale = self.diffusion.step_scale
+            sigma_t = sch.sigma_t
+            denoised_over_sigma = (x_noisy - atom_coords_denoised) / t_hat
+            # The inertia tensor K requires a zero-COM anchor over real atoms.
+            x_noisy_c = self._masked_center(x_noisy)
+            v_proj = horizontal_projection(
+                x_noisy_c.float(), denoised_over_sigma.float(), self.atom_mask.float()
+            ).to(x_noisy.dtype)
+            x_next = x_noisy + step_scale * (sigma_t - t_hat) * v_proj
+        elif self.diffusion.alignment_reverse_diff:
             x_noisy = weighted_rigid_align(
                 x_noisy.float(),
                 atom_coords_denoised.float(),
@@ -457,10 +533,15 @@ class BoltzSamplerCore:
             )
             x_noisy = x_noisy.to(atom_coords_denoised)
 
-        step_scale = self.diffusion.step_scale
-        sigma_t = sch.sigma_t
-        denoised_over_sigma = (x_noisy - atom_coords_denoised) / t_hat
-        x_next = x_noisy + step_scale * (sigma_t - t_hat) * denoised_over_sigma
+            step_scale = self.diffusion.step_scale
+            sigma_t = sch.sigma_t
+            denoised_over_sigma = (x_noisy - atom_coords_denoised) / t_hat
+            x_next = x_noisy + step_scale * (sigma_t - t_hat) * denoised_over_sigma
+        else:
+            step_scale = self.diffusion.step_scale
+            sigma_t = sch.sigma_t
+            denoised_over_sigma = (x_noisy - atom_coords_denoised) / t_hat
+            x_next = x_noisy + step_scale * (sigma_t - t_hat) * denoised_over_sigma
 
         x_next = _nan_fallback(x_next, atom_coords, label=f"forward step {step_idx}")
 

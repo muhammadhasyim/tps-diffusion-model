@@ -18,6 +18,7 @@ import pytest
 
 # All genai_tps submodules to verify
 _MODULES = [
+    # Boltz backend
     "genai_tps.backends.boltz.collective_variables",
     "genai_tps.backends.boltz.engine",
     "genai_tps.backends.boltz.gpu_core",
@@ -25,11 +26,28 @@ _MODULES = [
     "genai_tps.backends.boltz.snapshot",
     "genai_tps.backends.boltz.states",
     "genai_tps.backends.boltz.tps_sampling",
-    "genai_tps.enhanced_sampling.openmm_cv",
-    "genai_tps.enhanced_sampling.opes_bias",
-    "genai_tps.enhanced_sampling.exponential_tilting",
-    "genai_tps.enhanced_sampling.mbar_analysis",
-    "genai_tps.analysis.boltz_npz_export",
+    # Simulation
+    "genai_tps.simulation.openmm_cv",
+    "genai_tps.simulation.bias.opes",
+    "genai_tps.simulation.bias.umbrella",
+    "genai_tps.simulation.mbar_analysis",
+    # I/O
+    "genai_tps.io.boltz_npz_export",
+    # Evaluation
+    "genai_tps.evaluation.posebusters",
+    "genai_tps.evaluation.skrinjar_similarity",
+    "genai_tps.evaluation.terminal_ensemble_prody",
+    "genai_tps.evaluation.distribution_metrics",
+    "genai_tps.evaluation.ligand_torsions",
+    "genai_tps.evaluation.interaction_fingerprints",
+    "genai_tps.evaluation.ensemble_atlas",
+    # Training
+    "genai_tps.training.quotient_projection",
+    "genai_tps.training.loss",
+    "genai_tps.training.noise_schedule",
+    "genai_tps.training.config",
+    "genai_tps.training.dataset",
+    "genai_tps.training.diagnostics",
 ]
 
 
@@ -72,6 +90,35 @@ def test_collective_variables_callables() -> None:
         assert callable(fn), f"{fn} is not callable"
 
 
+def test_plddt_proxy_cv_requires_predictor() -> None:
+    """make_plddt_proxy_cv must raise ValueError when predictor is None."""
+    from genai_tps.backends.boltz.collective_variables import make_plddt_proxy_cv
+    with pytest.raises(ValueError, match="requires a real predictor"):
+        make_plddt_proxy_cv(predictor=None)
+
+
+def test_boltz_plddt_predictor_requires_confidence_module() -> None:
+    """make_boltz_plddt_predictor must raise AttributeError when model lacks confidence_module."""
+    from genai_tps.backends.boltz.collective_variables import make_boltz_plddt_predictor
+
+    class _FakeModel:
+        pass
+
+    with pytest.raises(AttributeError, match="confidence_module"):
+        make_boltz_plddt_predictor(_FakeModel(), {})
+
+
+def test_boltz_plddt_predictor_validates_kwargs() -> None:
+    """make_boltz_plddt_predictor must raise KeyError when kwargs missing required keys."""
+    from genai_tps.backends.boltz.collective_variables import make_boltz_plddt_predictor
+
+    class _FakeModel:
+        confidence_module = lambda *a, **kw: {}  # noqa: E731
+
+    with pytest.raises(KeyError, match="missing keys"):
+        make_boltz_plddt_predictor(_FakeModel(), {"s": None})
+
+
 def test_gpu_core_boltz_sampler_core_signature() -> None:
     """BoltzSamplerCore.__init__ must accept compile_model, n_fixed_point, inference_dtype."""
     import inspect
@@ -96,7 +143,7 @@ def test_run_tps_path_sampling_has_diagnostic_cv_param() -> None:
 def test_openmm_cv_has_persistent_context_attrs() -> None:
     """OpenMMLocalMinRMSD.__init__ must initialize _simulation and _ligand_smiles_cache."""
     import inspect
-    from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+    from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
     src = inspect.getsource(OpenMMLocalMinRMSD.__init__)
     assert "_simulation" in src
     assert "_ligand_smiles_cache" in src

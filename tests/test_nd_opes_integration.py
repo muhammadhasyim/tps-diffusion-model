@@ -10,6 +10,7 @@ Tests verify:
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -17,11 +18,13 @@ import numpy as np
 import pytest
 import torch
 
+os.environ["GENAI_TPS_NAN_FALLBACK"] = "1"
+
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.backends.boltz.snapshot import boltz_snapshot_descriptor
-from genai_tps.enhanced_sampling.opes_bias import OPESBias
+from genai_tps.simulation.bias.opes import OPESBias
 from tests.mock_boltz_diffusion import MockDiffusion
 
 

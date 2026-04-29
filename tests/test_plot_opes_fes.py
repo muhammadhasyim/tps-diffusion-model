@@ -94,7 +94,7 @@ def test_plot_opes_fes_writes_png_explicit_x_range(tmp_path: Path) -> None:
         if p.is_dir() and str(p) not in sys.path:
             sys.path.insert(0, str(p))
 
-    from genai_tps.enhanced_sampling.opes_bias import OPESBias  # noqa: PLC0415
+    from genai_tps.simulation.bias.opes import OPESBias  # noqa: PLC0415
     from plot_opes_fes import plot_opes_fes  # type: ignore[import]
 
     bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1)
@@ -127,7 +127,7 @@ def test_plot_opes_fes_raises_when_x_range_excludes_all_samples(tmp_path: Path) 
         if p.is_dir() and str(p) not in sys.path:
             sys.path.insert(0, str(p))
 
-    from genai_tps.enhanced_sampling.opes_bias import OPESBias  # noqa: PLC0415
+    from genai_tps.simulation.bias.opes import OPESBias  # noqa: PLC0415
     from plot_opes_fes import plot_opes_fes  # type: ignore[import]
 
     bias = OPESBias(kbt=1.0, barrier=5.0, biasfactor=10.0, pace=1)
@@ -257,7 +257,7 @@ def test_opes_evaluation_grid_resolves_needle_kernel() -> None:
         if p.is_dir() and str(p) not in sys.path:
             sys.path.insert(0, str(p))
 
-    from genai_tps.enhanced_sampling.opes_bias import OPESBias  # noqa: PLC0415
+    from genai_tps.simulation.bias.opes import OPESBias  # noqa: PLC0415
     from plot_opes_fes import (  # type: ignore[import]
         _integrate_trapezoid,
         _opes_evaluation_grid,
@@ -302,7 +302,7 @@ def test_plot_opes_fes_2d_writes_png(tmp_path: Path) -> None:
         if p.is_dir() and str(p) not in sys.path:
             sys.path.insert(0, str(p))
 
-    from genai_tps.enhanced_sampling.opes_bias import OPESBias  # noqa: PLC0415
+    from genai_tps.simulation.bias.opes import OPESBias  # noqa: PLC0415
     from plot_opes_fes import plot_opes_fes_2d  # type: ignore[import]
 
     bias = OPESBias(

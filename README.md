@@ -16,9 +16,9 @@ pip install -e ./boltz
 pip install -e "./boltz[cuda]"
 ```
 
-Or conda: `conda env create -f environment.yml` then `conda activate genai-tps` (that file includes **OpenMM** + **openmmforcefields** + **OpenFF Toolkit**, **ProDy**, **PyMOL**, **pymbar** stack, plus editable `boltz` and `genai-tps` with `[boltz,dev,enhanced_sampling]`).
+Or conda: `conda env create -f environment.yml` then `conda activate genai-tps` (that file includes **OpenMM** + **openmmforcefields** + **OpenFF Toolkit**, **ProDy**, **PyMOL**, **pymbar** stack, plus editable `boltz` and `genai-tps` with `[boltz,dev,sampling]`).
 
-**Optional pip extras** (see `pyproject.toml`): `[viz]` (PyMOL), `[analysis]` (ProDy), `[enhanced_sampling]` (OpenMM + pymbar + GAFF/OpenFF pins). For a **single pip line** without conda: `pip install -e ./boltz` and `pip install -e ".[boltz,dev,full]"` (`full` bundles PyMOL, ProDy, and the full OpenMM/ligand/MBAR set).
+**Optional pip extras** (see `pyproject.toml`): `[viz]` (PyMOL), `[analysis]` (ProDy), `[sampling]` (OpenMM + pymbar + GAFF/OpenFF pins), `[cli]` (Typer + Hydra). For a **single pip line** without conda: `pip install -e ./boltz` and `pip install -e ".[boltz,dev,full]"` (`full` bundles PyMOL, ProDy, and the full OpenMM/ligand/MBAR set).
 
 ## Example: TPS-style sampling on Boltz-2 diffusion
 
@@ -60,7 +60,7 @@ For a **heterodimer co-folding**–style benchmark (two proteins associating), r
 ```bash
 pip install -e ".[boltz,dev]"
 pip install -e ./boltz
-python scripts/run_cofolding_tps_demo.py --out ./cofolding_tps_out --diffusion-steps 32 --shoot-rounds 5
+python scripts/run_cofolding_tps_demo.py --out ./artifacts/cofolding/cofolding_tps_out --diffusion-steps 32 --shoot-rounds 5
 # optional: pip install -e "./boltz[cuda]"  then  ... --kernels
 ```
 
@@ -70,15 +70,15 @@ Artifacts: `trajectory_summary.json` (per-frame σ and geometry stats), `coords_
 
 ```bash
 python scripts/visualize_cofolding_trajectory.py \
-  --npz ./cofolding_tps_out/coords_trajectory.npz \
-  --summary ./cofolding_tps_out/trajectory_summary.json \
-  --pdb-out ./cofolding_tps_out/diffusion_traj.pdb
+  --npz ./artifacts/cofolding/cofolding_tps_out/coords_trajectory.npz \
+  --summary ./artifacts/cofolding/cofolding_tps_out/trajectory_summary.json \
+  --pdb-out ./artifacts/cofolding/cofolding_tps_out/diffusion_traj.pdb
 # PyMOL: open diffusion_traj.pdb, use state slider to scrub frames
 ```
 
 ## RLDiff-style offline RL (Boltz-2)
 
-[`scripts/train_rl_boltz.py`](scripts/train_rl_boltz.py) implements an **offline** fine-tuning loop inspired by [RLDiff](https://github.com/oxpig/RLDiff) (DDPO-IS–style clipped surrogate and importance weights), adapted to **Boltz-2** `AtomDiffusion` stepping. Terminal rewards use **GPU-native** PoseBusters-style geometry checks in [`genai_tps/analysis/posebusters_gpu.py`](src/python/genai_tps/analysis/posebusters_gpu.py) (no dependency on the third-party `posebusters` package on the training path). Core helpers live under [`genai_tps/rl/`](src/python/genai_tps/rl/).
+[`scripts/train_rl_boltz.py`](scripts/train_rl_boltz.py) implements an **offline** fine-tuning loop inspired by [RLDiff](https://github.com/oxpig/RLDiff) (DDPO-IS–style clipped surrogate and importance weights), adapted to **Boltz-2** `AtomDiffusion` stepping. Terminal rewards use **GPU-native** PoseBusters-style geometry checks in [`genai_tps/evaluation/posebusters.py`](src/python/genai_tps/evaluation/posebusters.py) (no dependency on the third-party `posebusters` package on the training path). Core helpers live under [`genai_tps/rl/`](src/python/genai_tps/rl/).
 
 **Citation:** Broster *et al.*, *Teaching Diffusion Models Physics: Reinforcement Learning for Physically Valid Diffusion-Based Docking*, bioRxiv (2026), DOI [10.64898/2026.03.25.714128](https://doi.org/10.64898/2026.03.25.714128). See **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)** for the RLDiff MIT license and attribution of derived surrogate code.
 
@@ -98,8 +98,10 @@ The old package name **`tps_boltz`** still works as a thin shim but emits `Depre
 ```bash
 pip install -e ".[boltz,dev]"
 pip install -e ./boltz   # submodule: needed for Boltz imports in backend tests
-pytest tests/
+python -m pytest tests/
 ```
+
+Use the same interpreter that installed the package (`conda activate …` or `.venv/bin/python`) so NumPy/pandas match **pyproject.toml**—a global `pytest` on system Python can pull incompatible wheels from `~/.local`.
 
 `tests/conftest.py` adds `boltz/src` to `sys.path` when the submodule exists; you still need Boltz’s dependencies (install editable as above).
 

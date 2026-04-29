@@ -19,7 +19,7 @@ Large files live under **`data/runs_n_poses/`**, which is **gitignored** except 
 | `extracted/ground_truth/` | Optional unpack of `ground_truth.tar.gz` via [`scripts/extract_zenodo_runs_n_poses.py`](../scripts/extract_zenodo_runs_n_poses.py) |
 | `training_ligands_flat/` | Optional: flatten or symlink `*.sdf` here for `--skrinjar-training-ligands-dir` (incremental scorer uses non-recursive `glob("*.sdf")`) |
 - Similarity definition (paper / PLINDER benchmark): `SuCOS-pocket` = SuCOS after RDKit `rdShapeAlign.AlignMol`, multiplied by **pocket_qcov** from the PLINDER pipeline (Methods §7.4).
-- **This repo’s incremental CV** (`training_sucos_pocket_qcov` in `genai_tps.analysis.skrinjar_similarity`) uses a **geometric pocket Cα proxy** and **does not** apply Foldseek’s rigid transform to the training ligand the way `papers/runs-n-poses/similarity_scoring.py` does for holo pairs — expect differences vs Zenodo `all_similarity_scores.parquet` even when RDKit matches upstream.
+- **This repo’s incremental CV** (`training_sucos_pocket_qcov` in `genai_tps.evaluation.skrinjar_similarity`) uses a **geometric pocket Cα proxy** and **does not** apply Foldseek’s rigid transform to the training ligand the way `papers/runs-n-poses/similarity_scoring.py` does for holo pairs — expect differences vs Zenodo `all_similarity_scores.parquet` even when RDKit matches upstream.
 
 ## Disk and RAM (order of magnitude)
 
@@ -39,7 +39,7 @@ Plan **≥1 TB** free disk for a comfortable full PDB + DB + scratch workflow; *
 ## GPU vs CPU
 
 - **Foldseek** (release 10+): use `--gpu 1` with a recent NVIDIA driver; see [Foldseek releases](https://github.com/steineggerlab/foldseek).
-- **RDKit** `rdShapeAlign`, **SuCOS-style** pharmacophore + shape terms, and **PLINDER** chemistry: **CPU** in the reference stack. The incremental module in `genai_tps.analysis.skrinjar_similarity` matches that chemistry on CPU while using GPU for Foldseek **search** only.
+- **RDKit** `rdShapeAlign`, **SuCOS-style** pharmacophore + shape terms, and **PLINDER** chemistry: **CPU** in the reference stack. The incremental module in `genai_tps.evaluation.skrinjar_similarity` matches that chemistry on CPU while using GPU for Foldseek **search** only.
 
 ## 1. Download Zenodo files (no full PDB)
 
@@ -165,7 +165,7 @@ python scripts/run_skrinjar_full_similarity_batch.py --pdb-id 8cq9 --work-dir pa
 
 The batch script validates environment and delegates to **`papers/runs-n-poses/similarity_scoring.py`**. It does **not** replace PLINDER ingestion or Foldseek precomputation.
 
-## 7. Incremental scoring for TPS (`genai_tps.analysis.skrinjar_similarity`)
+## 7. Incremental scoring for TPS (`genai_tps.evaluation.skrinjar_similarity`)
 
 Use **`IncrementalSkrinjarScorer`** when you have:
 

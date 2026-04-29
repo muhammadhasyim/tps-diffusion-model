@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import pytest
+
+pytest.importorskip("genai_tps.rl.config", reason="optional genai_tps.rl not in this checkout")
+
 import torch
 
 from genai_tps.backends.boltz.path_probability import forward_step_meta

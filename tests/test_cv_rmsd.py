@@ -124,13 +124,9 @@ class TestKabschRMSD:
 # OpenMM minimisation smoke test
 # ---------------------------------------------------------------------------
 
-_OPENMM_AVAILABLE = True
-try:
-    import openmm  # noqa: F401
-    import openmm.app  # noqa: F401
-    from openmm import unit  # noqa: F401
-except ImportError:
-    _OPENMM_AVAILABLE = False
+import openmm  # noqa: F401
+import openmm.app  # noqa: F401
+from openmm import unit  # noqa: F401
 
 # A minimal two-residue ALA-ALA peptide in PDB format (heavy atoms only,
 # slightly distorted so the minimiser has something to do).
@@ -150,7 +146,6 @@ _ALA_ALA_PDB = textwrap.dedent("""\
 """)
 
 
-@pytest.mark.skipif(not _OPENMM_AVAILABLE, reason="openmm not installed")
 class TestMinimizePDB:
     def _write_ala_ala(self, tmp_path: Path) -> Path:
         pdb_path = tmp_path / "ala_ala.pdb"
@@ -236,12 +231,8 @@ class TestMinimizePDB:
 # openmmforcefields availability guard
 # ---------------------------------------------------------------------------
 
-_OPENMMFF_AVAILABLE = True
-try:
-    from openff.toolkit.topology import Molecule as _OpenFFMolecule  # noqa: F401
-    from openmmforcefields.generators import GAFFTemplateGenerator as _GAFF  # noqa: F401
-except (ImportError, Exception):
-    _OPENMMFF_AVAILABLE = False
+from openff.toolkit.topology import Molecule as _OpenFFMolecule  # noqa: F401
+from openmmforcefields.generators import GAFFTemplateGenerator as _GAFF  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -443,3 +434,50 @@ class TestMinimizePDBWithMonoatomicIon:
         assert result["n_ca_atoms"] == 2
         assert result["error"] is None
         assert result["energy_kj_mol"] is not None
+
+
+class TestLigandPocketDistanceFiniteness:
+    """Non-finite coordinates must not propagate NaN through COM distance."""
+
+    def test_non_finite_coords_return_sentinel(self):
+        from types import SimpleNamespace
+
+        import torch
+
+        from genai_tps.backends.boltz.collective_variables import ligand_pocket_distance
+
+        indexer = SimpleNamespace(
+            ligand_idx=np.array([0, 1], dtype=np.int64),
+            pocket_ca_idx=np.array([2, 3], dtype=np.int64),
+        )
+        coords = torch.tensor(
+            [
+                [
+                    [0.0, 0.0, 0.0],
+                    [float("nan"), 1.0, 1.0],
+                    [1.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                ]
+            ],
+            dtype=torch.float32,
+        )
+        snap = SimpleNamespace(_tensor_coords_gpu=coords)
+        assert ligand_pocket_distance(snap, indexer) == pytest.approx(1e3)
+
+    def test_finite_coords_positive_distance(self):
+        from types import SimpleNamespace
+
+        import torch
+
+        from genai_tps.backends.boltz.collective_variables import ligand_pocket_distance
+
+        indexer = SimpleNamespace(
+            ligand_idx=np.array([0], dtype=np.int64),
+            pocket_ca_idx=np.array([1], dtype=np.int64),
+        )
+        coords = torch.tensor(
+            [[[0.0, 0.0, 0.0], [3.0, 4.0, 0.0]]],
+            dtype=torch.float32,
+        )
+        snap = SimpleNamespace(_tensor_coords_gpu=coords)
+        assert ligand_pocket_distance(snap, indexer) == pytest.approx(5.0)

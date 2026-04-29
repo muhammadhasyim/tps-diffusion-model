@@ -143,13 +143,8 @@ def test_minimize_pdb_protein_only_cuda_after_pytorch(tmp_path):
 
 # --- Optional ligand path (GAFF2 parameterisation on CPU, OpenMM on CUDA) ---
 
-try:
-    from openmmforcefields.generators import GAFFTemplateGenerator  # noqa: F401
-    from openff.toolkit.topology import Molecule as _OpenFFMolecule  # noqa: F401
-
-    _LIGAND_STACK_OK = True
-except Exception:
-    _LIGAND_STACK_OK = False
+from openmmforcefields.generators import GAFFTemplateGenerator  # noqa: F401
+from openff.toolkit.topology import Molecule as _OpenFFMolecule  # noqa: F401
 
 _ASPIRIN_SMILES = "CC(=O)Oc1ccccc1C(=O)O"
 
@@ -197,7 +192,6 @@ _ALA_ALA_ASPIRIN_PDB = textwrap.dedent("""\
 
 
 @pytest.mark.cuda
-@pytest.mark.skipif(not _LIGAND_STACK_OK, reason="openmmforcefields / openff stack")
 def test_minimize_pdb_protein_ligand_uses_cuda(tmp_path):
     """Ligand path: GAFF typing (CPU) + OpenMM minimise on CUDA."""
     if not torch.cuda.is_available():

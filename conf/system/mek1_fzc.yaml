@@ -1,0 +1,4 @@
+# Example system definition — point to project inputs / PDB / ligand SMILES as needed.
+name: mek1_fzc
+yaml: inputs/tps_diagnostic/case1_mek1_fzc_novel.yaml
+description: MEK1 + FZC diagnostic co-folding case

@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _ensure_analysis_on_path() -> None:
-    """Add src/python to sys.path so genai_tps.analysis is importable."""
+    """Add src/python to sys.path so genai_tps (including evaluation/io) is importable."""
     root = Path(__file__).resolve().parents[1]
     src = root / "src" / "python"
     if src.is_dir() and str(src) not in sys.path:
@@ -55,7 +55,7 @@ def _ensure_analysis_on_path() -> None:
 
 _ensure_analysis_on_path()
 
-from genai_tps.analysis.boltz_npz_export import load_topo, npz_to_pdb  # noqa: E402
+from genai_tps.io.boltz_npz_export import load_topo, npz_to_pdb  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

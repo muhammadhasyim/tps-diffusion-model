@@ -3,7 +3,7 @@
 
 This script loads RMSD distributions from:
   1. Vanilla (unbiased) TPS -- from ``watch_rmsd_live.py`` output
-  2. Enhanced sampling TPS -- either exponential tilting or OPES
+  2. Enhanced sampling TPS -- umbrella+MBAR (:mod:`scripts/run_umbrella_tps.py`) or OPES
 
 It applies the appropriate reweighting to the enhanced sampling results and
 compares the reconstructed distribution to the vanilla baseline using:
@@ -13,10 +13,10 @@ compares the reconstructed distribution to the vanilla baseline using:
 
 Usage::
 
-    # Compare tilting + MBAR results against vanilla:
+    # Compare umbrella + MBAR results against vanilla:
     python scripts/validate_enhanced_sampling.py \\
         --vanilla-json  cofolding_tps_out/cv_rmsd_analysis_live/rmsd_results_live.json \\
-        --mbar-json     cofolding_tps_out_tilted/mbar_samples.json \\
+        --mbar-json     cofolding_tps_out_umbrella/mbar_samples.json \\
         --out-dir       validation_results/
 
     # Compare OPES-reweighted results against vanilla:
@@ -148,8 +148,8 @@ def plot_comparison(
 
 
 def validate_mbar(vanilla_json: Path, mbar_json: Path, out_dir: Path) -> dict:
-    """Validate exponential tilting + MBAR against vanilla distribution."""
-    from genai_tps.enhanced_sampling.mbar_analysis import MBARDistributionEstimator
+    """Validate umbrella-window MBAR against vanilla distribution."""
+    from genai_tps.simulation.mbar_analysis import MBARDistributionEstimator
 
     vanilla = load_vanilla_rmsds(vanilla_json)
     logger.info("Vanilla: %d samples, mean=%.3f Å", len(vanilla), vanilla.mean())
@@ -171,12 +171,12 @@ def validate_mbar(vanilla_json: Path, mbar_json: Path, out_dir: Path) -> dict:
         vanilla, enhanced_cvs, weights=None,
         out_path=out_dir / "validation_mbar.png",
         title="MBAR Reweighted vs Vanilla TPS",
-        label_enhanced="MBAR combined (all lambdas)",
+        label_enhanced="MBAR combined (all windows)",
     )
 
     ks = ks_test(vanilla, enhanced_cvs)
     summary = {
-        "method": "exponential_tilting_mbar",
+        "method": "umbrella_mbar",
         "n_vanilla": len(vanilla),
         "vanilla_mean": float(vanilla.mean()),
         "vanilla_std": float(vanilla.std()),
@@ -194,7 +194,7 @@ def validate_opes(
     vanilla_json: Path, opes_state: Path, opes_cv_json: Path, out_dir: Path
 ) -> dict:
     """Validate OPES-reweighted results against vanilla distribution."""
-    from genai_tps.enhanced_sampling.opes_bias import OPESBias
+    from genai_tps.simulation import OPESBias
 
     vanilla = load_vanilla_rmsds(vanilla_json)
     logger.info("Vanilla: %d samples, mean=%.3f Å", len(vanilla), vanilla.mean())
@@ -252,7 +252,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--mbar-json", type=Path, default=None,
-        help="Path to MBAR samples JSON (for exponential tilting validation).",
+        help="Path to MBAR samples JSON (from run_umbrella_tps / WindowSamples).",
     )
     parser.add_argument(
         "--opes-state", type=Path, default=None,
@@ -273,7 +273,7 @@ def main() -> None:
     results = {}
 
     if args.mbar_json is not None:
-        logger.info("=== Validating Exponential Tilting + MBAR ===")
+        logger.info("=== Validating Umbrella windows + MBAR ===")
         results["mbar"] = validate_mbar(
             args.vanilla_json, args.mbar_json, args.out_dir
         )

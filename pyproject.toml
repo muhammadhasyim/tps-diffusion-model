@@ -17,7 +17,9 @@ dependencies = [
   # boltz/pyproject.toml pins scipy==1.13.1 exactly; conda-forge can float to
   # 1.17.x causing ABI mismatches with openmm's compiled xtc_utils extension.
   "scipy>=1.13,<1.14",
-  "pandas",
+  # Pandas 2.2.2+ supports NumPy 2.0 wheels; older pandas + numpy 2.x yields
+  # import/runtime errors (https://pandas.pydata.org/docs/whatsnew/v2.2.2.html).
+  "pandas>=2.2.2",
   "netcdf4",
   "svgwrite",
   "networkx",
@@ -25,6 +27,8 @@ dependencies = [
   "ujson>=4.0.2",
   "dill",
   "sqlalchemy>=1.4.1",
+  "requests>=2.32",
+  "tqdm>=4.66",
   "mdtraj",
 ]
 
@@ -46,8 +50,13 @@ viz = [
 analysis = [
   # ProDy 2.x is compatible with NumPy 2.x (tested with 2.6.1 / NumPy 2.2).
   "prody>=2.0",
+  # Protein-ligand interaction fingerprints (interaction_fingerprints.py).
+  "prolif>=2.0",
+  # RDKit: ligand torsion analysis (ligand_torsions.py), SuCOS scoring.
+  # Prefer conda-forge; pip wheels available as rdkit>=2024.3.2.
+  "rdkit>=2024.3.2",
 ]
-enhanced_sampling = [
+sampling = [
   # pymbar with JAX for GPU-accelerated MBAR (pip install pymbar[jax]).
   # For pure NumPy fallback: pip install pymbar.
   # Source: https://github.com/choderalab/pymbar
@@ -58,16 +67,19 @@ enhanced_sampling = [
   "pdbfixer>=1.9",
   # GAFF2 / SMIRNOFF ligand parameterization (scripts/compute_cv_rmsd.py, cofactors).
   "openmmforcefields>=0.14",
+  # Prefer conda-forge for reproducible pins; pip-only installs depend on PyPI availability.
   "openff-toolkit>=0.14.0",
   # Ligand pose quality checks for OPES (--bias-cv posebusters_*).
   "posebusters==0.6.5",
 ]
 # Pip-only one-shot: PyMOL cartoons, ProDy ensemble analysis, OpenMM+MBAR+ligands.
 # Conda users: environment.yml installs prody, pymol-open-source, openff-toolkit from conda-forge
-# and uses -e .[boltz,dev,enhanced_sampling] to avoid duplicate PyMOL/ProDy wheels.
+# and uses -e .[boltz,dev,sampling] to avoid duplicate PyMOL/ProDy wheels.
 full = [
   "pymol-open-source>=3.2.0a0",
   "prody>=2.0",
+  "prolif>=2.0",
+  "rdkit>=2024.3.2",
   "pymbar>=4.0",
   "openmm>=8.0",
   "pdbfixer>=1.9",
@@ -75,6 +87,14 @@ full = [
   "openff-toolkit>=0.14.0",
   "posebusters==0.6.5",
 ]
+cli = [
+  "typer>=0.12",
+  "hydra-core>=1.3",
+  "omegaconf>=2.3",
+]
+
+[project.scripts]
+genai-tps = "genai_tps.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src/python"]

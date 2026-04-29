@@ -184,7 +184,7 @@ def main() -> None:
 
     # ── Step 1: resolve PDB directory ────────────────────────────────────────
     if args.ckpt_dir:
-        from genai_tps.analysis.boltz_npz_export import batch_export  # noqa: PLC0415
+        from genai_tps.io.boltz_npz_export import batch_export  # noqa: PLC0415
         pdb_dir = args.out_dir / "exported_pdbs"
         logger.info("Exporting last frames from %s → %s …", args.ckpt_dir, pdb_dir)
         pdb_paths = batch_export(args.ckpt_dir, args.topo_npz, pdb_dir)
@@ -207,7 +207,7 @@ def main() -> None:
         # temp symlink directory — simpler: just pass a custom glob via a
         # wrapper that builds the ensemble from a list of paths.
         # For simplicity, call the library API directly here.
-        from genai_tps.analysis.terminal_ensemble_prody import (  # noqa: PLC0415
+        from genai_tps.evaluation.terminal_ensemble_prody import (  # noqa: PLC0415
             run_ensemble_analysis,
         )
         import prody as pd  # noqa: PLC0415
@@ -229,7 +229,7 @@ def main() -> None:
         result.labels = [result.labels[i] for i in keep]
         result.n_structures = len(keep)
     else:
-        from genai_tps.analysis.terminal_ensemble_prody import (  # noqa: PLC0415
+        from genai_tps.evaluation.terminal_ensemble_prody import (  # noqa: PLC0415
             run_ensemble_analysis,
         )
         result = run_ensemble_analysis(

@@ -88,9 +88,28 @@ Thumbs.db
 data/runs_n_poses/*
 !data/runs_n_poses/README.md
 
+# ── Local model weights (layout in git via .gitkeep; blobs stay untracked — no LFS)
+# See weights/README.md
+weights/boltz/*
+!weights/boltz/.gitkeep
+weights/finetuned/*
+!weights/finetuned/.gitkeep
+
 # ── Secrets / credentials ─────────────────────────────────────────────────────
 .env
 *.pem
 *.key
 secrets.json
 credentials.json
+
+# ── Local artifacts & experiments (runs, dashboards; symlink outputs → here) ───
+artifacts/
+
+# ── Structured outputs symlink convention (see artifacts/evaluation/README_outputs_note.md)
+outputs/
+
+/*.log
+/*.npz
+axon-*.pdf
+postprocess.out
+opes_tps_run.log

@@ -1,8 +1,6 @@
-"""Tests for genai_tps.analysis — ProDy terminal-structure ensemble analysis.
+"""Tests for genai_tps.evaluation.terminal_ensemble_prody — ProDy terminal-structure ensemble analysis.
 
-All ProDy-dependent tests are skipped automatically when ProDy is not
-installed (``@pytest.mark.skipif``), so the CI suite does not break on
-environments where only the core TPS dependencies are present.
+ProDy is a required analysis dependency (pyproject.toml [analysis]).
 
 The tests use minimal synthetic PDB fixtures (5 atoms per structure, 3–5
 structures) to keep runtime under a second.
@@ -16,22 +14,8 @@ from io import StringIO
 from pathlib import Path
 
 import numpy as np
+import prody  # noqa: F401
 import pytest
-
-# ---------------------------------------------------------------------------
-# Availability guard
-# ---------------------------------------------------------------------------
-
-try:
-    import prody  # noqa: F401
-    _PRODY_AVAILABLE = True
-except ImportError:
-    _PRODY_AVAILABLE = False
-
-prody_required = pytest.mark.skipif(
-    not _PRODY_AVAILABLE,
-    reason="ProDy not installed (pip install 'prody>=2.0')",
-)
 
 # ---------------------------------------------------------------------------
 # Minimal PDB fixture helpers
@@ -80,10 +64,9 @@ def _make_ensemble_pdb_dir(tmp_path: Path, n: int = 5, seed: int = 42) -> Path:
 # Unit tests for EnsembleAnalysisResult.to_dict()
 # ---------------------------------------------------------------------------
 
-@prody_required
 class TestEnsembleAnalysisResultToDict:
     def test_empty_result_serialisable(self):
-        from genai_tps.analysis.terminal_ensemble_prody import EnsembleAnalysisResult
+        from genai_tps.evaluation.terminal_ensemble_prody import EnsembleAnalysisResult
 
         r = EnsembleAnalysisResult()
         d = r.to_dict()
@@ -94,7 +77,7 @@ class TestEnsembleAnalysisResultToDict:
         assert back["anm_eigenvalues"] is None
 
     def test_filled_result_serialisable(self):
-        from genai_tps.analysis.terminal_ensemble_prody import EnsembleAnalysisResult
+        from genai_tps.evaluation.terminal_ensemble_prody import EnsembleAnalysisResult
 
         r = EnsembleAnalysisResult(
             n_structures=3,
@@ -120,11 +103,10 @@ class TestEnsembleAnalysisResultToDict:
 # Unit tests for run_ensemble_analysis
 # ---------------------------------------------------------------------------
 
-@prody_required
 class TestRunEnsembleAnalysis:
     def test_basic_pca(self, tmp_path):
         """PCA should run and return correct shapes for a minimal ensemble."""
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=5)
         result = run_ensemble_analysis(pdb_dir, n_pcs=3)
@@ -139,14 +121,14 @@ class TestRunEnsembleAnalysis:
         assert result.failed_pdbs == []
 
     def test_eigenvalues_non_negative(self, tmp_path):
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=4)
         result = run_ensemble_analysis(pdb_dir, n_pcs=3)
         assert np.all(result.eigenvalues >= 0)
 
     def test_explained_variance_sums_to_one(self, tmp_path):
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=5)
         # 3 Cα atoms → at most 3*3-6=3 non-trivial modes; request 4 so capping kicks in
@@ -155,14 +137,14 @@ class TestRunEnsembleAnalysis:
         assert result.cumulative_variance_ratio[-1] == pytest.approx(1.0, abs=1e-6)
 
     def test_mean_coords_shape(self, tmp_path):
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=4)
         result = run_ensemble_analysis(pdb_dir, n_pcs=2)
         assert result.mean_coords.shape == (3, 3)  # (n_ca_atoms=3, 3D)
 
     def test_anm_runs_and_gives_eigenvalues(self, tmp_path):
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=4)
         result = run_ensemble_analysis(pdb_dir, n_pcs=2, run_anm=True, n_enm_modes=3)
@@ -171,7 +153,7 @@ class TestRunEnsembleAnalysis:
         assert np.all(result.anm_eigenvalues >= 0)
 
     def test_gnm_runs_and_gives_eigenvalues(self, tmp_path):
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=4)
         result = run_ensemble_analysis(pdb_dir, n_pcs=2, run_gnm=True, n_enm_modes=3)
@@ -179,7 +161,7 @@ class TestRunEnsembleAnalysis:
         assert len(result.gnm_eigenvalues) > 0
 
     def test_warns_on_fewer_than_two_structures(self, tmp_path):
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=1)
         with pytest.warns(RuntimeWarning, match="at least 2"):
@@ -188,14 +170,14 @@ class TestRunEnsembleAnalysis:
         assert len(result.eigenvalues) == 0
 
     def test_empty_dir_raises(self, tmp_path):
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         with pytest.raises(FileNotFoundError, match="No PDB files"):
             run_ensemble_analysis(tmp_path / "nonexistent")
 
     def test_topology_mismatch_skips_bad_structure(self, tmp_path):
         """A PDB with a different number of Cα atoms is skipped, not fatal."""
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=4)
         # Write a 2-residue PDB (wrong atom count)
@@ -210,7 +192,7 @@ class TestRunEnsembleAnalysis:
         assert result.n_structures == 4  # the 4 good ones still processed
 
     def test_result_to_dict_roundtrip(self, tmp_path):
-        from genai_tps.analysis.terminal_ensemble_prody import run_ensemble_analysis
+        from genai_tps.evaluation.terminal_ensemble_prody import run_ensemble_analysis
 
         pdb_dir = _make_ensemble_pdb_dir(tmp_path, n=4)
         result = run_ensemble_analysis(pdb_dir, n_pcs=2)
@@ -228,34 +210,29 @@ class TestRunEnsembleAnalysis:
 
 class TestBoltzNpzExportPaths:
     def test_load_topo_missing_file_raises(self, tmp_path):
-        from genai_tps.analysis.boltz_npz_export import load_topo
+        from genai_tps.io.boltz_npz_export import load_topo
 
         with pytest.raises(FileNotFoundError):
             load_topo(tmp_path / "nonexistent.npz")
 
     def test_batch_export_empty_dir_returns_empty_list(self, tmp_path):
-        """batch_export with no matching NPZ files should return empty list.
+        """batch_export with no matching NPZ files should return empty list."""
+        from boltz.data.types import StructureV2  # noqa: F401
 
-        This test requires Boltz to be importable (the function imports
-        StructureV2 lazily); skip if Boltz is not available.
-        """
-        try:
-            from boltz.data.types import StructureV2  # noqa: F401
-        except ImportError:
-            pytest.skip("Boltz submodule not available")
-
-        from genai_tps.analysis.boltz_npz_export import batch_export
+        from genai_tps.io.boltz_npz_export import batch_export
 
         # Supply a dummy topo_npz — the function will fail at load_topo before
         # iterating, but we want it to iterate on an empty dir instead.
         # Easiest: pass a real topo NPZ if present, else skip.
         topo_candidates = sorted(
-            Path("cofolding_tps_out").glob(
+            Path("artifacts/cofolding/cofolding_tps_out").glob(
                 "boltz_results_*/processed/structures/*.npz"
             )
         )
         if not topo_candidates:
-            pytest.skip("No Boltz topology NPZ found in cofolding_tps_out/")
+            pytest.skip(
+                "No Boltz topology NPZ found in artifacts/cofolding/cofolding_tps_out/"
+            )
 
         result = batch_export(tmp_path, topo_candidates[0], tmp_path / "out")
         assert result == []

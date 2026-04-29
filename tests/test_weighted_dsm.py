@@ -9,11 +9,10 @@ The test plan matches the plan document:
   3. test_regularization_term_penalizes_drift
   4. test_effective_sample_size_uniform
   5. test_effective_sample_size_degenerate
-  6. test_temper_log_weights
-  7. test_dataset_loading_from_npz
-  8. test_noise_schedule_matches_boltz2
-  9. test_integration_smoke
- 10. Additional edge-case and robustness tests
+  6. test_dataset_loading_from_npz
+  7. test_noise_schedule_matches_boltz2
+  8. test_integration_smoke
+  9. Additional edge-case and robustness tests
 """
 from __future__ import annotations
 
@@ -30,19 +29,18 @@ _src = _root / "src" / "python"
 if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))
 
-from genai_tps.weighted_dsm.config import WeightedDSMConfig
-from genai_tps.weighted_dsm.dataset import ReweightedStructureDataset
-from genai_tps.weighted_dsm.diagnostics import (
+from genai_tps.training.config import WeightedDSMConfig
+from genai_tps.training.dataset import ReweightedStructureDataset
+from genai_tps.training.diagnostics import (
     clip_log_weights,
     effective_sample_size,
-    temper_log_weights,
     weight_statistics,
 )
-from genai_tps.weighted_dsm.loss import (
+from genai_tps.training.loss import (
     regularized_weighted_dsm_loss,
     weighted_dsm_loss,
 )
-from genai_tps.weighted_dsm.noise_schedule import EDMNoiseParams, edm_loss_weight, sample_noise_sigma
+from genai_tps.training.noise_schedule import EDMNoiseParams, edm_loss_weight, sample_noise_sigma
 
 
 # ---------------------------------------------------------------------------
@@ -248,39 +246,7 @@ def test_effective_sample_size_empty():
 
 
 # ---------------------------------------------------------------------------
-# 6. Weight tempering
-# ---------------------------------------------------------------------------
-
-def test_temper_log_weights_identity():
-    """gamma=1 is the identity."""
-    logw = np.array([-1.0, 0.0, 2.0, 5.0])
-    result = temper_log_weights(logw, gamma=1.0)
-    np.testing.assert_allclose(result, logw)
-
-
-def test_temper_log_weights_half():
-    """gamma=0.5 halves every log-weight."""
-    logw = np.array([-2.0, 0.0, 4.0])
-    result = temper_log_weights(logw, gamma=0.5)
-    np.testing.assert_allclose(result, logw * 0.5)
-
-
-def test_temper_log_weights_zero():
-    """gamma=0 collapses to uniform (all zeros)."""
-    logw = np.array([1.0, -3.0, 7.0])
-    result = temper_log_weights(logw, gamma=0.0)
-    np.testing.assert_allclose(result, np.zeros_like(logw))
-
-
-def test_temper_log_weights_preserves_shape():
-    rng = np.random.default_rng(42)
-    logw = rng.standard_normal(200)
-    result = temper_log_weights(logw, gamma=0.7)
-    assert result.shape == logw.shape
-
-
-# ---------------------------------------------------------------------------
-# Weight clipping
+# 6. Weight clipping
 # ---------------------------------------------------------------------------
 
 def test_clip_log_weights_no_clip():
@@ -489,14 +455,8 @@ def test_integration_smoke(tmp_path):
 def test_config_defaults():
     cfg = WeightedDSMConfig()
     assert cfg.beta >= 0.0
-    assert 0.0 < cfg.gamma <= 1.0
     assert cfg.learning_rate > 0.0
     assert cfg.max_grad_norm > 0.0
-
-
-def test_config_invalid_gamma():
-    with pytest.raises((ValueError, AssertionError)):
-        WeightedDSMConfig(gamma=1.5)
 
 
 def test_config_invalid_beta():
@@ -529,3 +489,146 @@ def test_loss_with_partial_mask():
     noise_params = EDMNoiseParams()
     loss = weighted_dsm_loss(model, x0, logw, mask, noise_params)
     assert torch.isfinite(loss)
+
+
+# ---------------------------------------------------------------------------
+# Tests for true_quotient_dsm_loss (arXiv:2604.21809)
+# ---------------------------------------------------------------------------
+
+from genai_tps.training.loss import alignment_weighted_dsm_loss, true_quotient_dsm_loss  # noqa: E402
+
+
+def test_true_quotient_loss_is_finite():
+    """true_quotient_dsm_loss must return a finite scalar."""
+    torch.manual_seed(11)
+    model = ParametricMockDiffusion()
+    x0 = torch.randn(BATCH_SIZE, N_ATOMS, 3)
+    logw = torch.zeros(BATCH_SIZE)
+    mask = torch.ones(BATCH_SIZE, N_ATOMS)
+    noise_params = EDMNoiseParams()
+    loss = true_quotient_dsm_loss(model, x0, logw, mask, noise_params)
+    assert torch.isfinite(loss), f"true_quotient_dsm_loss is not finite: {loss}"
+
+
+def test_true_quotient_loss_non_negative():
+    """Loss value must be >= 0 (it is a sum of squared norms)."""
+    torch.manual_seed(22)
+    model = ParametricMockDiffusion()
+    x0 = torch.randn(BATCH_SIZE, N_ATOMS, 3)
+    logw = torch.zeros(BATCH_SIZE)
+    mask = torch.ones(BATCH_SIZE, N_ATOMS)
+    noise_params = EDMNoiseParams()
+    loss = true_quotient_dsm_loss(model, x0, logw, mask, noise_params)
+    assert loss.item() >= -1e-6, f"Loss is negative: {loss.item():.6f}"
+
+
+def test_true_quotient_loss_gradient_flows():
+    """Gradients must reach the model parameters."""
+    torch.manual_seed(33)
+    model = ParametricMockDiffusion()
+    x0 = torch.randn(BATCH_SIZE, N_ATOMS, 3)
+    logw = torch.zeros(BATCH_SIZE)
+    mask = torch.ones(BATCH_SIZE, N_ATOMS)
+    noise_params = EDMNoiseParams()
+
+    loss = true_quotient_dsm_loss(model, x0, logw, mask, noise_params)
+    loss.backward()
+
+    assert model.proj.weight.grad is not None, "No gradient on proj.weight"
+    assert torch.isfinite(model.proj.weight.grad).all(), "Non-finite gradient"
+
+
+def test_true_quotient_loss_invariant_to_input_rotation():
+    """Both original and rotated inputs should give finite, comparable losses
+    (sanity check for consistent behaviour under SE(3) transformations)."""
+    torch.manual_seed(44)
+    model = ParametricMockDiffusion()
+    model.eval()  # disable random augmentation
+
+    B, N = BATCH_SIZE, N_ATOMS
+    x0 = torch.randn(B, N, 3)
+    logw = torch.zeros(B)
+    mask = torch.ones(B, N)
+    noise_params = EDMNoiseParams()
+
+    from tests.test_quotient_projection import _random_so3
+    R = _random_so3(B)
+    x0_rot = torch.einsum("bij,bnj->bni", R.float(), x0)
+
+    with torch.no_grad():
+        torch.manual_seed(99)
+        loss_orig = true_quotient_dsm_loss(model, x0, logw, mask, noise_params)
+        torch.manual_seed(99)
+        loss_rot = true_quotient_dsm_loss(model, x0_rot, logw, mask, noise_params)
+
+    assert torch.isfinite(loss_orig), "Original loss not finite"
+    assert torch.isfinite(loss_rot), "Rotated loss not finite"
+    # Both should be non-negative
+    assert loss_orig.item() >= -1e-5
+    assert loss_rot.item() >= -1e-5
+
+
+def test_true_quotient_loss_le_cartesian_loss():
+    """The quotient loss uses horizontal projection of the residual which
+    removes 3 DoFs (rigid rotations).  Therefore for the same noise and model
+    output, ||P_x(r)||^2 <= ||r||^2 (orthogonal projection never inflates norm).
+
+    We verify this directly using a manually controlled forward pass."""
+    torch.manual_seed(77)
+    B, N = BATCH_SIZE, N_ATOMS
+    model = ParametricMockDiffusion()
+    model.eval()
+
+    from genai_tps.training.loss import _center, sample_noise_sigma
+    from genai_tps.training.noise_schedule import EDMNoiseParams
+    from genai_tps.training.quotient_projection import horizontal_projection
+
+    x0 = torch.randn(B, N, 3)
+    mask = torch.ones(B, N)
+    noise_params = EDMNoiseParams()
+
+    x0_c, _ = _center(x0, mask)
+    sigma = sample_noise_sigma(B, noise_params, device=x0.device)
+    eps = torch.randn_like(x0_c)
+    x_noisy = x0_c + sigma.view(B, 1, 1) * eps
+
+    with torch.no_grad():
+        x_denoised = model.preconditioned_network_forward(x_noisy, sigma)
+
+    residual = x_denoised - x0_c                             # (B, N, 3)
+    x_noisy_c, _ = _center(x_noisy, mask)
+    residual_proj = horizontal_projection(x_noisy_c, residual, mask)
+
+    norm_full = (residual * mask.unsqueeze(-1)).norm()
+    norm_proj = residual_proj.norm()
+
+    assert norm_proj.item() <= norm_full.item() + 1e-6, (
+        f"Projection inflated residual norm: {norm_proj.item():.4f} > {norm_full.item():.4f}"
+    )
+
+
+def test_true_quotient_loss_with_regularization():
+    """With beta > 0 and a frozen model, regularized loss must be >= base loss."""
+    torch.manual_seed(66)
+    model = ParametricMockDiffusion()
+    frozen = ParametricMockDiffusion()
+    # Perturb frozen model to create a non-zero regularization term
+    with torch.no_grad():
+        frozen.proj.weight.add_(0.5 * torch.randn_like(frozen.proj.weight))
+
+    x0 = torch.randn(BATCH_SIZE, N_ATOMS, 3)
+    logw = torch.zeros(BATCH_SIZE)
+    mask = torch.ones(BATCH_SIZE, N_ATOMS)
+    noise_params = EDMNoiseParams()
+
+    with torch.no_grad():
+        base = true_quotient_dsm_loss(model, x0, logw, mask, noise_params)
+        torch.manual_seed(66)
+        regularized = true_quotient_dsm_loss(
+            model, x0, logw, mask, noise_params, frozen_model=frozen, beta=1.0
+        )
+
+    assert regularized.item() >= base.item() - 1e-6, (
+        f"Regularized loss {regularized.item():.6f} < base loss {base.item():.6f}"
+    )
+

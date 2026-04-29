@@ -17,6 +17,12 @@ from genai_tps.backends.boltz.path_probability import (
     trajectory_log_path_prob,
 )
 from genai_tps.backends.boltz.tps_sampling import trajectory_has_finite_coords
+from genai_tps.backends.boltz.tps_sampling import (
+    BoltzDiffusionForwardShootMover,
+    BoltzDiffusionOneWayShootingMover,
+    GlobalReshuffleMover,
+)
+from genai_tps.training.quotient_projection import horizontal_projection
 
 from tests.mock_boltz_diffusion import MockDiffusion
 
@@ -281,11 +287,20 @@ def test_trajectory_log_path_prob_mixed_prefix_backward_generated(core_and_engin
 # ---------------------------------------------------------------------------
 
 
-def test_nan_fallback_replaces_nonfinite():
-    """_nan_fallback should replace NaN/Inf with fallback values element-wise."""
+def test_nan_fallback_raises_in_strict_mode(monkeypatch):
+    """_nan_fallback should raise RuntimeError by default when NaN detected."""
+    monkeypatch.delenv("GENAI_TPS_NAN_FALLBACK", raising=False)
     good = torch.tensor([1.0, 2.0, 3.0])
     bad = torch.tensor([1.0, float("nan"), float("inf")])
-    result = _nan_fallback(bad, good, label="test")
+    with pytest.raises(RuntimeError, match="non-finite values detected"):
+        _nan_fallback(bad, good, label="test")
+
+
+def test_nan_fallback_replaces_when_allowed():
+    """_nan_fallback should replace NaN/Inf when allow_fallback=True."""
+    good = torch.tensor([1.0, 2.0, 3.0])
+    bad = torch.tensor([1.0, float("nan"), float("inf")])
+    result = _nan_fallback(bad, good, label="test", allow_fallback=True)
     assert torch.isfinite(result).all()
     assert result[0] == 1.0
     assert result[1] == 2.0  # replaced
@@ -300,8 +315,9 @@ def test_nan_fallback_noop_on_finite():
     torch.testing.assert_close(result, x)
 
 
-def test_forward_step_nan_guard():
-    """Forward step: if the network returns NaN, the guard restores input coords."""
+def test_forward_step_nan_guard(monkeypatch):
+    """Forward step: if the network returns NaN, strict mode raises."""
+    monkeypatch.delenv("GENAI_TPS_NAN_FALLBACK", raising=False)
     from tests.mock_boltz_diffusion import MockDiffusion
 
     class _NaNDiffusion(MockDiffusion):
@@ -313,12 +329,13 @@ def test_forward_step_nan_guard():
     core = BoltzSamplerCore(diff, torch.ones(b, m), {"multiplicity": 1}, multiplicity=1)
     core.build_schedule(3)
     finite_input = torch.randn(1, m, 3)
-    x_next, eps, rr, tr, meta = core.single_forward_step(finite_input, 0)
-    assert torch.isfinite(x_next).all(), "NaN guard should replace NaN with input coords"
+    with pytest.raises(RuntimeError, match="non-finite values detected"):
+        core.single_forward_step(finite_input, 0)
 
 
-def test_backward_step_nan_guard():
-    """Backward step: if the network returns NaN, the guard restores input coords."""
+def test_backward_step_nan_guard(monkeypatch):
+    """Backward step: if the network returns NaN, strict mode raises."""
+    monkeypatch.delenv("GENAI_TPS_NAN_FALLBACK", raising=False)
     from tests.mock_boltz_diffusion import MockDiffusion
 
     class _NaNDiffusion(MockDiffusion):
@@ -330,8 +347,8 @@ def test_backward_step_nan_guard():
     core = BoltzSamplerCore(diff, torch.ones(b, m), {"multiplicity": 1}, multiplicity=1)
     core.build_schedule(3)
     finite_input = torch.randn(1, m, 3)
-    x_prev, eps, rr, tr, meta = core.single_backward_step(finite_input, 1)
-    assert torch.isfinite(x_prev).all(), "NaN guard should replace NaN with input coords"
+    with pytest.raises(RuntimeError, match="non-finite values detected"):
+        core.single_backward_step(finite_input, 1)
 
 
 def test_trajectory_has_finite_coords_rejects_nan():
@@ -551,7 +568,7 @@ def test_se3_augmentation_uses_lower_frame_for_backward_generated(core_and_engin
     n_atoms_count = int(bwd_snap.tensor_coords.shape[1])
     lp_manual = (
         log_gaussian_isotropic(eps_manual, v).sum()
-        + log_det_jacobian_step(alpha, n_atoms_count)
+        - log_det_jacobian_step(alpha, n_atoms_count)
     ) if v > 1e-30 else torch.tensor(0.0)
     assert torch.isfinite(lp_manual)
     assert abs(float(lp.cpu()) - float(lp_manual.cpu())) < 1e-3, (
@@ -666,10 +683,9 @@ def test_backward_then_forward_recovers_x_noisy():
 
 
 def test_forward_only_shooting_mode(core_and_engine):
-    """Forward-only shooting never uses backward moves; accepted bias always 1.0 or 0.0."""
+    """Forward-only never constructs backward movers; may add global reshuffle when enabled."""
     from genai_tps.backends.boltz.tps_sampling import (
         BoltzDiffusionOneWayShootingMover,
-        BoltzDiffusionForwardShootMover,
         BoltzDiffusionBackwardShootMover,
     )
     core, engine = core_and_engine
@@ -680,18 +696,29 @@ def test_forward_only_shooting_mode(core_and_engine):
     ens = paths.TISEnsemble(state_a, state_b, state_a, lambda_i=0.0).named("test")
     sel = paths.UniformSelector()
 
-    mover_fwd_only = BoltzDiffusionOneWayShootingMover(
+    mover_fwd_only_strict = BoltzDiffusionOneWayShootingMover(
+        ensemble=ens,
+        selector=sel,
+        engine=engine,
+        forward_only=True,
+        reshuffle_probability=0.0,
+    )
+    mover_fwd_only_with_rsh = BoltzDiffusionOneWayShootingMover(
         ensemble=ens, selector=sel, engine=engine, forward_only=True
     )
     mover_both = BoltzDiffusionOneWayShootingMover(
         ensemble=ens, selector=sel, engine=engine, forward_only=False
     )
 
-    # Forward-only: all sub-movers are ForwardShootMover
-    assert all(
-        isinstance(m, BoltzDiffusionForwardShootMover) for m in mover_fwd_only.movers
-    ), "forward_only=True must only contain ForwardShootMover"
-    assert len(mover_fwd_only.movers) == 1
+    # Forward-only + no reshuffle: single forward mover only
+    assert isinstance(mover_fwd_only_strict.movers[0], BoltzDiffusionForwardShootMover)
+    assert len(mover_fwd_only_strict.movers) == 1
+
+    # Forward-only + default reshuffle: forward + global reshuffle (quotient-compatible)
+    assert any(isinstance(m, BoltzDiffusionForwardShootMover) for m in mover_fwd_only_with_rsh.movers)
+    assert any(isinstance(m, GlobalReshuffleMover) for m in mover_fwd_only_with_rsh.movers)
+    assert not any(isinstance(m, BoltzDiffusionBackwardShootMover) for m in mover_fwd_only_with_rsh.movers)
+    assert len(mover_fwd_only_with_rsh.movers) == 2
 
     # Both: should contain exactly one forward and one backward (and optionally reshuffle)
     types_both = [type(m) for m in mover_both.movers]
@@ -700,3 +727,117 @@ def test_forward_only_shooting_mode(core_and_engine):
     # With default reshuffle_probability=0.1 there are 3 movers; without engine
     # the reshuffle mover is skipped.  Either way fwd+bwd must be present.
     assert len(mover_both.movers) >= 2
+
+
+def test_backward_shooting_mover_rejects_quotient_space_core(core_and_engine):
+    """Backward shooting is disabled for quotient-space sampling until fully validated."""
+    from genai_tps.backends.boltz.tps_sampling import BoltzDiffusionBackwardShootMover
+    import openpathsampling as paths
+
+    core, engine = core_and_engine
+    core.quotient_space_sampling = True
+
+    state_a = paths.volume.EmptyVolume()
+    state_b = paths.volume.FullVolume()
+    ens = paths.TISEnsemble(state_a, state_b, state_a, lambda_i=0.0).named("test")
+    sel = paths.UniformSelector()
+
+    with pytest.raises(NotImplementedError, match="Quotient-space backward shooting"):
+        BoltzDiffusionBackwardShootMover(ensemble=ens, selector=sel, engine=engine)
+
+
+class _VerticalComponentDenoiser(MockDiffusion):
+    """Denoiser with a rotational component that quotient projection must remove."""
+
+    def preconditioned_network_forward(self, noised_atom_coords, sigma, network_condition_kwargs=None):
+        if isinstance(sigma, (int, float)):
+            sigma = torch.tensor(
+                sigma,
+                dtype=noised_atom_coords.dtype,
+                device=noised_atom_coords.device,
+            )
+        c_skip = self.sigma_data ** 2 / (sigma ** 2 + self.sigma_data ** 2)
+        x_centered = noised_atom_coords - noised_atom_coords.mean(dim=-2, keepdim=True)
+        omega = torch.tensor(
+            [0.35, -0.2, 0.15],
+            dtype=noised_atom_coords.dtype,
+            device=noised_atom_coords.device,
+        ).view(1, 1, 3)
+        omega = omega.expand(noised_atom_coords.shape[0], noised_atom_coords.shape[1], 3)
+        vertical = torch.linalg.cross(omega, x_centered, dim=-1)
+        return c_skip * noised_atom_coords + vertical
+
+
+def test_quotient_solve_x_noisy_roundtrip_removes_vertical_denoiser_component():
+    """Quotient inversion must invert the projected map, not the Cartesian map."""
+    torch.manual_seed(1234)
+    diff = _VerticalComponentDenoiser()
+    b, n_atoms = 1, 8
+    atom_mask = torch.ones(b, n_atoms)
+    core = BoltzSamplerCore(
+        diff,
+        atom_mask,
+        {"multiplicity": 1},
+        multiplicity=1,
+        quotient_space_sampling=True,
+        n_fixed_point=8,
+    )
+    core.build_schedule(4)
+
+    step_idx = 1
+    sch = core.schedule[step_idx]
+    x_noisy = torch.randn(b, n_atoms, 3)
+    x_hat = diff.preconditioned_network_forward(x_noisy, sch.t_hat)
+    alpha = diff.step_scale * (sch.sigma_t - sch.t_hat) / sch.t_hat
+    denoised_over_sigma = (x_noisy - x_hat) / sch.t_hat
+    x_noisy_c = x_noisy - (x_noisy * atom_mask.unsqueeze(-1)).mean(dim=1, keepdim=True)
+    v_proj = horizontal_projection(x_noisy_c, denoised_over_sigma, atom_mask)
+    x_out = x_noisy + diff.step_scale * (sch.sigma_t - sch.t_hat) * v_proj
+
+    recovered = core._solve_x_noisy_from_output(x_out, step_idx, n_fixed_point=8)
+    torch.testing.assert_close(recovered, x_noisy, rtol=1e-4, atol=1e-4)
+
+
+def test_quotient_projection_uses_mask_normalized_center():
+    """Quotient projection must center real atoms, not divide by padded length."""
+    diff = MockDiffusion()
+    atom_mask = torch.tensor([[1.0, 1.0, 1.0, 0.0, 0.0]])
+    core = BoltzSamplerCore(
+        diff,
+        atom_mask,
+        {"multiplicity": 1},
+        multiplicity=1,
+        quotient_space_sampling=True,
+    )
+
+    x = torch.tensor(
+        [[[1.0, 0.0, 0.0], [3.0, 0.0, 0.0], [5.0, 0.0, 0.0], [999.0, 0.0, 0.0], [999.0, 0.0, 0.0]]]
+    )
+    centered = core._masked_center(x)
+    real_com = (centered * atom_mask.unsqueeze(-1)).sum(dim=1) / atom_mask.sum(dim=1, keepdim=True)
+    torch.testing.assert_close(real_com, torch.zeros_like(real_com), rtol=0.0, atol=1e-6)
+    torch.testing.assert_close(centered[:, 3:], torch.zeros_like(centered[:, 3:]), rtol=0.0, atol=0.0)
+
+
+def test_quotient_forward_reshuffle_move_scheme_excludes_backward(core_and_engine):
+    """Quotient TPS can combine forward shooting with global reshuffle without backward moves."""
+    import openpathsampling as paths
+
+    core, engine = core_and_engine
+    core.quotient_space_sampling = True
+    state_a = paths.volume.EmptyVolume()
+    state_b = paths.volume.FullVolume()
+    ens = paths.TISEnsemble(state_a, state_b, state_a, lambda_i=0.0).named("test")
+    sel = paths.UniformSelector()
+
+    mover = BoltzDiffusionOneWayShootingMover(
+        ensemble=ens,
+        selector=sel,
+        engine=engine,
+        forward_only=True,
+        reshuffle_probability=0.25,
+    )
+
+    assert any(isinstance(m, BoltzDiffusionForwardShootMover) for m in mover.movers)
+    assert any(isinstance(m, GlobalReshuffleMover) for m in mover.movers)
+    assert len(mover.movers) == 2

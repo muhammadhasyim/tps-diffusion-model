@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
@@ -303,7 +304,7 @@ def make_sigma_cv(name: str = "sigma") -> FunctionCV:
 
 def make_plddt_proxy_cv(
     name: str = "pLDDT_proxy",
-    predictor: Callable[[torch.Tensor], torch.Tensor] | None = None,
+    predictor: "Callable[[torch.Tensor], torch.Tensor] | None" = None,
 ) -> FunctionCV:
     """pLDDT from denoised coords; supply ``predictor`` for real Boltz confidence.
 
@@ -313,8 +314,13 @@ def make_plddt_proxy_cv(
         OPS CV name.
     predictor:
         Callable that takes ``(B, N, 3)`` coordinates and returns a scalar
-        pLDDT value (0–100).  If ``None``, returns the stub value 50.0
-        (used when the confidence head is not available).
+        pLDDT value (0–100).
+
+    Raises
+    ------
+    ValueError
+        If ``predictor`` is ``None``.  A real predictor must be supplied via
+        :func:`make_boltz_plddt_predictor`.
 
     Notes
     -----
@@ -322,11 +328,15 @@ def make_plddt_proxy_cv(
     :func:`make_boltz_plddt_predictor` to create the predictor from a loaded
     ``Boltz2`` model instance before constructing this CV.
     """
+    if predictor is None:
+        raise ValueError(
+            "make_plddt_proxy_cv requires a real predictor callable. "
+            "Use make_boltz_plddt_predictor() to create one from a loaded Boltz2 model, "
+            "or pass a custom function that maps (B, N, 3) coords -> scalar pLDDT."
+        )
 
     def _pred(snap):
         x = _coords_torch(snap)
-        if predictor is None:
-            return 50.0 + 0.0 * float(x.detach().cpu().mean())
         with torch.no_grad():
             out = predictor(x)
         return float(out.detach().cpu().reshape(-1)[0])
@@ -340,56 +350,78 @@ def make_boltz_plddt_predictor(
 ) -> "Callable[[torch.Tensor], torch.Tensor]":
     """Create a pLDDT predictor callable from a loaded Boltz2 model.
 
-    Extracts the confidence head (``model.confidence_head``) and returns a
+    Extracts the confidence module (``model.confidence_module``) and returns a
     callable that runs a forward pass on denoised coordinates to obtain the
     mean per-residue pLDDT (0–100 scale).
+
+    The confidence module follows Algorithm 31 of the Boltz-2 paper:
+    it requires trunk single representations (s, s_inputs), pair
+    representations (z), predicted coordinates (x_pred), features dict (feats),
+    and predicted distogram logits — NOT raw coordinates alone.
 
     Parameters
     ----------
     model:
         A loaded ``Boltz2`` model instance (from ``Boltz2.load_from_checkpoint``).
+        Must have a ``confidence_module`` attribute.
     network_condition_kwargs:
-        The same kwargs dict used for the score network (contains trunk features,
-        feats, etc.).  The confidence head reuses the same conditioning tensors.
+        The same kwargs dict used for the score network.  Must contain:
+        ``s_inputs``, ``s``, ``z``, ``feats``, ``pred_distogram_logits``, and
+        ``multiplicity``.
 
     Returns
     -------
     Callable[[torch.Tensor], torch.Tensor]
         A function that takes ``(B, N, 3)`` coords and returns a scalar pLDDT
-        float in [0, 100].  Returns 50.0 on error.
+        float in [0, 100].
+
+    Raises
+    ------
+    AttributeError
+        If the model does not have a ``confidence_module``.
+    KeyError
+        If ``network_condition_kwargs`` is missing required keys for the
+        confidence forward pass.
     """
-    try:
-        confidence_head = model.confidence_head
-    except AttributeError:
-        import logging  # noqa: PLC0415
-        logging.getLogger(__name__).warning(
-            "make_boltz_plddt_predictor: model has no confidence_head; "
-            "returning stub predictor (50.0)"
+    if not hasattr(model, "confidence_module"):
+        raise AttributeError(
+            "make_boltz_plddt_predictor: model has no 'confidence_module'. "
+            "Ensure the Boltz2 checkpoint was loaded with confidence_prediction=True."
+        )
+    confidence_module = model.confidence_module
+
+    required_keys = {"s_inputs", "s", "z", "feats", "pred_distogram_logits", "multiplicity"}
+    missing = required_keys - set(network_condition_kwargs.keys())
+    if missing:
+        raise KeyError(
+            f"make_boltz_plddt_predictor: network_condition_kwargs missing keys "
+            f"required by the Boltz2 confidence module: {missing}. "
+            f"These are produced by the trunk forward pass (Boltz2.forward)."
         )
 
-        def _stub(coords: torch.Tensor) -> torch.Tensor:
-            return torch.tensor(50.0)
-
-        return _stub
+    from boltz.model.layers.confidence_utils import compute_aggregated_metric  # noqa: PLC0415
 
     def _predictor(coords: torch.Tensor) -> torch.Tensor:
-        try:
-            from boltz.model.modules.confidence_utils import (  # noqa: PLC0415
-                compute_aggregated_metric,
+        """Run Boltz2 confidence module on denoised coords -> mean pLDDT."""
+        with torch.no_grad():
+            out = confidence_module(
+                s_inputs=network_condition_kwargs["s_inputs"].detach(),
+                s=network_condition_kwargs["s"].detach(),
+                z=network_condition_kwargs["z"].detach(),
+                x_pred=coords.detach(),
+                feats=network_condition_kwargs["feats"],
+                pred_distogram_logits=network_condition_kwargs["pred_distogram_logits"].detach(),
+                multiplicity=network_condition_kwargs["multiplicity"],
             )
-            with torch.no_grad():
-                out = confidence_head(coords, **network_condition_kwargs)
-            plddt_logits = out.get("plddt", None)
-            if plddt_logits is not None:
-                plddt = compute_aggregated_metric(plddt_logits)
-                return plddt.mean()
-            return torch.tensor(50.0)
-        except Exception as exc:
-            import logging  # noqa: PLC0415
-            logging.getLogger(__name__).warning(
-                "make_boltz_plddt_predictor._predictor: error %s; returning 50.0", exc
+
+        plddt_logits = out.get("plddt", None)
+        if plddt_logits is None:
+            raise RuntimeError(
+                "Boltz2 confidence module returned no 'plddt' key. "
+                "Available keys: " + str(list(out.keys()))
             )
-            return torch.tensor(50.0)
+        plddt = compute_aggregated_metric(plddt_logits)
+        return plddt.mean()
 
     return _predictor
 
@@ -662,12 +694,19 @@ def _kabsch_rotation(
     """
     mobile = np.asarray(mobile, dtype=np.float64)
     reference = np.asarray(reference, dtype=np.float64)
+    if mobile.shape[0] < 3 or reference.shape[0] < 3:
+        raise ValueError("Kabsch alignment needs at least three points.")
     c_mob = mobile.mean(axis=0)
     c_ref = reference.mean(axis=0)
     P = mobile - c_mob
     Q = reference - c_ref
     H = P.T @ Q
-    U, _, Vt = np.linalg.svd(H)
+    if not np.isfinite(H).all():
+        raise ValueError("Kabsch: non-finite covariance (check MD coordinates).")
+    try:
+        U, _, Vt = np.linalg.svd(H)
+    except np.linalg.LinAlgError:
+        U, _, Vt = np.linalg.svd(H + 1e-12 * np.eye(3, dtype=np.float64))
     d = np.sign(np.linalg.det(Vt.T @ U.T))
     correction = np.diag([1.0, 1.0, d])
     R = Vt.T @ correction @ U.T
@@ -784,6 +823,11 @@ class PoseCVIndexer:
         else:
             self.ref_protein_ca = np.empty((0, 3), dtype=np.float64)
 
+        if len(self.pocket_ca_idx) > 0:
+            self.ref_pocket_ca: np.ndarray = ref[self.pocket_ca_idx].copy()
+        else:
+            self.ref_pocket_ca = np.empty((0, 3), dtype=np.float64)
+
         if len(self.ligand_idx) > 0:
             self.ref_ligand: np.ndarray = ref[self.ligand_idx].copy()
         else:
@@ -817,12 +861,26 @@ def ligand_pose_rmsd(snapshot, indexer: PoseCVIndexer) -> float:
         return 0.0
 
     x = _coords_torch(snapshot)[0].detach().cpu().numpy().astype(np.float64)
+    if not np.isfinite(x).all():
+        return 1e3
     lig_cur = x[indexer.ligand_idx]  # (L, 3)
 
-    if len(indexer.protein_ca_idx) >= 3:
-        ca_cur = x[indexer.protein_ca_idx]  # (M, 3)
-        R, c_mob, c_ref = _kabsch_rotation(ca_cur, indexer.ref_protein_ca)
-        lig_aligned = (lig_cur - c_mob) @ R.T + c_ref
+    if len(indexer.pocket_ca_idx) >= 3:
+        ca_cur = x[indexer.pocket_ca_idx]
+        ca_ref = indexer.ref_pocket_ca
+    elif len(indexer.protein_ca_idx) >= 3:
+        ca_cur = x[indexer.protein_ca_idx]
+        ca_ref = indexer.ref_protein_ca
+    else:
+        ca_cur = None
+        ca_ref = None
+
+    if ca_cur is not None and len(ca_cur) >= 3 and np.isfinite(ca_cur).all():
+        try:
+            R, c_mob, c_ref = _kabsch_rotation(ca_cur, ca_ref)
+            lig_aligned = (lig_cur - c_mob) @ R.T + c_ref
+        except (np.linalg.LinAlgError, ValueError):
+            lig_aligned = lig_cur
     else:
         # No protein Cα available: skip alignment (raw RMSD against reference)
         lig_aligned = lig_cur
@@ -863,13 +921,21 @@ def ligand_pocket_distance(snapshot, indexer: PoseCVIndexer) -> float:
     -------
     float
         Distance in Ångström.  Returns 0.0 when the pocket is empty.
+        Returns ``1e3`` when coordinates are non-finite (same sentinel as
+        :func:`ligand_pose_rmsd`).
     """
     if len(indexer.ligand_idx) == 0 or len(indexer.pocket_ca_idx) == 0:
         return 0.0
 
     x = _coords_torch(snapshot)[0].detach().cpu().numpy().astype(np.float64)
+    if not np.isfinite(x).all():
+        # Match ``ligand_pose_rmsd`` sentinel when coordinates are unusable.
+        return 1e3
+
     lig_com = x[indexer.ligand_idx].mean(axis=0)
     pocket_com = x[indexer.pocket_ca_idx].mean(axis=0)
+    if not (np.isfinite(lig_com).all() and np.isfinite(pocket_com).all()):
+        return 1e3
     return float(np.linalg.norm(lig_com - pocket_com))
 
 
@@ -1028,7 +1094,7 @@ def make_training_sucos_pocket_qcov_traj_fn(
 ):
     """Build ``f(traj) -> float`` for Škrinjar-style training similarity on trajectories.
 
-    Wraps :class:`genai_tps.analysis.skrinjar_similarity.IncrementalSkrinjarScorer`
+    Wraps :class:`genai_tps.evaluation.skrinjar_similarity.IncrementalSkrinjarScorer`
     with Boltz last-frame PDB export.  The CLI entry point is
     ``scripts/run_opes_tps.py --bias-cv training_sucos_pocket_qcov`` (coordinate
     hash caching lives on *scorer*).
@@ -1036,7 +1102,7 @@ def make_training_sucos_pocket_qcov_traj_fn(
     Parameters
     ----------
     scorer:
-        Configured :class:`~genai_tps.analysis.skrinjar_similarity.IncrementalSkrinjarScorer`.
+        Configured :class:`~genai_tps.evaluation.skrinjar_similarity.IncrementalSkrinjarScorer`.
     structure:
         Boltz :class:`~boltz.data.types.StructureV2` from ``load_topo``.
     n_struct:
@@ -1057,3 +1123,85 @@ def make_training_sucos_pocket_qcov_traj_fn(
         return float(scorer.score_coords(coords, structure, n))
 
     return _fn
+
+
+def compute_cvs(
+    structures: np.ndarray,
+    reference_coords: np.ndarray,
+    atom_mask_np: np.ndarray | None,
+    topo_npz: str | Path,
+) -> dict[str, np.ndarray]:
+    """Compute geometry and pose CVs using Boltz topology from *topo_npz*.
+
+    Parameters
+    ----------
+    structures
+        Array of shape ``(n_samples, n_atoms, 3)``.
+    reference_coords
+        Reference structure for RMSD, shape ``(n_atoms, 3)`` or larger (padded).
+    atom_mask_np
+        Optional mask for reference RMSD, shape broadcastable with batch.
+    topo_npz
+        Path to Boltz processed-structure NPZ for :class:`PoseCVIndexer` topology.
+    """
+    from genai_tps.backends.boltz.snapshot import BoltzSnapshot  # noqa: PLC0415
+    from genai_tps.io.boltz_npz_export import load_topo  # noqa: PLC0415
+
+    ref_t = torch.tensor(reference_coords, dtype=torch.float32)
+    mask_t = torch.tensor(atom_mask_np[:1], dtype=torch.float32) if atom_mask_np is not None else None
+
+    structure, n_struct = load_topo(Path(topo_npz))
+    n_s = int(n_struct)
+    ref_np = reference_coords[:n_s].astype(np.float32)
+    indexer = PoseCVIndexer(structure, ref_np, pocket_radius=6.0)
+
+    results: dict[str, list[float]] = {
+        "rmsd": [],
+        "rg": [],
+        "contact_order": [],
+        "clash_count": [],
+        "ligand_rmsd": [],
+        "ligand_pocket_dist": [],
+    }
+
+    for i, coords in enumerate(structures):
+        coords_t = torch.tensor(coords, dtype=torch.float32).unsqueeze(0)
+        snap = BoltzSnapshot.from_gpu_batch(coords_t, step_index=0, defer_numpy_coords=True)
+
+        results["rmsd"].append(float(rmsd_to_reference(snap, ref_t, mask_t)))
+        results["rg"].append(float(radius_of_gyration(snap, mask_t)))
+        results["contact_order"].append(float(contact_order(snap)))
+        results["clash_count"].append(float(clash_count(snap)))
+
+        try:
+            results["ligand_rmsd"].append(float(ligand_pose_rmsd(snap, indexer)))
+            results["ligand_pocket_dist"].append(float(ligand_pocket_distance(snap, indexer)))
+        except Exception:
+            results["ligand_rmsd"].append(float("nan"))
+            results["ligand_pocket_dist"].append(float("nan"))
+
+        if (i + 1) % 100 == 0:
+            print(f"  CVs computed for {i + 1}/{len(structures)}", flush=True)
+
+    return {k: np.array(v) for k, v in results.items()}
+
+
+def compute_simple_cvs(structures: np.ndarray, ref_coords: np.ndarray) -> dict[str, np.ndarray]:
+    """Lightweight CVs without full Boltz topology (ligand channels zeroed)."""
+    from genai_tps.backends.boltz.snapshot import BoltzSnapshot  # noqa: PLC0415
+
+    ref_t = torch.tensor(ref_coords, dtype=torch.float32)
+    results: dict[str, list[float]] = {
+        cv: []
+        for cv in ["rmsd", "rg", "contact_order", "clash_count", "ligand_rmsd", "ligand_pocket_dist"]
+    }
+    for coords in structures:
+        ct = torch.tensor(coords, dtype=torch.float32).unsqueeze(0)
+        snap = BoltzSnapshot.from_gpu_batch(ct, step_index=0, defer_numpy_coords=True)
+        results["rmsd"].append(float(rmsd_to_reference(snap, ref_t)))
+        results["rg"].append(float(radius_of_gyration(snap)))
+        results["contact_order"].append(float(contact_order(snap)))
+        results["clash_count"].append(float(clash_count(snap)))
+        results["ligand_rmsd"].append(0.0)
+        results["ligand_pocket_dist"].append(0.0)
+    return {k: np.array(v) for k, v in results.items()}

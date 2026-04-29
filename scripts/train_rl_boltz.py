@@ -32,6 +32,18 @@ if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
 
+def _exit_if_rl_excluded() -> None:
+    try:
+        import genai_tps.rl.config  # noqa: F401
+    except ImportError:
+        print(
+            "This script requires the optional genai_tps.rl package.\n"
+            "Restore it with: git checkout HEAD -- src/python/genai_tps/rl",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
 def _build_boltz_session(
     *,
     yaml_path: Path,
@@ -207,6 +219,7 @@ def _cv_reward_from_coords(
 
 
 def main() -> None:
+    _exit_if_rl_excluded()
     parser = argparse.ArgumentParser(description="RLDiff-style offline RL for Boltz-2 diffusion (classic FES CVs).")
     parser.add_argument("--yaml", type=Path, default=None, help="Boltz input YAML (protein-ligand).")
     parser.add_argument("--cache", type=Path, default=None, help="Boltz cache dir (default ~/.boltz).")
@@ -237,7 +250,7 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        from genai_tps.analysis.boltz_npz_export import load_topo
+        from genai_tps.io.boltz_npz_export import load_topo
         from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
         from genai_tps.rl.config import BoltzRLConfig
         from genai_tps.rl.ppo_surrogate import normalize_rewards_per_trajectory

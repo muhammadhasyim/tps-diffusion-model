@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from genai_tps.enhanced_sampling.opes_bias import (
+from genai_tps.simulation.bias.opes import (
     Kernel,
     OPESBias,
     _all_finite,

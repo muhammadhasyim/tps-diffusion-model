@@ -1,0 +1,2460 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{changdefs}[2022/05/10, v3.0. Chang Liu's own macros. <liuchangsmail@gmail.com>]
+
+\RequirePackage{amsmath, amsfonts, amssymb}
+
+\DeclareOption{nomathrm}{\gdef\changdefsnomathrm{1}}
+\DeclareOption{nomathtn}{\gdef\changdefsnotextnormal{1}}
+\DeclareOption{nomathcal}{\gdef\changdefsnomathcal{1}}
+\DeclareOption{nomathbb}{\gdef\changdefsnomathbb{1}}
+\DeclareOption{nomathfrak}{\gdef\changdefsnomathfrak{1}}
+\DeclareOption{nomathscr}{\gdef\changdefsnomathscr{1}}
+\DeclareOption{nobm}{\gdef\changdefsnobm{1}}
+\DeclareOption{nomathbf}{\gdef\changdefsnomathbf{1}}
+\DeclareOption{nomathsf}{\gdef\changdefsnomathsf{1}}
+\DeclareOption{nomathsfit}{\gdef\changdefsnomathsfit{1}}
+\DeclareOption{noupgreek}{\gdef\changdefsnoupgreek{1}}
+
+\DeclareOption{nobar}{\gdef\changdefsnobar{1}}
+\DeclareOption{nodot}{\gdef\changdefsnodot{1}}
+\DeclareOption{nohat}{\gdef\changdefsnohat{1}}
+\DeclareOption{notilde}{\gdef\changdefsnotilde{1}}
+\DeclareOption{novec}{\gdef\changdefsnovec{1}}
+
+\DeclareOption{noitems}{\gdef\changdefsnoitems{1}}
+\DeclareOption{nobraket}{\gdef\changdefsnobraket{1}}
+\DeclareOption{nodecorators}{\gdef\changdefsnodecorators{1}}
+
+\DeclareOption{notheorems}{\gdef\changdefsnotheorems{1}}
+\DeclareOption{nocompactproof}{\gdef\changdefsnocompactproof{1}}
+\DeclareOption{noautonum}{\gdef\changdefsnoautonum{1}}
+\DeclareOption{noeqref}{\gdef\changdefsnoeqref{1}}
+\DeclareOption{nolege}{\gdef\changdefsnolege{1}}
+\DeclareOption{alldisp}{\gdef\changdefsalldisp{1}}
+
+\DeclareOption{script}{\gdef\changdefsscript{1}}
+\DeclareOption{chang}{\gdef\changdefschang{1}}
+\DeclareOption{hyperref}{\gdef\changdefshyperref{1}}
+\ProcessOptions\relax
+
+% Script template (based on NeurIPS's template)
+\ifdefined\changdefsscript
+
+\ifdefined\changdefschang\else\gdef\changdefschang{1}\fi
+\ifdefined\changdefshyperref\else\gdef\changdefshyperref{1}\fi
+
+% fonts
+\renewcommand{\rmdefault}{ptm}
+\renewcommand{\sfdefault}{phv}
+
+% set page geometry
+\RequirePackage[verbose=true,letterpaper]{geometry}
+\AtBeginDocument{
+  \newgeometry{
+    textheight=9.4in,
+    textwidth=6.8in,
+    top=0.72in,
+    headheight=12pt,
+    headsep=25pt,
+    footskip=28pt,
+    left=0.76in
+  }
+}
+
+\providecommand{\@maketitle}{}
+\renewcommand{\@maketitle}{%
+  \vbox{%
+    \hsize\textwidth
+    \linewidth\hsize
+    \vskip 0.1in
+    \centering
+    {\LARGE\bf \@title\par}
+    \rule{\z@}{20\p@}{\large \@author}
+    \par
+    {\large \@date}
+    \vskip 0.1in \@minus 0.1in
+  }
+}
+
+\widowpenalty=10000
+\clubpenalty=10000
+\flushbottom
+\sloppy
+
+% font sizes with reduced leading
+\renewcommand{\normalsize}{%
+  \@setfontsize\normalsize\@xpt\@xipt
+  \abovedisplayskip      7\p@ \@plus 2\p@ \@minus 5\p@
+  \abovedisplayshortskip \z@ \@plus 3\p@
+  \belowdisplayskip      \abovedisplayskip
+  \belowdisplayshortskip 4\p@ \@plus 3\p@ \@minus 3\p@
+}
+\normalsize
+\renewcommand{\small}{%
+  \@setfontsize\small\@ixpt\@xpt
+  \abovedisplayskip      6\p@ \@plus 1.5\p@ \@minus 4\p@
+  \abovedisplayshortskip \z@  \@plus 2\p@
+  \belowdisplayskip      \abovedisplayskip
+  \belowdisplayshortskip 3\p@ \@plus 2\p@   \@minus 2\p@
+}
+\renewcommand{\footnotesize}{\@setfontsize\footnotesize\@ixpt\@xpt}
+\renewcommand{\scriptsize}{\@setfontsize\scriptsize\@viipt\@viiipt}
+\renewcommand{\tiny}{\@setfontsize\tiny\@vipt\@viipt}
+\renewcommand{\large}{\@setfontsize\large\@xiipt{14}}
+\renewcommand{\Large}{\@setfontsize\Large\@xivpt{16}}
+\renewcommand{\LARGE}{\@setfontsize\LARGE\@xviipt{20}}
+\renewcommand{\huge}{\@setfontsize\huge\@xxpt{23}}
+\renewcommand{\Huge}{\@setfontsize\Huge\@xxvpt{28}}
+
+% sections with less space
+\providecommand{\section}{}
+\renewcommand{\section}{%
+  \@startsection{section}{1}{\z@}%
+                {-1.6ex \@plus -0.5ex \@minus -0.2ex}%
+                { 1.0ex \@plus  0.3ex \@minus  0.2ex}%
+                {\large\bf\raggedright}%
+}
+\providecommand{\subsection}{}
+\renewcommand{\subsection}{%
+  \@startsection{subsection}{2}{\z@}%
+                {-1.2ex \@plus -0.5ex \@minus -0.2ex}%
+                { 0.5ex \@plus  0.2ex}%
+                {\normalsize\bf\raggedright}%
+}
+\providecommand{\subsubsection}{}
+\renewcommand{\subsubsection}{%
+  \@startsection{subsubsection}{3}{\z@}%
+                {-1.0ex \@plus -0.5ex \@minus -0.2ex}%
+                { 0.3ex \@plus  0.2ex}%
+                {\normalsize\bf\raggedright}%
+}
+\providecommand{\paragraph}{}
+\renewcommand{\paragraph}{%
+  \@startsection{paragraph}{4}{\z@}%
+                {0.0ex \@plus 0.5ex \@minus 0.2ex}%
+                {-1em}%
+                {\normalsize\bf}%
+}
+\providecommand{\subparagraph}{}
+\renewcommand{\subparagraph}{%
+  \@startsection{subparagraph}{5}{\z@}%
+                {0.0ex \@plus 0.5ex \@minus 0.2ex}%
+                {-1em}%
+                {\normalsize\bf}%
+}
+\providecommand{\subsubsubsection}{}
+\renewcommand{\subsubsubsection}{%
+  \vskip5pt{\noindent\normalsize\rm\raggedright}%
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+% See <https://ftp.jaist.ac.jp/pub/CTAN/macros/latex/contrib/enumitem/enumitem.pdf>, Fig. 1.
+\RequirePackage[shortlabels]{enumitem}
+\setlist{leftmargin=16pt, topsep=0pt, itemsep=0pt, partopsep=1pt, parsep=3pt}
+
+\RequirePackage{mathtools} % for env dcases (``d'' for ``display'')
+\allowdisplaybreaks[2]
+\fi
+% End of script template
+
+
+% Fonts for Latin and Greek Letters
+% See also this link <https://tex.stackexchange.com/questions/58098/what-are-all-the-font-styles-i-can-use-in-math-mode>
+
+%% aliases
+\newcommand{\eps}{\epsilon}
+\newcommand{\veps}{\varepsilon}
+
+%% italic capital Greek letters
+\newcommand{\itGamma}{\mathit{\Gamma}}
+\newcommand{\itDelta}{\mathit{\Delta}}
+\newcommand{\itTheta}{\mathit{\Theta}}
+\newcommand{\itLambda}{\mathit{\Lambda}}
+\newcommand{\itXi}{\mathit{\Xi}}
+\newcommand{\itPi}{\mathit{\Pi}}
+\newcommand{\itSigma}{\mathit{\Sigma}}
+\newcommand{\itUpsilon}{\mathit{\Upsilon}}
+\newcommand{\itPhi}{\mathit{\Phi}}
+\newcommand{\itPsi}{\mathit{\Psi}}
+\newcommand{\itOmega}{\mathit{\Omega}}
+
+%% textnormal
+\ifdefined\changdefsnotextnormal\else
+\newcommand{\tnA}{\textnormal{A}}
+\newcommand{\tnB}{\textnormal{B}}
+\newcommand{\tnC}{\textnormal{C}}
+\newcommand{\tnD}{\textnormal{D}}
+\newcommand{\tnE}{\textnormal{E}}
+\newcommand{\tnF}{\textnormal{F}}
+\newcommand{\tnG}{\textnormal{G}}
+\newcommand{\tnH}{\textnormal{H}}
+\newcommand{\tnI}{\textnormal{I}}
+\newcommand{\tnJ}{\textnormal{J}}
+\newcommand{\tnK}{\textnormal{K}}
+\newcommand{\tnL}{\textnormal{L}}
+\newcommand{\tnM}{\textnormal{M}}
+\newcommand{\tnN}{\textnormal{N}}
+\newcommand{\tnO}{\textnormal{O}}
+\newcommand{\tnP}{\textnormal{P}}
+\newcommand{\tnQ}{\textnormal{Q}}
+\newcommand{\tnR}{\textnormal{R}}
+\newcommand{\tnS}{\textnormal{S}}
+\newcommand{\tnT}{\textnormal{T}}
+\newcommand{\tnU}{\textnormal{U}}
+\newcommand{\tnV}{\textnormal{V}}
+\newcommand{\tnW}{\textnormal{W}}
+\newcommand{\tnX}{\textnormal{X}}
+\newcommand{\tnY}{\textnormal{Y}}
+\newcommand{\tnZ}{\textnormal{Z}}
+
+\newcommand{\tnaa}{\textnormal{a}}
+\newcommand{\tnbb}{\textnormal{b}}
+\newcommand{\tncc}{\textnormal{c}}
+\newcommand{\tndd}{\textnormal{d}}
+\newcommand{\tnee}{\textnormal{e}}
+\newcommand{\tnff}{\textnormal{f}}
+\newcommand{\tngg}{\textnormal{g}}
+\newcommand{\tnhh}{\textnormal{h}}
+\newcommand{\tnii}{\textnormal{i}}
+\newcommand{\tnjj}{\textnormal{j}}
+\newcommand{\tnkk}{\textnormal{k}}
+\newcommand{\tnll}{\textnormal{l}}
+\newcommand{\tnmm}{\textnormal{m}}
+\newcommand{\tnnn}{\textnormal{n}}
+\newcommand{\tnoo}{\textnormal{o}}
+\newcommand{\tnpp}{\textnormal{p}}
+\newcommand{\tnqq}{\textnormal{q}}
+\newcommand{\tnrr}{\textnormal{r}}
+\newcommand{\tnss}{\textnormal{s}}
+\newcommand{\tntt}{\textnormal{t}}
+\newcommand{\tnuu}{\textnormal{u}}
+\newcommand{\tnvv}{\textnormal{v}}
+\newcommand{\tnww}{\textnormal{w}}
+\newcommand{\tnxx}{\textnormal{x}}
+\newcommand{\tnyy}{\textnormal{y}}
+\newcommand{\tnzz}{\textnormal{z}}
+
+%%% Invalid commands for Greeks and partial/nabla
+
+\newcommand{\tnzro}{\textnormal{0}}
+\newcommand{\tnone}{\textnormal{1}}
+\newcommand{\tntwo}{\textnormal{2}}
+\newcommand{\tnthr}{\textnormal{3}}
+\newcommand{\tnfor}{\textnormal{4}}
+\newcommand{\tnfiv}{\textnormal{5}}
+\newcommand{\tnsix}{\textnormal{6}}
+\newcommand{\tnsev}{\textnormal{7}}
+\newcommand{\tneit}{\textnormal{8}}
+\newcommand{\tnnin}{\textnormal{9}}
+\fi
+
+%% math roman (mathrm)
+\ifdefined\changdefsnomathrm\else
+\newcommand{\rmA}{\mathrm{A}}
+\newcommand{\rmB}{\mathrm{B}}
+\newcommand{\rmC}{\mathrm{C}}
+\newcommand{\rmD}{\mathrm{D}}
+\newcommand{\rmE}{\mathrm{E}}
+\newcommand{\rmF}{\mathrm{F}}
+\newcommand{\rmG}{\mathrm{G}}
+\newcommand{\rmH}{\mathrm{H}}
+\newcommand{\rmI}{\mathrm{I}}
+\newcommand{\rmJ}{\mathrm{J}}
+\newcommand{\rmK}{\mathrm{K}}
+\newcommand{\rmL}{\mathrm{L}}
+\newcommand{\rmM}{\mathrm{M}}
+\newcommand{\rmN}{\mathrm{N}}
+\newcommand{\rmO}{\mathrm{O}}
+\newcommand{\rmP}{\mathrm{P}}
+\newcommand{\rmQ}{\mathrm{Q}}
+\newcommand{\rmR}{\mathrm{R}}
+\newcommand{\rmS}{\mathrm{S}}
+\newcommand{\rmT}{\mathrm{T}}
+\newcommand{\rmU}{\mathrm{U}}
+\newcommand{\rmV}{\mathrm{V}}
+\newcommand{\rmW}{\mathrm{W}}
+\newcommand{\rmX}{\mathrm{X}}
+\newcommand{\rmY}{\mathrm{Y}}
+\newcommand{\rmZ}{\mathrm{Z}}
+
+\newcommand{\rmaa}{\mathrm{a}}
+\newcommand{\rmbb}{\mathrm{b}}
+\newcommand{\rmcc}{\mathrm{c}}
+\newcommand{\rmdd}{\mathrm{d}}
+\newcommand{\rmee}{\mathrm{e}}
+\newcommand{\rmff}{\mathrm{f}}
+\newcommand{\rmgg}{\mathrm{g}}
+\newcommand{\rmhh}{\mathrm{h}}
+\newcommand{\rmii}{\mathrm{i}}
+\newcommand{\rmjj}{\mathrm{j}}
+\newcommand{\rmkk}{\mathrm{k}}
+\newcommand{\rmll}{\mathrm{l}}
+\newcommand{\rmmm}{\mathrm{m}}
+\newcommand{\rmnn}{\mathrm{n}}
+\newcommand{\rmoo}{\mathrm{o}}
+\newcommand{\rmpp}{\mathrm{p}}
+\newcommand{\rmqq}{\mathrm{q}}
+\newcommand{\rmrr}{\mathrm{r}}
+\newcommand{\rmss}{\mathrm{s}}
+\newcommand{\rmtt}{\mathrm{t}}
+\newcommand{\rmuu}{\mathrm{u}}
+\newcommand{\rmvv}{\mathrm{v}}
+\newcommand{\rmww}{\mathrm{w}}
+\newcommand{\rmxx}{\mathrm{x}}
+\newcommand{\rmyy}{\mathrm{y}}
+\newcommand{\rmzz}{\mathrm{z}}
+
+%%% trivial fonts for Greeks by default
+\newcommand{\rmGamma}{\mathrm{\Gamma}}
+\newcommand{\rmDelta}{\mathrm{\Delta}}
+\newcommand{\rmTheta}{\mathrm{\Theta}}
+\newcommand{\rmLambda}{\mathrm{\Lambda}}
+\newcommand{\rmXi}{\mathrm{\Xi}}
+\newcommand{\rmPi}{\mathrm{\Pi}}
+\newcommand{\rmSigma}{\mathrm{\Sigma}}
+\newcommand{\rmUpsilon}{\mathrm{\Upsilon}}
+\newcommand{\rmPhi}{\mathrm{\Phi}}
+\newcommand{\rmPsi}{\mathrm{\Psi}}
+\newcommand{\rmOmega}{\mathrm{\Omega}}
+
+\ifdefined\changdefsnoupgreek
+\newcommand{\rmalpha}{\mathrm{\alpha}}
+\newcommand{\rmbeta}{\mathrm{\beta}}
+\newcommand{\rmgamma}{\mathrm{\gamma}}
+\newcommand{\rmdelta}{\mathrm{\delta}}
+\newcommand{\rmepsilon}{\mathrm{\epsilon}}
+\newcommand{\rmeps}{\mathrm{\epsilon}}
+\newcommand{\rmvarepsilon}{\mathrm{\varepsilon}}
+\newcommand{\rmveps}{\mathrm{\varepsilon}}
+\newcommand{\rmzeta}{\mathrm{\zeta}}
+\newcommand{\rmeta}{\mathrm{\eta}}
+\newcommand{\rmtheta}{\mathrm{\theta}}
+\newcommand{\rmvartheta}{\mathrm{\vartheta}}
+\newcommand{\rmiota}{\mathrm{\iota}}
+\newcommand{\rmkappa}{\mathrm{\kappa}}
+\newcommand{\rmlambda}{\mathrm{\lambda}}
+\newcommand{\rmmu}{\mathrm{\mu}}
+\newcommand{\rmnu}{\mathrm{\nu}}
+\newcommand{\rmxi}{\mathrm{\xi}}
+\newcommand{\rmpi}{\mathrm{\pi}}
+\newcommand{\rmvarpi}{\mathrm{\varpi}}
+\newcommand{\rmrho}{\mathrm{\rho}}
+\newcommand{\rmvarrho}{\mathrm{\varrho}}
+\newcommand{\rmsigma}{\mathrm{\sigma}}
+\newcommand{\rmvarsigma}{\mathrm{\varsigma}}
+\newcommand{\rmtau}{\mathrm{\tau}}
+\newcommand{\rmupsilon}{\mathrm{\upsilon}}
+\newcommand{\rmphi}{\mathrm{\phi}}
+\newcommand{\rmvarphi}{\mathrm{\varphi}}
+\newcommand{\rmchi}{\mathrm{\chi}}
+\newcommand{\rmpsi}{\mathrm{\psi}}
+\newcommand{\rmomega}{\mathrm{\omega}}
+\else
+\RequirePackage{upgreek}
+\newcommand{\rmalpha}{\upalpha}
+\newcommand{\rmbeta}{\upbeta}
+\newcommand{\rmgamma}{\upgamma}
+\newcommand{\rmdelta}{\updelta}
+\newcommand{\rmepsilon}{\upepsilon}
+\newcommand{\rmeps}{\upepsilon}
+\newcommand{\rmvarepsilon}{\upvarepsilon}
+\newcommand{\rmveps}{\upvarepsilon}
+\newcommand{\rmzeta}{\upzeta}
+\newcommand{\rmeta}{\upeta}
+\newcommand{\rmtheta}{\uptheta}
+\newcommand{\rmvartheta}{\upvartheta}
+\newcommand{\rmiota}{\upiota}
+\newcommand{\rmkappa}{\upkappa}
+\newcommand{\rmlambda}{\uplambda}
+\newcommand{\rmmu}{\upmu}
+\newcommand{\rmnu}{\upnu}
+\newcommand{\rmxi}{\upxi}
+\newcommand{\rmpi}{\uppi}
+\newcommand{\rmvarpi}{\upvarpi}
+\newcommand{\rmrho}{\uprho}
+\newcommand{\rmvarrho}{\upvarrho}
+\newcommand{\rmsigma}{\upsigma}
+\newcommand{\rmvarsigma}{\upvarsigma}
+\newcommand{\rmtau}{\uptau}
+\newcommand{\rmupsilon}{\upupsilon}
+\newcommand{\rmphi}{\upphi}
+\newcommand{\rmvarphi}{\upvarphi}
+\newcommand{\rmchi}{\upchi}
+\newcommand{\rmpsi}{\uppsi}
+\newcommand{\rmomega}{\upomega}
+\fi
+
+%%% trivial fonts for numbers and partial/nabla
+\fi
+
+%% math calligraphy (mathcal)
+\ifdefined\changdefsnomathcal\else
+\newcommand{\clA}{\mathcal{A}}
+\newcommand{\clB}{\mathcal{B}}
+\newcommand{\clC}{\mathcal{C}}
+\newcommand{\clD}{\mathcal{D}}
+\newcommand{\clE}{\mathcal{E}}
+\newcommand{\clF}{\mathcal{F}}
+\newcommand{\clG}{\mathcal{G}}
+\newcommand{\clH}{\mathcal{H}}
+\newcommand{\clI}{\mathcal{I}}
+\newcommand{\clJ}{\mathcal{J}}
+\newcommand{\clK}{\mathcal{K}}
+\newcommand{\clL}{\mathcal{L}}
+\newcommand{\clM}{\mathcal{M}}
+\newcommand{\clN}{\mathcal{N}}
+\newcommand{\clO}{\mathcal{O}}
+\newcommand{\clP}{\mathcal{P}}
+\newcommand{\clQ}{\mathcal{Q}}
+\newcommand{\clR}{\mathcal{R}}
+\newcommand{\clS}{\mathcal{S}}
+\newcommand{\clT}{\mathcal{T}}
+\newcommand{\clU}{\mathcal{U}}
+\newcommand{\clV}{\mathcal{V}}
+\newcommand{\clW}{\mathcal{W}}
+\newcommand{\clX}{\mathcal{X}}
+\newcommand{\clY}{\mathcal{Y}}
+\newcommand{\clZ}{\mathcal{Z}}
+
+%%% no valid fonts for lower Latins
+
+%%% trivial fonts for lower Greeks; no valid fonts for capital Greeks
+
+%%% no valid fonts for numbers
+% \newcommand{\clzro}{\mathcal{0}}
+% \newcommand{\clone}{\mathcal{1}}
+% \newcommand{\cltwo}{\mathcal{2}}
+% \newcommand{\clthr}{\mathcal{3}}
+% \newcommand{\clfor}{\mathcal{4}}
+% \newcommand{\clfiv}{\mathcal{5}}
+% \newcommand{\clsix}{\mathcal{6}}
+% \newcommand{\clsev}{\mathcal{7}}
+% \newcommand{\cleit}{\mathcal{8}}
+% \newcommand{\clnin}{\mathcal{9}}
+\fi
+
+%% math blackboard-bold (mathbb)
+\ifdefined\changdefsnomathbb\else
+\newcommand{\bbA}{\mathbb{A}}
+\newcommand{\bbB}{\mathbb{B}}
+\newcommand{\bbC}{\mathbb{C}}
+\newcommand{\bbD}{\mathbb{D}}
+\newcommand{\bbE}{\mathbb{E}}
+\newcommand{\bbF}{\mathbb{F}}
+\newcommand{\bbG}{\mathbb{G}}
+\newcommand{\bbH}{\mathbb{H}}
+\newcommand{\bbI}{\mathbb{I}}
+\newcommand{\bbJ}{\mathbb{J}}
+\newcommand{\bbK}{\mathbb{K}}
+\newcommand{\bbL}{\mathbb{L}}
+\newcommand{\bbM}{\mathbb{M}}
+\newcommand{\bbN}{\mathbb{N}}
+\newcommand{\bbO}{\mathbb{O}}
+\newcommand{\bbP}{\mathbb{P}}
+\newcommand{\bbQ}{\mathbb{Q}}
+\newcommand{\bbR}{\mathbb{R}}
+\newcommand{\bbS}{\mathbb{S}}
+\newcommand{\bbT}{\mathbb{T}}
+\newcommand{\bbU}{\mathbb{U}}
+\newcommand{\bbV}{\mathbb{V}}
+\newcommand{\bbW}{\mathbb{W}}
+\newcommand{\bbX}{\mathbb{X}}
+\newcommand{\bbY}{\mathbb{Y}}
+\newcommand{\bbZ}{\mathbb{Z}}
+
+%%% no valid fonts for lower Latins
+%%% trivial fonts for lower Greeks; no valid fonts for capital Greeks and numbers
+
+\RequirePackage[bbgreekl]{mathbbol} % When loaded with this option, Greek letters and more are available (`\bbalpha`, `\Lbrack`, `\Rbrack` directly available). Also use `\mathbb` command. Changes fonts of capital Latins.
+\DeclareSymbolFontAlphabet{\mathbb}{AMSb}
+\DeclareSymbolFontAlphabet{\mathbbl}{bbold} % Use both lines to reserve the original bb for capital Latins.
+% \RequirePackage{bbold} % Also use `\mathbb` command. Changes fonts of capital Latins.
+% \RequirePackage{bbm}
+\newcommand{\bbaa}{\mathbbl{a}}
+\newcommand{\bbbb}{\mathbbl{b}}
+\newcommand{\bbcc}{\mathbbl{c}}
+\newcommand{\bbdd}{\mathbbl{d}}
+\newcommand{\bbee}{\mathbbl{e}}
+\newcommand{\bbff}{\mathbbl{f}}
+\newcommand{\bbgg}{\mathbbl{g}}
+\newcommand{\bbhh}{\mathbbl{h}}
+\newcommand{\bbii}{\mathbbl{i}}
+\newcommand{\bbjj}{\mathbbl{j}}
+\newcommand{\bbkk}{\mathbbl{k}}
+\newcommand{\bbll}{\mathbbl{l}}
+\newcommand{\bbmm}{\mathbbl{m}}
+\newcommand{\bbnn}{\mathbbl{n}}
+\newcommand{\bboo}{\mathbbl{o}}
+\newcommand{\bbpp}{\mathbbl{p}}
+\newcommand{\bbqq}{\mathbbl{q}}
+\newcommand{\bbrr}{\mathbbl{r}}
+\newcommand{\bbss}{\mathbbl{s}}
+\newcommand{\bbtt}{\mathbbl{t}}
+\newcommand{\bbuu}{\mathbbl{u}}
+\newcommand{\bbvv}{\mathbbl{v}}
+\newcommand{\bbww}{\mathbbl{w}}
+\newcommand{\bbxx}{\mathbbl{x}}
+\newcommand{\bbyy}{\mathbbl{y}}
+\newcommand{\bbzz}{\mathbbl{z}}
+
+\newcommand{\bbGamma}{\mathbbl{\Gamma}}
+\newcommand{\bbDelta}{\mathbbl{\Delta}}
+\newcommand{\bbTheta}{\mathbbl{\Theta}}
+\newcommand{\bbLambda}{\mathbbl{\Lambda}}
+\newcommand{\bbXi}{\mathbbl{\Xi}}
+\newcommand{\bbPi}{\mathbbl{\Pi}}
+\newcommand{\bbSigma}{\mathbbl{\Sigma}}
+\newcommand{\bbUpsilon}{\mathbbl{\Upsilon}}
+\newcommand{\bbPhi}{\mathbbl{\Phi}}
+\newcommand{\bbPsi}{\mathbbl{\Psi}}
+\newcommand{\bbOmega}{\mathbbl{\Omega}}
+
+%%% Lower Greek: only available using `mathbbol` with option `bbgreekl`, in which case `\bbalpha` etc. are already defined, and are different from `\mathbb{\alpha}` etc.
+
+%%% Numbers: `bbm` only has `1` and `2`.
+\newcommand{\bbzro}{\mathbbl{0}}
+\newcommand{\bbone}{\mathbbl{1}}
+\newcommand{\bbtwo}{\mathbbl{2}}
+\newcommand{\bbthr}{\mathbbl{3}}
+\newcommand{\bbfor}{\mathbbl{4}}
+\newcommand{\bbfiv}{\mathbbl{5}}
+\newcommand{\bbsix}{\mathbbl{6}}
+\newcommand{\bbsev}{\mathbbl{7}}
+\newcommand{\bbeit}{\mathbbl{8}}
+\newcommand{\bbnin}{\mathbbl{9}}
+\fi
+
+%% math fraktur (mathfrak)
+\ifdefined\changdefsnomathfrak\else
+\newcommand{\frA}{\mathfrak{A}}
+\newcommand{\frB}{\mathfrak{B}}
+\newcommand{\frC}{\mathfrak{C}}
+\newcommand{\frD}{\mathfrak{D}}
+\newcommand{\frE}{\mathfrak{E}}
+\newcommand{\frF}{\mathfrak{F}}
+\newcommand{\frG}{\mathfrak{G}}
+\newcommand{\frH}{\mathfrak{H}}
+\newcommand{\frI}{\mathfrak{I}}
+\newcommand{\frJ}{\mathfrak{J}}
+\newcommand{\frK}{\mathfrak{K}}
+\newcommand{\frL}{\mathfrak{L}}
+\newcommand{\frM}{\mathfrak{M}}
+\newcommand{\frN}{\mathfrak{N}}
+\newcommand{\frO}{\mathfrak{O}}
+\newcommand{\frP}{\mathfrak{P}}
+\newcommand{\frQ}{\mathfrak{Q}}
+\newcommand{\frR}{\mathfrak{R}}
+\newcommand{\frS}{\mathfrak{S}}
+\newcommand{\frT}{\mathfrak{T}}
+\newcommand{\frU}{\mathfrak{U}}
+\newcommand{\frV}{\mathfrak{V}}
+\newcommand{\frW}{\mathfrak{W}}
+\newcommand{\frX}{\mathfrak{X}}
+\newcommand{\frY}{\mathfrak{Y}}
+\newcommand{\frZ}{\mathfrak{Z}}
+
+\newcommand{\fraa}{\mathfrak{a}}
+\newcommand{\frbb}{\mathfrak{b}}
+\newcommand{\frcc}{\mathfrak{c}}
+\newcommand{\frdd}{\mathfrak{d}}
+\newcommand{\free}{\mathfrak{e}}
+\newcommand{\frff}{\mathfrak{f}}
+\newcommand{\frgg}{\mathfrak{g}}
+\newcommand{\frhh}{\mathfrak{h}}
+\newcommand{\frii}{\mathfrak{i}}
+\newcommand{\frjj}{\mathfrak{j}}
+\newcommand{\frkk}{\mathfrak{k}}
+\newcommand{\frll}{\mathfrak{l}}
+\newcommand{\frmm}{\mathfrak{m}}
+\newcommand{\frnn}{\mathfrak{n}}
+\newcommand{\froo}{\mathfrak{o}}
+\newcommand{\frpp}{\mathfrak{p}}
+\newcommand{\frqq}{\mathfrak{q}}
+\newcommand{\frrr}{\mathfrak{r}}
+\newcommand{\frss}{\mathfrak{s}}
+\newcommand{\frtt}{\mathfrak{t}}
+\newcommand{\fruu}{\mathfrak{u}}
+\newcommand{\frvv}{\mathfrak{v}}
+\newcommand{\frww}{\mathfrak{w}}
+\newcommand{\frxx}{\mathfrak{x}}
+\newcommand{\fryy}{\mathfrak{y}}
+\newcommand{\frzz}{\mathfrak{z}}
+
+%%% trivial fonts for lower Greeks; no valid fonts for capital Greeks
+
+\newcommand{\frzro}{\mathfrak{0}}
+\newcommand{\frone}{\mathfrak{1}}
+\newcommand{\frtwo}{\mathfrak{2}}
+\newcommand{\frthr}{\mathfrak{3}}
+\newcommand{\frfor}{\mathfrak{4}}
+\newcommand{\frfiv}{\mathfrak{5}}
+\newcommand{\frsix}{\mathfrak{6}}
+\newcommand{\frsev}{\mathfrak{7}}
+\newcommand{\freit}{\mathfrak{8}}
+\newcommand{\frnin}{\mathfrak{9}}
+\fi
+
+%% math script (mathscr)
+\ifdefined\changdefsnomathscr\else
+\RequirePackage{mathrsfs}
+\newcommand{\scA}{\mathscr{A}}
+\newcommand{\scB}{\mathscr{B}}
+\newcommand{\scC}{\mathscr{C}}
+\newcommand{\scD}{\mathscr{D}}
+\newcommand{\scE}{\mathscr{E}}
+\newcommand{\scF}{\mathscr{F}}
+\newcommand{\scG}{\mathscr{G}}
+\newcommand{\scH}{\mathscr{H}}
+\newcommand{\scI}{\mathscr{I}}
+\newcommand{\scJ}{\mathscr{J}}
+\newcommand{\scK}{\mathscr{K}}
+\newcommand{\scL}{\mathscr{L}}
+\newcommand{\scM}{\mathscr{M}}
+\newcommand{\scN}{\mathscr{N}}
+\newcommand{\scO}{\mathscr{O}}
+\newcommand{\scP}{\mathscr{P}}
+\newcommand{\scQ}{\mathscr{Q}}
+\newcommand{\scR}{\mathscr{R}}
+\newcommand{\scS}{\mathscr{S}}
+\newcommand{\scT}{\mathscr{T}}
+\newcommand{\scU}{\mathscr{U}}
+\newcommand{\scV}{\mathscr{V}}
+\newcommand{\scW}{\mathscr{W}}
+\newcommand{\scX}{\mathscr{X}}
+\newcommand{\scY}{\mathscr{Y}}
+\newcommand{\scZ}{\mathscr{Z}}
+
+%%% no valid fonts for lower Latins
+
+%%% trivial fonts for lower Greeks; no valid fonts for capital Greeks and numbers
+\fi
+
+%% bold (bm)
+\ifdefined\changdefsnobm\else
+\RequirePackage{bm}
+\newcommand{\bmA}{{\bm{A}}}
+\newcommand{\bmB}{{\bm{B}}}
+\newcommand{\bmC}{{\bm{C}}}
+\newcommand{\bmD}{{\bm{D}}}
+\newcommand{\bmE}{{\bm{E}}}
+\newcommand{\bmF}{{\bm{F}}}
+\newcommand{\bmG}{{\bm{G}}}
+\newcommand{\bmH}{{\bm{H}}}
+\newcommand{\bmI}{{\bm{I}}}
+\newcommand{\bmJ}{{\bm{J}}}
+\newcommand{\bmK}{{\bm{K}}}
+\newcommand{\bmL}{{\bm{L}}}
+\newcommand{\bmM}{{\bm{M}}}
+\newcommand{\bmN}{{\bm{N}}}
+\newcommand{\bmO}{{\bm{O}}}
+\newcommand{\bmP}{{\bm{P}}}
+\newcommand{\bmQ}{{\bm{Q}}}
+\newcommand{\bmR}{{\bm{R}}}
+\newcommand{\bmS}{{\bm{S}}}
+\newcommand{\bmT}{{\bm{T}}}
+\newcommand{\bmU}{{\bm{U}}}
+\newcommand{\bmV}{{\bm{V}}}
+\newcommand{\bmW}{{\bm{W}}}
+\newcommand{\bmX}{{\bm{X}}}
+\newcommand{\bmY}{{\bm{Y}}}
+\newcommand{\bmZ}{{\bm{Z}}}
+
+\newcommand{\bmaa}{{\bm{a}}}
+\newcommand{\bmbb}{{\bm{b}}}
+\newcommand{\bmcc}{{\bm{c}}}
+\newcommand{\bmdd}{{\bm{d}}}
+\newcommand{\bmee}{{\bm{e}}}
+\newcommand{\bmff}{{\bm{f}}}
+\newcommand{\bmgg}{{\bm{g}}}
+\newcommand{\bmhh}{{\bm{h}}}
+\newcommand{\bmii}{{\bm{i}}}
+\newcommand{\bmjj}{{\bm{j}}}
+\newcommand{\bmkk}{{\bm{k}}}
+\newcommand{\bmll}{{\bm{l}}}
+\newcommand{\bmmm}{{\bm{m}}}
+\newcommand{\bmnn}{{\bm{n}}}
+\newcommand{\bmoo}{{\bm{o}}}
+\newcommand{\bmpp}{{\bm{p}}}
+\newcommand{\bmqq}{{\bm{q}}}
+\newcommand{\bmrr}{{\bm{r}}}
+\newcommand{\bmss}{{\bm{s}}}
+\newcommand{\bmtt}{{\bm{t}}}
+\newcommand{\bmuu}{{\bm{u}}}
+\newcommand{\bmvv}{{\bm{v}}}
+\newcommand{\bmww}{{\bm{w}}}
+\newcommand{\bmxx}{{\bm{x}}}
+\newcommand{\bmyy}{{\bm{y}}}
+\newcommand{\bmzz}{{\bm{z}}}
+
+\newcommand{\bmGamma}{{\bm{\Gamma}}}
+\newcommand{\bmDelta}{{\bm{\Delta}}}
+\newcommand{\bmTheta}{{\bm{\Theta}}}
+\newcommand{\bmLambda}{{\bm{\Lambda}}}
+\newcommand{\bmXi}{{\bm{\Xi}}}
+\newcommand{\bmPi}{{\bm{\Pi}}}
+\newcommand{\bmSigma}{{\bm{\Sigma}}}
+\newcommand{\bmUpsilon}{{\bm{\Upsilon}}}
+\newcommand{\bmPhi}{{\bm{\Phi}}}
+\newcommand{\bmPsi}{{\bm{\Psi}}}
+\newcommand{\bmOmega}{{\bm{\Omega}}}
+
+\newcommand{\biGamma}{{\bm{\mathit{\Gamma}}}}
+\newcommand{\biDelta}{{\bm{\mathit{\Delta}}}}
+\newcommand{\biTheta}{{\bm{\mathit{\Theta}}}}
+\newcommand{\biLambda}{{\bm{\mathit{\Lambda}}}}
+\newcommand{\biXi}{{\bm{\mathit{\Xi}}}}
+\newcommand{\biPi}{{\bm{\mathit{\Pi}}}}
+\newcommand{\biSigma}{{\bm{\mathit{\Sigma}}}}
+\newcommand{\biUpsilon}{{\bm{\mathit{\Upsilon}}}}
+\newcommand{\biPhi}{{\bm{\mathit{\Phi}}}}
+\newcommand{\biPsi}{{\bm{\mathit{\Psi}}}}
+\newcommand{\biOmega}{{\bm{\mathit{\Omega}}}}
+
+\newcommand{\bmalpha}{{\bm{\alpha}}}
+\newcommand{\bmbeta}{{\bm{\beta}}}
+\newcommand{\bmgamma}{{\bm{\gamma}}}
+\newcommand{\bmdelta}{{\bm{\delta}}}
+\newcommand{\bmepsilon}{{\bm{\epsilon}}}
+\newcommand{\bmeps}{{\bm{\epsilon}}}
+\newcommand{\bmvarepsilon}{{\bm{\varepsilon}}}
+\newcommand{\bmveps}{{\bm{\varepsilon}}}
+\newcommand{\bmzeta}{{\bm{\zeta}}}
+\newcommand{\bmeta}{{\bm{\eta}}}
+\newcommand{\bmtheta}{{\bm{\theta}}}
+\newcommand{\bmvartheta}{{\bm{\vartheta}}}
+\newcommand{\bmiota}{{\bm{\iota}}}
+\newcommand{\bmkappa}{{\bm{\kappa}}}
+\newcommand{\bmlambda}{{\bm{\lambda}}}
+\newcommand{\bmmu}{{\bm{\mu}}}
+\newcommand{\bmnu}{{\bm{\nu}}}
+\newcommand{\bmxi}{{\bm{\xi}}}
+\newcommand{\bmpi}{{\bm{\pi}}}
+\newcommand{\bmvarpi}{{\bm{\varpi}}}
+\newcommand{\bmrho}{{\bm{\rho}}}
+\newcommand{\bmvarrho}{{\bm{\varrho}}}
+\newcommand{\bmsigma}{{\bm{\sigma}}}
+\newcommand{\bmvarsigma}{{\bm{\varsigma}}}
+\newcommand{\bmtau}{{\bm{\tau}}}
+\newcommand{\bmupsilon}{{\bm{\upsilon}}}
+\newcommand{\bmphi}{{\bm{\phi}}}
+\newcommand{\bmvarphi}{{\bm{\varphi}}}
+\newcommand{\bmchi}{{\bm{\chi}}}
+\newcommand{\bmpsi}{{\bm{\psi}}}
+\newcommand{\bmomega}{{\bm{\omega}}}
+
+\newcommand{\bmpartial}{{\bm{\partial}}}
+\newcommand{\bmnabla}{{\bm{\nabla}}}
+
+\newcommand{\bmzro}{{\bm{0}}}
+\newcommand{\bmone}{{\bm{1}}}
+\newcommand{\bmtwo}{{\bm{2}}}
+\newcommand{\bmthr}{{\bm{3}}}
+\newcommand{\bmfor}{{\bm{4}}}
+\newcommand{\bmfiv}{{\bm{5}}}
+\newcommand{\bmsix}{{\bm{6}}}
+\newcommand{\bmsev}{{\bm{7}}}
+\newcommand{\bmeit}{{\bm{8}}}
+\newcommand{\bmnin}{{\bm{9}}}
+\fi
+
+%% bold (mathbf)
+\ifdefined\changdefsnomathbf\else
+\newcommand{\bfA}{\mathbf{A}}
+\newcommand{\bfB}{\mathbf{B}}
+\newcommand{\bfC}{\mathbf{C}}
+\newcommand{\bfD}{\mathbf{D}}
+\newcommand{\bfE}{\mathbf{E}}
+\newcommand{\bfF}{\mathbf{F}}
+\newcommand{\bfG}{\mathbf{G}}
+\newcommand{\bfH}{\mathbf{H}}
+\newcommand{\bfI}{\mathbf{I}}
+\newcommand{\bfJ}{\mathbf{J}}
+\newcommand{\bfK}{\mathbf{K}}
+\newcommand{\bfL}{\mathbf{L}}
+\newcommand{\bfM}{\mathbf{M}}
+\newcommand{\bfN}{\mathbf{N}}
+\newcommand{\bfO}{\mathbf{O}}
+\newcommand{\bfP}{\mathbf{P}}
+\newcommand{\bfQ}{\mathbf{Q}}
+\newcommand{\bfR}{\mathbf{R}}
+\newcommand{\bfS}{\mathbf{S}}
+\newcommand{\bfT}{\mathbf{T}}
+\newcommand{\bfU}{\mathbf{U}}
+\newcommand{\bfV}{\mathbf{V}}
+\newcommand{\bfW}{\mathbf{W}}
+\newcommand{\bfX}{\mathbf{X}}
+\newcommand{\bfY}{\mathbf{Y}}
+\newcommand{\bfZ}{\mathbf{Z}}
+
+\newcommand{\bfaa}{\mathbf{a}}
+\newcommand{\bfbb}{\mathbf{b}}
+\newcommand{\bfcc}{\mathbf{c}}
+\newcommand{\bfdd}{\mathbf{d}}
+\newcommand{\bfee}{\mathbf{e}}
+\newcommand{\bfff}{\mathbf{f}}
+\newcommand{\bfgg}{\mathbf{g}}
+\newcommand{\bfhh}{\mathbf{h}}
+\newcommand{\bfii}{\mathbf{i}}
+\newcommand{\bfjj}{\mathbf{j}}
+\newcommand{\bfkk}{\mathbf{k}}
+\newcommand{\bfll}{\mathbf{l}}
+\newcommand{\bfmm}{\mathbf{m}}
+\newcommand{\bfnn}{\mathbf{n}}
+\newcommand{\bfoo}{\mathbf{o}}
+\newcommand{\bfpp}{\mathbf{p}}
+\newcommand{\bfqq}{\mathbf{q}}
+\newcommand{\bfrr}{\mathbf{r}}
+\newcommand{\bfss}{\mathbf{s}}
+\newcommand{\bftt}{\mathbf{t}}
+\newcommand{\bfuu}{\mathbf{u}}
+\newcommand{\bfvv}{\mathbf{v}}
+\newcommand{\bfww}{\mathbf{w}}
+\newcommand{\bfxx}{\mathbf{x}}
+\newcommand{\bfyy}{\mathbf{y}}
+\newcommand{\bfzz}{\mathbf{z}}
+
+\newcommand{\bfGamma}{\mathbf{\Gamma}}
+\newcommand{\bfDelta}{\mathbf{\Delta}}
+\newcommand{\bfTheta}{\mathbf{\Theta}}
+\newcommand{\bfLambda}{\mathbf{\Lambda}}
+\newcommand{\bfXi}{\mathbf{\Xi}}
+\newcommand{\bfPi}{\mathbf{\Pi}}
+\newcommand{\bfSigma}{\mathbf{\Sigma}}
+\newcommand{\bfUpsilon}{\mathbf{\Upsilon}}
+\newcommand{\bfPhi}{\mathbf{\Phi}}
+\newcommand{\bfPsi}{\mathbf{\Psi}}
+\newcommand{\bfOmega}{\mathbf{\Omega}}
+
+%%% trivial fonts for lower Greeks by default
+\ifdefined\changdefsnoupgreek
+\newcommand{\bfalpha}{\mathbf{\alpha}}
+\newcommand{\bfbeta}{\mathbf{\beta}}
+\newcommand{\bfgamma}{\mathbf{\gamma}}
+\newcommand{\bfdelta}{\mathbf{\delta}}
+\newcommand{\bfepsilon}{\mathbf{\epsilon}}
+\newcommand{\bfeps}{\mathbf{\epsilon}}
+\newcommand{\bfvarepsilon}{\mathbf{\varepsilon}}
+\newcommand{\bfveps}{\mathbf{\varepsilon}}
+\newcommand{\bfzeta}{\mathbf{\zeta}}
+\newcommand{\bfeta}{\mathbf{\eta}}
+\newcommand{\bftheta}{\mathbf{\theta}}
+\newcommand{\bfvartheta}{\mathbf{\vartheta}}
+\newcommand{\bfiota}{\mathbf{\iota}}
+\newcommand{\bfkappa}{\mathbf{\kappa}}
+\newcommand{\bflambda}{\mathbf{\lambda}}
+\newcommand{\bfmu}{\mathbf{\mu}}
+\newcommand{\bfnu}{\mathbf{\nu}}
+\newcommand{\bfxi}{\mathbf{\xi}}
+\newcommand{\bfpi}{\mathbf{\pi}}
+\newcommand{\bfvarpi}{\mathbf{\varpi}}
+\newcommand{\bfrho}{\mathbf{\rho}}
+\newcommand{\bfvarrho}{\mathbf{\varrho}}
+\newcommand{\bfsigma}{\mathbf{\sigma}}
+\newcommand{\bfvarsigma}{\mathbf{\varsigma}}
+\newcommand{\bftau}{\mathbf{\tau}}
+\newcommand{\bfupsilon}{\mathbf{\upsilon}}
+\newcommand{\bfphi}{\mathbf{\phi}}
+\newcommand{\bfvarphi}{\mathbf{\varphi}}
+\newcommand{\bfchi}{\mathbf{\chi}}
+\newcommand{\bfpsi}{\mathbf{\psi}}
+\newcommand{\bfomega}{\mathbf{\omega}}
+\else
+\RequirePackage{bm}
+\RequirePackage{upgreek}
+\newcommand{\bfalpha}{{\bm{\upalpha}}}
+\newcommand{\bfbeta}{{\bm{\upbeta}}}
+\newcommand{\bfgamma}{{\bm{\upgamma}}}
+\newcommand{\bfdelta}{{\bm{\updelta}}}
+\newcommand{\bfepsilon}{{\bm{\upepsilon}}}
+\newcommand{\bfeps}{{\bm{\upepsilon}}}
+\newcommand{\bfvarepsilon}{{\bm{\upvarepsilon}}}
+\newcommand{\bfveps}{{\bm{\upvarepsilon}}}
+\newcommand{\bfzeta}{{\bm{\upzeta}}}
+\newcommand{\bfeta}{{\bm{\upeta}}}
+\newcommand{\bftheta}{{\bm{\uptheta}}}
+\newcommand{\bfvartheta}{{\bm{\upvartheta}}}
+\newcommand{\bfiota}{{\bm{\upiota}}}
+\newcommand{\bfkappa}{{\bm{\upkappa}}}
+\newcommand{\bflambda}{{\bm{\uplambda}}}
+\newcommand{\bfmu}{{\bm{\upmu}}}
+\newcommand{\bfnu}{{\bm{\upnu}}}
+\newcommand{\bfxi}{{\bm{\upxi}}}
+\newcommand{\bfpi}{{\bm{\uppi}}}
+\newcommand{\bfvarpi}{{\bm{\upvarpi}}}
+\newcommand{\bfrho}{{\bm{\uprho}}}
+\newcommand{\bfvarrho}{{\bm{\upvarrho}}}
+\newcommand{\bfsigma}{{\bm{\upsigma}}}
+\newcommand{\bfvarsigma}{{\bm{\upvarsigma}}}
+\newcommand{\bftau}{{\bm{\uptau}}}
+\newcommand{\bfupsilon}{{\bm{\upupsilon}}}
+\newcommand{\bfphi}{{\bm{\upphi}}}
+\newcommand{\bfvarphi}{{\bm{\upvarphi}}}
+\newcommand{\bfchi}{{\bm{\upchi}}}
+\newcommand{\bfpsi}{{\bm{\uppsi}}}
+\newcommand{\bfomega}{{\bm{\upomega}}}
+\fi
+
+%%% trivial fonts for partial/nabla
+
+\newcommand{\bfzro}{\mathbf{0}}
+\newcommand{\bfone}{\mathbf{1}}
+\newcommand{\bftwo}{\mathbf{2}}
+\newcommand{\bfthr}{\mathbf{3}}
+\newcommand{\bffor}{\mathbf{4}}
+\newcommand{\bffiv}{\mathbf{5}}
+\newcommand{\bfsix}{\mathbf{6}}
+\newcommand{\bfsev}{\mathbf{7}}
+\newcommand{\bfeit}{\mathbf{8}}
+\newcommand{\bfnin}{\mathbf{9}}
+\fi
+
+% sans-serif
+\ifdefined\changdefsnomathsf\else
+\newcommand{\sfA}{\mathsf{A}}
+\newcommand{\sfB}{\mathsf{B}}
+\newcommand{\sfC}{\mathsf{C}}
+\newcommand{\sfD}{\mathsf{D}}
+\newcommand{\sfE}{\mathsf{E}}
+\newcommand{\sfF}{\mathsf{F}}
+\newcommand{\sfG}{\mathsf{G}}
+\newcommand{\sfH}{\mathsf{H}}
+\newcommand{\sfI}{\mathsf{I}}
+\newcommand{\sfJ}{\mathsf{J}}
+\newcommand{\sfK}{\mathsf{K}}
+\newcommand{\sfL}{\mathsf{L}}
+\newcommand{\sfM}{\mathsf{M}}
+\newcommand{\sfN}{\mathsf{N}}
+\newcommand{\sfO}{\mathsf{O}}
+\newcommand{\sfP}{\mathsf{P}}
+\newcommand{\sfQ}{\mathsf{Q}}
+\newcommand{\sfR}{\mathsf{R}}
+\newcommand{\sfS}{\mathsf{S}}
+\newcommand{\sfT}{\mathsf{T}}
+\newcommand{\sfU}{\mathsf{U}}
+\newcommand{\sfV}{\mathsf{V}}
+\newcommand{\sfW}{\mathsf{W}}
+\newcommand{\sfX}{\mathsf{X}}
+\newcommand{\sfY}{\mathsf{Y}}
+\newcommand{\sfZ}{\mathsf{Z}}
+
+\newcommand{\sfaa}{\mathsf{a}}
+\newcommand{\sfbb}{\mathsf{b}}
+\newcommand{\sfcc}{\mathsf{c}}
+\newcommand{\sfdd}{\mathsf{d}}
+\newcommand{\sfee}{\mathsf{e}}
+\newcommand{\sfff}{\mathsf{f}}
+\newcommand{\sfgg}{\mathsf{g}}
+\newcommand{\sfhh}{\mathsf{h}}
+\newcommand{\sfii}{\mathsf{i}}
+\newcommand{\sfjj}{\mathsf{j}}
+\newcommand{\sfkk}{\mathsf{k}}
+\newcommand{\sfll}{\mathsf{l}}
+\newcommand{\sfmm}{\mathsf{m}}
+\newcommand{\sfnn}{\mathsf{n}}
+\newcommand{\sfoo}{\mathsf{o}}
+\newcommand{\sfpp}{\mathsf{p}}
+\newcommand{\sfqq}{\mathsf{q}}
+\newcommand{\sfrr}{\mathsf{r}}
+\newcommand{\sfss}{\mathsf{s}}
+\newcommand{\sftt}{\mathsf{t}}
+\newcommand{\sfuu}{\mathsf{u}}
+\newcommand{\sfvv}{\mathsf{v}}
+\newcommand{\sfww}{\mathsf{w}}
+\newcommand{\sfxx}{\mathsf{x}}
+\newcommand{\sfyy}{\mathsf{y}}
+\newcommand{\sfzz}{\mathsf{z}}
+
+%%% trivial fonts for lower Greeks and partial/nabla
+\newcommand{\sfGamma}{\mathsf{\Gamma}}
+\newcommand{\sfDelta}{\mathsf{\Delta}}
+\newcommand{\sfTheta}{\mathsf{\Theta}}
+\newcommand{\sfLambda}{\mathsf{\Lambda}}
+\newcommand{\sfXi}{\mathsf{\Xi}}
+\newcommand{\sfPi}{\mathsf{\Pi}}
+\newcommand{\sfSigma}{\mathsf{\Sigma}}
+\newcommand{\sfUpsilon}{\mathsf{\Upsilon}}
+\newcommand{\sfPhi}{\mathsf{\Phi}}
+\newcommand{\sfPsi}{\mathsf{\Psi}}
+\newcommand{\sfOmega}{\mathsf{\Omega}}
+
+\newcommand{\sfzro}{\mathsf{0}}
+\newcommand{\sfone}{\mathsf{1}}
+\newcommand{\sftwo}{\mathsf{2}}
+\newcommand{\sfthr}{\mathsf{3}}
+\newcommand{\sffor}{\mathsf{4}}
+\newcommand{\sffiv}{\mathsf{5}}
+\newcommand{\sfsix}{\mathsf{6}}
+\newcommand{\sfsev}{\mathsf{7}}
+\newcommand{\sfeit}{\mathsf{8}}
+\newcommand{\sfnin}{\mathsf{9}}
+
+% sans-serif, bm
+\newcommand{\sfbA}{{\bm{\mathsf{A}}}}
+\newcommand{\sfbB}{{\bm{\mathsf{B}}}}
+\newcommand{\sfbC}{{\bm{\mathsf{C}}}}
+\newcommand{\sfbD}{{\bm{\mathsf{D}}}}
+\newcommand{\sfbE}{{\bm{\mathsf{E}}}}
+\newcommand{\sfbF}{{\bm{\mathsf{F}}}}
+\newcommand{\sfbG}{{\bm{\mathsf{G}}}}
+\newcommand{\sfbH}{{\bm{\mathsf{H}}}}
+\newcommand{\sfbI}{{\bm{\mathsf{I}}}}
+\newcommand{\sfbJ}{{\bm{\mathsf{J}}}}
+\newcommand{\sfbK}{{\bm{\mathsf{K}}}}
+\newcommand{\sfbL}{{\bm{\mathsf{L}}}}
+\newcommand{\sfbM}{{\bm{\mathsf{M}}}}
+\newcommand{\sfbN}{{\bm{\mathsf{N}}}}
+\newcommand{\sfbO}{{\bm{\mathsf{O}}}}
+\newcommand{\sfbP}{{\bm{\mathsf{P}}}}
+\newcommand{\sfbQ}{{\bm{\mathsf{Q}}}}
+\newcommand{\sfbR}{{\bm{\mathsf{R}}}}
+\newcommand{\sfbS}{{\bm{\mathsf{S}}}}
+\newcommand{\sfbT}{{\bm{\mathsf{T}}}}
+\newcommand{\sfbU}{{\bm{\mathsf{U}}}}
+\newcommand{\sfbV}{{\bm{\mathsf{V}}}}
+\newcommand{\sfbW}{{\bm{\mathsf{W}}}}
+\newcommand{\sfbX}{{\bm{\mathsf{X}}}}
+\newcommand{\sfbY}{{\bm{\mathsf{Y}}}}
+\newcommand{\sfbZ}{{\bm{\mathsf{Z}}}}
+
+\newcommand{\sfbaa}{{\bm{\mathsf{a}}}}
+\newcommand{\sfbbb}{{\bm{\mathsf{b}}}}
+\newcommand{\sfbcc}{{\bm{\mathsf{c}}}}
+\newcommand{\sfbdd}{{\bm{\mathsf{d}}}}
+\newcommand{\sfbee}{{\bm{\mathsf{e}}}}
+\newcommand{\sfbff}{{\bm{\mathsf{f}}}}
+\newcommand{\sfbgg}{{\bm{\mathsf{g}}}}
+\newcommand{\sfbhh}{{\bm{\mathsf{h}}}}
+\newcommand{\sfbii}{{\bm{\mathsf{i}}}}
+\newcommand{\sfbjj}{{\bm{\mathsf{j}}}}
+\newcommand{\sfbkk}{{\bm{\mathsf{k}}}}
+\newcommand{\sfbll}{{\bm{\mathsf{l}}}}
+\newcommand{\sfbmm}{{\bm{\mathsf{m}}}}
+\newcommand{\sfbnn}{{\bm{\mathsf{n}}}}
+\newcommand{\sfboo}{{\bm{\mathsf{o}}}}
+\newcommand{\sfbpp}{{\bm{\mathsf{p}}}}
+\newcommand{\sfbqq}{{\bm{\mathsf{q}}}}
+\newcommand{\sfbrr}{{\bm{\mathsf{r}}}}
+\newcommand{\sfbss}{{\bm{\mathsf{s}}}}
+\newcommand{\sfbtt}{{\bm{\mathsf{t}}}}
+\newcommand{\sfbuu}{{\bm{\mathsf{u}}}}
+\newcommand{\sfbvv}{{\bm{\mathsf{v}}}}
+\newcommand{\sfbww}{{\bm{\mathsf{w}}}}
+\newcommand{\sfbxx}{{\bm{\mathsf{x}}}}
+\newcommand{\sfbyy}{{\bm{\mathsf{y}}}}
+\newcommand{\sfbzz}{{\bm{\mathsf{z}}}}
+
+%%% trivial fonts for lower Greeks and partial/nabla
+\newcommand{\sfbGamma}{{\bm{\mathsf{\Gamma}}}}
+\newcommand{\sfbDelta}{{\bm{\mathsf{\Delta}}}}
+\newcommand{\sfbTheta}{{\bm{\mathsf{\Theta}}}}
+\newcommand{\sfbLambda}{{\bm{\mathsf{\Lambda}}}}
+\newcommand{\sfbXi}{{\bm{\mathsf{\Xi}}}}
+\newcommand{\sfbPi}{{\bm{\mathsf{\Pi}}}}
+\newcommand{\sfbSigma}{{\bm{\mathsf{\Sigma}}}}
+\newcommand{\sfbUpsilon}{{\bm{\mathsf{\Upsilon}}}}
+\newcommand{\sfbPhi}{{\bm{\mathsf{\Phi}}}}
+\newcommand{\sfbPsi}{{\bm{\mathsf{\Psi}}}}
+\newcommand{\sfbOmega}{{\bm{\mathsf{\Omega}}}}
+
+\newcommand{\sfbzro}{{\bm{\mathsf{0}}}}
+\newcommand{\sfbone}{{\bm{\mathsf{1}}}}
+\newcommand{\sfbtwo}{{\bm{\mathsf{2}}}}
+\newcommand{\sfbthr}{{\bm{\mathsf{3}}}}
+\newcommand{\sfbfor}{{\bm{\mathsf{4}}}}
+\newcommand{\sfbfiv}{{\bm{\mathsf{5}}}}
+\newcommand{\sfbsix}{{\bm{\mathsf{6}}}}
+\newcommand{\sfbsev}{{\bm{\mathsf{7}}}}
+\newcommand{\sfbeit}{{\bm{\mathsf{8}}}}
+\newcommand{\sfbnin}{{\bm{\mathsf{9}}}}
+\fi
+
+% sans-serif italic (from ICLR template 'math_commands.tex')
+\ifdefined\changdefsnomathsfit\else
+\ifdefined\mathsfit\else
+\DeclareMathAlphabet{\mathsfit}{\encodingdefault}{\sfdefault}{m}{sl}
+\SetMathAlphabet{\mathsfit}{bold}{\encodingdefault}{\sfdefault}{bx}{n}
+\fi
+\newcommand{\sfiA}{\mathsfit{A}}
+\newcommand{\sfiB}{\mathsfit{B}}
+\newcommand{\sfiC}{\mathsfit{C}}
+\newcommand{\sfiD}{\mathsfit{D}}
+\newcommand{\sfiE}{\mathsfit{E}}
+\newcommand{\sfiF}{\mathsfit{F}}
+\newcommand{\sfiG}{\mathsfit{G}}
+\newcommand{\sfiH}{\mathsfit{H}}
+\newcommand{\sfiI}{\mathsfit{I}}
+\newcommand{\sfiJ}{\mathsfit{J}}
+\newcommand{\sfiK}{\mathsfit{K}}
+\newcommand{\sfiL}{\mathsfit{L}}
+\newcommand{\sfiM}{\mathsfit{M}}
+\newcommand{\sfiN}{\mathsfit{N}}
+\newcommand{\sfiO}{\mathsfit{O}}
+\newcommand{\sfiP}{\mathsfit{P}}
+\newcommand{\sfiQ}{\mathsfit{Q}}
+\newcommand{\sfiR}{\mathsfit{R}}
+\newcommand{\sfiS}{\mathsfit{S}}
+\newcommand{\sfiT}{\mathsfit{T}}
+\newcommand{\sfiU}{\mathsfit{U}}
+\newcommand{\sfiV}{\mathsfit{V}}
+\newcommand{\sfiW}{\mathsfit{W}}
+\newcommand{\sfiX}{\mathsfit{X}}
+\newcommand{\sfiY}{\mathsfit{Y}}
+\newcommand{\sfiZ}{\mathsfit{Z}}
+
+\newcommand{\sfiaa}{\mathsfit{a}}
+\newcommand{\sfibb}{\mathsfit{b}}
+\newcommand{\sficc}{\mathsfit{c}}
+\newcommand{\sfidd}{\mathsfit{d}}
+\newcommand{\sfiee}{\mathsfit{e}}
+\newcommand{\sfiff}{\mathsfit{f}}
+\newcommand{\sfigg}{\mathsfit{g}}
+\newcommand{\sfihh}{\mathsfit{h}}
+\newcommand{\sfiii}{\mathsfit{i}}
+\newcommand{\sfijj}{\mathsfit{j}}
+\newcommand{\sfikk}{\mathsfit{k}}
+\newcommand{\sfill}{\mathsfit{l}}
+\newcommand{\sfimm}{\mathsfit{m}}
+\newcommand{\sfinn}{\mathsfit{n}}
+\newcommand{\sfioo}{\mathsfit{o}}
+\newcommand{\sfipp}{\mathsfit{p}}
+\newcommand{\sfiqq}{\mathsfit{q}}
+\newcommand{\sfirr}{\mathsfit{r}}
+\newcommand{\sfiss}{\mathsfit{s}}
+\newcommand{\sfitt}{\mathsfit{t}}
+\newcommand{\sfiuu}{\mathsfit{u}}
+\newcommand{\sfivv}{\mathsfit{v}}
+\newcommand{\sfiww}{\mathsfit{w}}
+\newcommand{\sfixx}{\mathsfit{x}}
+\newcommand{\sfiyy}{\mathsfit{y}}
+\newcommand{\sfizz}{\mathsfit{z}}
+
+%%% trivial fonts for lower Greeks and partial/nabla; no valid fonts for capital Greeks
+
+\newcommand{\sfizro}{\mathsfit{0}}
+\newcommand{\sfione}{\mathsfit{1}}
+\newcommand{\sfitwo}{\mathsfit{2}}
+\newcommand{\sfithr}{\mathsfit{3}}
+\newcommand{\sfifor}{\mathsfit{4}}
+\newcommand{\sfifiv}{\mathsfit{5}}
+\newcommand{\sfisix}{\mathsfit{6}}
+\newcommand{\sfisev}{\mathsfit{7}}
+\newcommand{\sfieit}{\mathsfit{8}}
+\newcommand{\sfinin}{\mathsfit{9}}
+
+% sans-serif italic, bm
+% For the default ICLR mathsfit, ${\bm{\mathsfit{A}}}$ produces the same thing as ${\bm{\mathsf{A}}}$. Different if using \usepackage[OMLmathsfit]{isomath}.
+\newcommand{\sfbiA}{{\bm{\mathsfit{A}}}}
+\newcommand{\sfbiB}{{\bm{\mathsfit{B}}}}
+\newcommand{\sfbiC}{{\bm{\mathsfit{C}}}}
+\newcommand{\sfbiD}{{\bm{\mathsfit{D}}}}
+\newcommand{\sfbiE}{{\bm{\mathsfit{E}}}}
+\newcommand{\sfbiF}{{\bm{\mathsfit{F}}}}
+\newcommand{\sfbiG}{{\bm{\mathsfit{G}}}}
+\newcommand{\sfbiH}{{\bm{\mathsfit{H}}}}
+\newcommand{\sfbiI}{{\bm{\mathsfit{I}}}}
+\newcommand{\sfbiJ}{{\bm{\mathsfit{J}}}}
+\newcommand{\sfbiK}{{\bm{\mathsfit{K}}}}
+\newcommand{\sfbiL}{{\bm{\mathsfit{L}}}}
+\newcommand{\sfbiM}{{\bm{\mathsfit{M}}}}
+\newcommand{\sfbiN}{{\bm{\mathsfit{N}}}}
+\newcommand{\sfbiO}{{\bm{\mathsfit{O}}}}
+\newcommand{\sfbiP}{{\bm{\mathsfit{P}}}}
+\newcommand{\sfbiQ}{{\bm{\mathsfit{Q}}}}
+\newcommand{\sfbiR}{{\bm{\mathsfit{R}}}}
+\newcommand{\sfbiS}{{\bm{\mathsfit{S}}}}
+\newcommand{\sfbiT}{{\bm{\mathsfit{T}}}}
+\newcommand{\sfbiU}{{\bm{\mathsfit{U}}}}
+\newcommand{\sfbiV}{{\bm{\mathsfit{V}}}}
+\newcommand{\sfbiW}{{\bm{\mathsfit{W}}}}
+\newcommand{\sfbiX}{{\bm{\mathsfit{X}}}}
+\newcommand{\sfbiY}{{\bm{\mathsfit{Y}}}}
+\newcommand{\sfbiZ}{{\bm{\mathsfit{Z}}}}
+
+\newcommand{\sfbiaa}{{\bm{\mathsfit{a}}}}
+\newcommand{\sfbibb}{{\bm{\mathsfit{b}}}}
+\newcommand{\sfbicc}{{\bm{\mathsfit{c}}}}
+\newcommand{\sfbidd}{{\bm{\mathsfit{d}}}}
+\newcommand{\sfbiee}{{\bm{\mathsfit{e}}}}
+\newcommand{\sfbiff}{{\bm{\mathsfit{f}}}}
+\newcommand{\sfbigg}{{\bm{\mathsfit{g}}}}
+\newcommand{\sfbihh}{{\bm{\mathsfit{h}}}}
+\newcommand{\sfbiii}{{\bm{\mathsfit{i}}}}
+\newcommand{\sfbijj}{{\bm{\mathsfit{j}}}}
+\newcommand{\sfbikk}{{\bm{\mathsfit{k}}}}
+\newcommand{\sfbill}{{\bm{\mathsfit{l}}}}
+\newcommand{\sfbimm}{{\bm{\mathsfit{m}}}}
+\newcommand{\sfbinn}{{\bm{\mathsfit{n}}}}
+\newcommand{\sfbioo}{{\bm{\mathsfit{o}}}}
+\newcommand{\sfbipp}{{\bm{\mathsfit{p}}}}
+\newcommand{\sfbiqq}{{\bm{\mathsfit{q}}}}
+\newcommand{\sfbirr}{{\bm{\mathsfit{r}}}}
+\newcommand{\sfbiss}{{\bm{\mathsfit{s}}}}
+\newcommand{\sfbitt}{{\bm{\mathsfit{t}}}}
+\newcommand{\sfbiuu}{{\bm{\mathsfit{u}}}}
+\newcommand{\sfbivv}{{\bm{\mathsfit{v}}}}
+\newcommand{\sfbiww}{{\bm{\mathsfit{w}}}}
+\newcommand{\sfbixx}{{\bm{\mathsfit{x}}}}
+\newcommand{\sfbiyy}{{\bm{\mathsfit{y}}}}
+\newcommand{\sfbizz}{{\bm{\mathsfit{z}}}}
+
+%%% trivial fonts for lower Greeks and partial/nabla; no valid fonts for capital Greeks
+
+\newcommand{\sfbizro}{{\bm{\mathsfit{0}}}}
+\newcommand{\sfbione}{{\bm{\mathsfit{1}}}}
+\newcommand{\sfbitwo}{{\bm{\mathsfit{2}}}}
+\newcommand{\sfbithr}{{\bm{\mathsfit{3}}}}
+\newcommand{\sfbifor}{{\bm{\mathsfit{4}}}}
+\newcommand{\sfbifiv}{{\bm{\mathsfit{5}}}}
+\newcommand{\sfbisix}{{\bm{\mathsfit{6}}}}
+\newcommand{\sfbisev}{{\bm{\mathsfit{7}}}}
+\newcommand{\sfbieit}{{\bm{\mathsfit{8}}}}
+\newcommand{\sfbinin}{{\bm{\mathsfit{9}}}}
+\fi
+
+
+% Decorators for Latin and Greek Letters
+
+%% bar
+\ifdefined\changdefsnobar\else
+\newcommand{\Ab}{\bar{A}}
+\newcommand{\Bb}{\bar{B}}
+\newcommand{\Cb}{\bar{C}}
+\newcommand{\Db}{\bar{D}}
+\newcommand{\Eb}{\bar{E}}
+\newcommand{\Fb}{\bar{F}}
+\newcommand{\Gb}{\bar{G}}
+\newcommand{\Hb}{\bar{H}}
+\newcommand{\Ib}{\bar{I}}
+\newcommand{\Jb}{\bar{J}}
+\newcommand{\Kb}{\bar{K}}
+\newcommand{\Lb}{\bar{L}}
+\newcommand{\Mb}{\bar{M}}
+\newcommand{\Nb}{\bar{N}}
+\newcommand{\Ob}{\bar{O}}
+\newcommand{\Pb}{\bar{P}}
+\newcommand{\Qb}{\bar{Q}}
+\newcommand{\Rb}{\bar{R}}
+\newcommand{\Sb}{\bar{S}}
+\newcommand{\Tb}{\bar{T}}
+\newcommand{\Ub}{\bar{U}}
+\newcommand{\Vb}{\bar{V}}
+\newcommand{\Wb}{\bar{W}}
+\newcommand{\Xb}{\bar{X}}
+\newcommand{\Yb}{\bar{Y}}
+\newcommand{\Zb}{\bar{Z}}
+
+\newcommand{\aab}{\bar{a}}
+\newcommand{\bbb}{\bar{b}}
+\newcommand{\ccb}{\bar{c}}
+\newcommand{\ddb}{\bar{d}}
+\newcommand{\eeb}{\bar{e}}
+\newcommand{\ffb}{\bar{f}}
+\newcommand{\ggb}{\bar{g}}
+\newcommand{\hhb}{\bar{h}}
+\newcommand{\iib}{\bar{i}}
+\newcommand{\jjb}{\bar{j}}
+\newcommand{\kkb}{\bar{k}}
+\newcommand{\llb}{\bar{l}}
+\newcommand{\mmb}{\bar{m}}
+\newcommand{\nnb}{\bar{n}}
+\newcommand{\oob}{\bar{o}}
+\newcommand{\ppb}{\bar{p}}
+\newcommand{\qqb}{\bar{q}}
+\newcommand{\rrb}{\bar{r}}
+\newcommand{\ssb}{\bar{s}}
+\newcommand{\ttb}{\bar{t}}
+\newcommand{\uub}{\bar{u}}
+\newcommand{\vvb}{\bar{v}}
+\newcommand{\wwb}{\bar{w}}
+\newcommand{\xxb}{\bar{x}}
+\newcommand{\yyb}{\bar{y}}
+\newcommand{\zzb}{\bar{z}}
+
+\newcommand{\Gammab}{\bar{\Gamma}}
+\newcommand{\Deltab}{\bar{\Delta}}
+\newcommand{\Thetab}{\bar{\Theta}}
+\newcommand{\Lambdab}{\bar{\Lambda}}
+\newcommand{\Xib}{\bar{\Xi}}
+\newcommand{\Pib}{\bar{\Pi}}
+\newcommand{\Sigmab}{\bar{\Sigma}}
+\newcommand{\Upsilonb}{\bar{\Upsilon}}
+\newcommand{\Phib}{\bar{\Phi}}
+\newcommand{\Psib}{\bar{\Psi}}
+\newcommand{\Omegab}{\bar{\Omega}}
+
+%%% \bar{\mathit{\Gamma}} places the bar to the left
+\newcommand{\itGammab}{\mathit{\bar{\Gamma}}}
+\newcommand{\itDeltab}{\mathit{\bar{\Delta}}}
+\newcommand{\itThetab}{\mathit{\bar{\Theta}}}
+\newcommand{\itLambdab}{\mathit{\bar{\Lambda}}}
+\newcommand{\itXib}{\mathit{\bar{\Xi}}}
+\newcommand{\itPib}{\mathit{\bar{\Pi}}}
+\newcommand{\itSigmab}{\mathit{\bar{\Sigma}}}
+\newcommand{\itUpsilonb}{\mathit{\bar{\Upsilon}}}
+\newcommand{\itPhib}{\mathit{\bar{\Phi}}}
+\newcommand{\itPsib}{\mathit{\bar{\Psi}}}
+\newcommand{\itOmegab}{\mathit{\bar{\Omega}}}
+
+\newcommand{\alphab}{\bar{\alpha}}
+\newcommand{\betab}{\bar{\beta}}
+\newcommand{\gammab}{\bar{\gamma}}
+\newcommand{\deltab}{\bar{\delta}}
+\newcommand{\epsilonb}{\bar{\epsilon}}
+\newcommand{\epsb}{\bar{\epsilon}}
+\newcommand{\varepsilonb}{\bar{\varepsilon}}
+\newcommand{\vepsb}{\bar{\varepsilon}}
+\newcommand{\zetab}{\bar{\zeta}}
+\newcommand{\etab}{\bar{\eta}}
+\newcommand{\thetab}{\bar{\theta}}
+\newcommand{\varthetab}{\bar{\vartheta}}
+\newcommand{\iotab}{\bar{\iota}}
+\newcommand{\kappab}{\bar{\kappa}}
+\newcommand{\lambdab}{\bar{\lambda}}
+\newcommand{\mub}{\bar{\mu}}
+\newcommand{\nub}{\bar{\nu}}
+\newcommand{\xib}{\bar{\xi}}
+\newcommand{\pib}{\bar{\pi}}
+\newcommand{\varpib}{\bar{\varpi}}
+\newcommand{\rhob}{\bar{\rho}}
+\newcommand{\varrhob}{\bar{\varrho}}
+\newcommand{\sigmab}{\bar{\sigma}}
+\newcommand{\varsigmab}{\bar{\varsigma}}
+\newcommand{\taub}{\bar{\tau}}
+\newcommand{\upsilonb}{\bar{\upsilon}}
+\newcommand{\phib}{\bar{\phi}}
+\newcommand{\varphib}{\bar{\varphi}}
+\newcommand{\chib}{\bar{\chi}}
+\newcommand{\psib}{\bar{\psi}}
+\newcommand{\omegab}{\bar{\omega}}
+
+\newcommand{\partialb}{\bar{\partial}}
+\newcommand{\nablab}{\bar{\nabla}}
+
+\newcommand{\zrob}{\bar{0}}
+\newcommand{\oneb}{\bar{1}}
+\newcommand{\twob}{\bar{2}}
+\newcommand{\thrb}{\bar{3}}
+\newcommand{\forb}{\bar{4}}
+\newcommand{\fivb}{\bar{5}}
+\newcommand{\sixb}{\bar{6}}
+\newcommand{\sevb}{\bar{7}}
+\newcommand{\eitb}{\bar{8}}
+\newcommand{\ninb}{\bar{9}}
+\fi
+
+%% dot
+\ifdefined\changdefsnodot\else
+\newcommand{\Ad}{\dot{A}}
+\newcommand{\Bd}{\dot{B}}
+\newcommand{\Cd}{\dot{C}}
+\newcommand{\Dd}{\dot{D}}
+\newcommand{\Ed}{\dot{E}}
+\newcommand{\Fd}{\dot{F}}
+\newcommand{\Gd}{\dot{G}}
+\newcommand{\Hd}{\dot{H}}
+\newcommand{\Idot}{\dot{I}} % excp
+\newcommand{\Jd}{\dot{J}}
+\newcommand{\Kd}{\dot{K}}
+\newcommand{\Ld}{\dot{L}}
+\newcommand{\Md}{\dot{M}}
+\newcommand{\Nd}{\dot{N}}
+\newcommand{\Od}{\dot{O}}
+\newcommand{\Pd}{\dot{P}}
+\newcommand{\Qd}{\dot{Q}}
+\newcommand{\Rd}{\dot{R}}
+\newcommand{\Sd}{\dot{S}}
+\newcommand{\Td}{\dot{T}}
+\newcommand{\Ud}{\dot{U}}
+\newcommand{\Vd}{\dot{V}}
+\newcommand{\Wd}{\dot{W}}
+\newcommand{\Xd}{\dot{X}}
+\newcommand{\Yd}{\dot{Y}}
+\newcommand{\Zd}{\dot{Z}}
+
+\newcommand{\aad}{\dot{a}}
+\newcommand{\bbd}{\dot{b}}
+\newcommand{\ccd}{\dot{c}}
+\newcommand{\ddd}{\dot{d}}
+\newcommand{\eed}{\dot{e}}
+\newcommand{\ffd}{\dot{f}}
+\newcommand{\ggd}{\dot{g}}
+\newcommand{\hhd}{\dot{h}}
+\newcommand{\iid}{\dot{i}}
+\newcommand{\jjd}{\dot{j}}
+\newcommand{\kkd}{\dot{k}}
+\newcommand{\lld}{\dot{l}}
+\newcommand{\mmd}{\dot{m}}
+\newcommand{\nnd}{\dot{n}}
+\newcommand{\ood}{\dot{o}}
+\newcommand{\ppd}{\dot{p}}
+\newcommand{\qqd}{\dot{q}}
+\newcommand{\rrd}{\dot{r}}
+\newcommand{\ssd}{\dot{s}}
+\newcommand{\ttd}{\dot{t}}
+\newcommand{\uud}{\dot{u}}
+\newcommand{\vvd}{\dot{v}}
+\newcommand{\wwd}{\dot{w}}
+\newcommand{\xxd}{\dot{x}}
+\newcommand{\yyd}{\dot{y}}
+\newcommand{\zzd}{\dot{z}}
+
+\newcommand{\Gammad}{\dot{\Gamma}}
+\newcommand{\Deltad}{\dot{\Delta}}
+\newcommand{\Thetad}{\dot{\Theta}}
+\newcommand{\Lambdad}{\dot{\Lambda}}
+\newcommand{\Xid}{\dot{\Xi}}
+\newcommand{\Pid}{\dot{\Pi}}
+\newcommand{\Sigmad}{\dot{\Sigma}}
+\newcommand{\Upsilond}{\dot{\Upsilon}}
+\newcommand{\Phid}{\dot{\Phi}}
+\newcommand{\Psid}{\dot{\Psi}}
+\newcommand{\Omegad}{\dot{\Omega}}
+
+%%% \dot{\mathit{\Gamma}} places the dot to the left
+\newcommand{\itGammad}{\mathit{\dot{\Gamma}}}
+\newcommand{\itDeltad}{\mathit{\dot{\Delta}}}
+\newcommand{\itThetad}{\mathit{\dot{\Theta}}}
+\newcommand{\itLambdad}{\mathit{\dot{\Lambda}}}
+\newcommand{\itXid}{\mathit{\dot{\Xi}}}
+\newcommand{\itPid}{\mathit{\dot{\Pi}}}
+\newcommand{\itSigmad}{\mathit{\dot{\Sigma}}}
+\newcommand{\itUpsilond}{\mathit{\dot{\Upsilon}}}
+\newcommand{\itPhid}{\mathit{\dot{\Phi}}}
+\newcommand{\itPsid}{\mathit{\dot{\Psi}}}
+\newcommand{\itOmegad}{\mathit{\dot{\Omega}}}
+
+\newcommand{\alphad}{\dot{\alpha}}
+\newcommand{\betad}{\dot{\beta}}
+\newcommand{\gammad}{\dot{\gamma}}
+\newcommand{\deltad}{\dot{\delta}}
+\newcommand{\epsilond}{\dot{\epsilon}}
+\newcommand{\epsd}{\dot{\epsilon}}
+\newcommand{\varepsilond}{\dot{\varepsilon}}
+\newcommand{\vepsd}{\dot{\varepsilon}}
+\newcommand{\zetad}{\dot{\zeta}}
+\newcommand{\etad}{\dot{\eta}}
+\newcommand{\thetad}{\dot{\theta}}
+\newcommand{\varthetad}{\dot{\vartheta}}
+\newcommand{\iotad}{\dot{\iota}}
+\newcommand{\kappad}{\dot{\kappa}}
+\newcommand{\lambdad}{\dot{\lambda}}
+\newcommand{\mud}{\dot{\mu}}
+\newcommand{\nud}{\dot{\nu}}
+\newcommand{\xid}{\dot{\xi}}
+\newcommand{\pid}{\dot{\pi}}
+\newcommand{\varpid}{\dot{\varpi}}
+\newcommand{\rhod}{\dot{\rho}}
+\newcommand{\varrhod}{\dot{\varrho}}
+\newcommand{\sigmad}{\dot{\sigma}}
+\newcommand{\varsigmad}{\dot{\varsigma}}
+\newcommand{\taud}{\dot{\tau}}
+\newcommand{\upsilond}{\dot{\upsilon}}
+\newcommand{\phid}{\dot{\phi}}
+\newcommand{\varphid}{\dot{\varphi}}
+\newcommand{\chid}{\dot{\chi}}
+\newcommand{\psid}{\dot{\psi}}
+\newcommand{\omegad}{\dot{\omega}}
+
+\newcommand{\partiald}{\dot{\partial}}
+\newcommand{\nablad}{\dot{\nabla}}
+
+\newcommand{\zrod}{\dot{0}}
+\newcommand{\oned}{\dot{1}}
+\newcommand{\twod}{\dot{2}}
+\newcommand{\thrd}{\dot{3}}
+\newcommand{\ford}{\dot{4}}
+\newcommand{\fivd}{\dot{5}}
+\newcommand{\sixd}{\dot{6}}
+\newcommand{\sevd}{\dot{7}}
+\newcommand{\eitd}{\dot{8}}
+\newcommand{\nind}{\dot{9}}
+\fi
+
+%% hat
+\ifdefined\changdefsnohat\else
+\newcommand{\Ah}{\hat{A}}
+\newcommand{\Bh}{\hat{B}}
+\newcommand{\Ch}{\hat{C}}
+\newcommand{\Dh}{\hat{D}}
+\newcommand{\Eh}{\hat{E}}
+\newcommand{\Fh}{\hat{F}}
+\newcommand{\Gh}{\hat{G}}
+\newcommand{\Hh}{\hat{H}}
+\newcommand{\Ih}{\hat{I}}
+\newcommand{\Jh}{\hat{J}}
+\newcommand{\Kh}{\hat{K}}
+\newcommand{\Lh}{\hat{L}}
+\newcommand{\Mh}{\hat{M}}
+\newcommand{\Nh}{\hat{N}}
+\newcommand{\Oh}{\hat{O}}
+\newcommand{\Ph}{\hat{P}}
+\newcommand{\Qh}{\hat{Q}}
+\newcommand{\Rh}{\hat{R}}
+\newcommand{\Sh}{\hat{S}}
+\newcommand{\Th}{\hat{T}}
+\newcommand{\Uh}{\hat{U}}
+\newcommand{\Vh}{\hat{V}}
+\newcommand{\Wh}{\hat{W}}
+\newcommand{\Xh}{\hat{X}}
+\newcommand{\Yh}{\hat{Y}}
+\newcommand{\Zh}{\hat{Z}}
+
+\newcommand{\aah}{\hat{a}}
+\newcommand{\bbh}{\hat{b}}
+\newcommand{\cch}{\hat{c}}
+\newcommand{\ddh}{\hat{d}}
+\newcommand{\eeh}{\hat{e}}
+\newcommand{\ffh}{\hat{f}}
+\newcommand{\ggh}{\hat{g}}
+\newcommand{\hhh}{\hat{h}}
+\newcommand{\iih}{\hat{i}}
+\newcommand{\jjh}{\hat{j}}
+\newcommand{\kkh}{\hat{k}}
+\newcommand{\llh}{\hat{l}}
+\newcommand{\mmh}{\hat{m}}
+\newcommand{\nnh}{\hat{n}}
+\newcommand{\ooh}{\hat{o}}
+\newcommand{\pph}{\hat{p}}
+\newcommand{\qqh}{\hat{q}}
+\newcommand{\rrh}{\hat{r}}
+\newcommand{\ssh}{\hat{s}}
+\newcommand{\tth}{\hat{t}}
+\newcommand{\uuh}{\hat{u}}
+\newcommand{\vvh}{\hat{v}}
+\newcommand{\wwh}{\hat{w}}
+\newcommand{\xxh}{\hat{x}}
+\newcommand{\yyh}{\hat{y}}
+\newcommand{\zzh}{\hat{z}}
+
+\newcommand{\Gammah}{\hat{\Gamma}}
+\newcommand{\Deltah}{\hat{\Delta}}
+\newcommand{\Thetah}{\hat{\Theta}}
+\newcommand{\Lambdah}{\hat{\Lambda}}
+\newcommand{\Xih}{\hat{\Xi}}
+\newcommand{\Pih}{\hat{\Pi}}
+\newcommand{\Sigmah}{\hat{\Sigma}}
+\newcommand{\Upsilonh}{\hat{\Upsilon}}
+\newcommand{\Phih}{\hat{\Phi}}
+\newcommand{\Psih}{\hat{\Psi}}
+\newcommand{\Omegah}{\hat{\Omega}}
+
+%%% \hat{\mathit{\Gamma}} places the hat to the left
+\newcommand{\itGammah}{\mathit{\hat{\Gamma}}}
+\newcommand{\itDeltah}{\mathit{\hat{\Delta}}}
+\newcommand{\itThetah}{\mathit{\hat{\Theta}}}
+\newcommand{\itLambdah}{\mathit{\hat{\Lambda}}}
+\newcommand{\itXih}{\mathit{\hat{\Xi}}}
+\newcommand{\itPih}{\mathit{\hat{\Pi}}}
+\newcommand{\itSigmah}{\mathit{\hat{\Sigma}}}
+\newcommand{\itUpsilonh}{\mathit{\hat{\Upsilon}}}
+\newcommand{\itPhih}{\mathit{\hat{\Phi}}}
+\newcommand{\itPsih}{\mathit{\hat{\Psi}}}
+\newcommand{\itOmegah}{\mathit{\hat{\Omega}}}
+
+\newcommand{\alphah}{\hat{\alpha}}
+\newcommand{\betah}{\hat{\beta}}
+\newcommand{\gammah}{\hat{\gamma}}
+\newcommand{\deltah}{\hat{\delta}}
+\newcommand{\epsilonh}{\hat{\epsilon}}
+\newcommand{\epsh}{\hat{\epsilon}}
+\newcommand{\varepsilonh}{\hat{\varepsilon}}
+\newcommand{\vepsh}{\hat{\varepsilon}}
+\newcommand{\zetah}{\hat{\zeta}}
+\newcommand{\etah}{\hat{\eta}}
+\newcommand{\thetah}{\hat{\theta}}
+\newcommand{\varthetah}{\hat{\vartheta}}
+\newcommand{\iotah}{\hat{\iota}}
+\newcommand{\kappah}{\hat{\kappa}}
+\newcommand{\lambdah}{\hat{\lambda}}
+\newcommand{\muh}{\hat{\mu}}
+\newcommand{\nuh}{\hat{\nu}}
+\newcommand{\xih}{\hat{\xi}}
+\newcommand{\pih}{\hat{\pi}}
+\newcommand{\varpih}{\hat{\varpi}}
+\newcommand{\rhoh}{\hat{\rho}}
+\newcommand{\varrhoh}{\hat{\varrho}}
+\newcommand{\sigmah}{\hat{\sigma}}
+\newcommand{\varsigmah}{\hat{\varsigma}}
+\newcommand{\tauh}{\hat{\tau}}
+\newcommand{\upsilonh}{\hat{\upsilon}}
+\newcommand{\phih}{\hat{\phi}}
+\newcommand{\varphih}{\hat{\varphi}}
+\newcommand{\chih}{\hat{\chi}}
+\newcommand{\psih}{\hat{\psi}}
+\newcommand{\omegah}{\hat{\omega}}
+
+\newcommand{\partialh}{\hat{\partial}}
+\newcommand{\nablah}{\hat{\nabla}}
+
+\newcommand{\zroh}{\hat{0}}
+\newcommand{\oneh}{\hat{1}}
+\newcommand{\twoh}{\hat{2}}
+\newcommand{\thrh}{\hat{3}}
+\newcommand{\forh}{\hat{4}}
+\newcommand{\fivh}{\hat{5}}
+\newcommand{\sixh}{\hat{6}}
+\newcommand{\sevh}{\hat{7}}
+\newcommand{\eith}{\hat{8}}
+\newcommand{\ninh}{\hat{9}}
+\fi
+
+%% tilde
+\ifdefined\changdefsnotilde\else
+\newcommand{\At}{\tilde{A}}
+\newcommand{\Bt}{\tilde{B}}
+\newcommand{\Ct}{\tilde{C}}
+\newcommand{\Dt}{\tilde{D}}
+\newcommand{\Et}{\tilde{E}}
+\newcommand{\Ft}{\tilde{F}}
+\newcommand{\Gt}{\tilde{G}}
+\newcommand{\Ht}{\tilde{H}}
+\newcommand{\It}{\tilde{I}}
+\newcommand{\Jt}{\tilde{J}}
+\newcommand{\Kt}{\tilde{K}}
+\newcommand{\Lt}{\tilde{L}}
+\newcommand{\Mt}{\tilde{M}}
+\newcommand{\Nt}{\tilde{N}}
+\newcommand{\Ot}{\tilde{O}}
+\newcommand{\Pt}{\tilde{P}}
+\newcommand{\Qt}{\tilde{Q}}
+\newcommand{\Rt}{\tilde{R}}
+\newcommand{\St}{\tilde{S}}
+\newcommand{\Tt}{\tilde{T}}
+\newcommand{\Ut}{\tilde{U}}
+\newcommand{\Vt}{\tilde{V}}
+\newcommand{\Wt}{\tilde{W}}
+\newcommand{\Xt}{\tilde{X}}
+\newcommand{\Yt}{\tilde{Y}}
+\newcommand{\Zt}{\tilde{Z}}
+
+\newcommand{\aat}{\tilde{a}}
+\newcommand{\bbt}{\tilde{b}}
+\newcommand{\cct}{\tilde{c}}
+\newcommand{\ddt}{\tilde{d}}
+\newcommand{\eet}{\tilde{e}}
+\newcommand{\fft}{\tilde{f}}
+\newcommand{\ggt}{\tilde{g}}
+\newcommand{\hht}{\tilde{h}}
+\newcommand{\iit}{\tilde{i}}
+\newcommand{\jjt}{\tilde{j}}
+\newcommand{\kkt}{\tilde{k}}
+\newcommand{\llt}{\tilde{l}}
+\newcommand{\mmt}{\tilde{m}}
+\newcommand{\nnt}{\tilde{n}}
+\newcommand{\oot}{\tilde{o}}
+\newcommand{\ppt}{\tilde{p}}
+\newcommand{\qqt}{\tilde{q}}
+\newcommand{\rrt}{\tilde{r}}
+\newcommand{\sst}{\tilde{s}}
+\newcommand{\ttt}{\tilde{t}}
+\newcommand{\uut}{\tilde{u}}
+\newcommand{\vvt}{\tilde{v}}
+\newcommand{\wwt}{\tilde{w}}
+\newcommand{\xxt}{\tilde{x}}
+\newcommand{\yyt}{\tilde{y}}
+\newcommand{\zzt}{\tilde{z}}
+
+\newcommand{\Gammat}{\tilde{\Gamma}}
+\newcommand{\Deltat}{\tilde{\Delta}}
+\newcommand{\Thetat}{\tilde{\Theta}}
+\newcommand{\Lambdat}{\tilde{\Lambda}}
+\newcommand{\Xit}{\tilde{\Xi}}
+\newcommand{\Pit}{\tilde{\Pi}}
+\newcommand{\Sigmat}{\tilde{\Sigma}}
+\newcommand{\Upsilont}{\tilde{\Upsilon}}
+\newcommand{\Phit}{\tilde{\Phi}}
+\newcommand{\Psit}{\tilde{\Psi}}
+\newcommand{\Omegat}{\tilde{\Omega}}
+
+%%% \tilde{\mathit{\Gamma}} places the tilde to the left
+\newcommand{\itGammat}{\mathit{\tilde{\Gamma}}}
+\newcommand{\itDeltat}{\mathit{\tilde{\Delta}}}
+\newcommand{\itThetat}{\mathit{\tilde{\Theta}}}
+\newcommand{\itLambdat}{\mathit{\tilde{\Lambda}}}
+\newcommand{\itXit}{\mathit{\tilde{\Xi}}}
+\newcommand{\itPit}{\mathit{\tilde{\Pi}}}
+\newcommand{\itSigmat}{\mathit{\tilde{\Sigma}}}
+\newcommand{\itUpsilont}{\mathit{\tilde{\Upsilon}}}
+\newcommand{\itPhit}{\mathit{\tilde{\Phi}}}
+\newcommand{\itPsit}{\mathit{\tilde{\Psi}}}
+\newcommand{\itOmegat}{\mathit{\tilde{\Omega}}}
+
+\newcommand{\alphat}{\tilde{\alpha}}
+\newcommand{\betat}{\tilde{\beta}}
+\newcommand{\gammat}{\tilde{\gamma}}
+\newcommand{\deltat}{\tilde{\delta}}
+\newcommand{\epsilont}{\tilde{\epsilon}}
+\newcommand{\epst}{\tilde{\epsilon}}
+\newcommand{\varepsilont}{\tilde{\varepsilon}}
+\newcommand{\vepst}{\tilde{\varepsilon}}
+\newcommand{\zetat}{\tilde{\zeta}}
+\newcommand{\etat}{\tilde{\eta}}
+\newcommand{\thetat}{\tilde{\theta}}
+\newcommand{\varthetat}{\tilde{\vartheta}}
+\newcommand{\iotat}{\tilde{\iota}}
+\newcommand{\kappat}{\tilde{\kappa}}
+\newcommand{\lambdat}{\tilde{\lambda}}
+\newcommand{\mut}{\tilde{\mu}}
+\newcommand{\nut}{\tilde{\nu}}
+\newcommand{\xit}{\tilde{\xi}}
+\newcommand{\pit}{\tilde{\pi}}
+\newcommand{\varpit}{\tilde{\varpi}}
+\newcommand{\rhot}{\tilde{\rho}}
+\newcommand{\varrhot}{\tilde{\varrho}}
+\newcommand{\sigmat}{\tilde{\sigma}}
+\newcommand{\varsigmat}{\tilde{\varsigma}}
+\newcommand{\taut}{\tilde{\tau}}
+\newcommand{\upsilont}{\tilde{\upsilon}}
+\newcommand{\phit}{\tilde{\phi}}
+\newcommand{\varphit}{\tilde{\varphi}}
+\newcommand{\chit}{\tilde{\chi}}
+\newcommand{\psit}{\tilde{\psi}}
+\newcommand{\omegat}{\tilde{\omega}}
+
+\newcommand{\partialt}{\tilde{\partial}}
+\newcommand{\nablat}{\tilde{\nabla}}
+
+\newcommand{\zrot}{\tilde{0}}
+\newcommand{\onet}{\tilde{1}}
+\newcommand{\twot}{\tilde{2}}
+\newcommand{\thrt}{\tilde{3}}
+\newcommand{\fort}{\tilde{4}}
+\newcommand{\fivt}{\tilde{5}}
+\newcommand{\sixt}{\tilde{6}}
+\newcommand{\sevt}{\tilde{7}}
+\newcommand{\eitt}{\tilde{8}}
+\newcommand{\nint}{\tilde{9}}
+\fi
+
+%% vec
+\ifdefined\changdefsnovec\else
+\newcommand{\Av}{\vec{A}}
+\newcommand{\Bv}{\vec{B}}
+\newcommand{\Cv}{\vec{C}}
+\newcommand{\Dv}{\vec{D}}
+\newcommand{\Ev}{\vec{E}}
+\newcommand{\Fv}{\vec{F}}
+\newcommand{\Gv}{\vec{G}}
+\newcommand{\Hv}{\vec{H}}
+\newcommand{\Iv}{\vec{I}}
+\newcommand{\Jv}{\vec{J}}
+\newcommand{\Kv}{\vec{K}}
+\newcommand{\Lv}{\vec{L}}
+\newcommand{\Mv}{\vec{M}}
+\newcommand{\Nv}{\vec{N}}
+\newcommand{\Ov}{\vec{O}}
+\newcommand{\Pv}{\vec{P}}
+\newcommand{\Qv}{\vec{Q}}
+\newcommand{\Rv}{\vec{R}}
+\newcommand{\Sv}{\vec{S}}
+\newcommand{\Tv}{\vec{T}}
+\newcommand{\Uv}{\vec{U}}
+\newcommand{\Vv}{\vec{V}}
+\newcommand{\Wv}{\vec{W}}
+\newcommand{\Xv}{\vec{X}}
+\newcommand{\Yv}{\vec{Y}}
+\newcommand{\Zv}{\vec{Z}}
+
+\newcommand{\aav}{\vec{a}}
+\newcommand{\bbv}{\vec{b}}
+\newcommand{\ccv}{\vec{c}}
+\newcommand{\ddv}{\vec{d}}
+\newcommand{\eev}{\vec{e}}
+\newcommand{\ffv}{\vec{f}}
+\newcommand{\ggv}{\vec{g}}
+\newcommand{\hhv}{\vec{h}}
+\newcommand{\iiv}{\vec{i}}
+\newcommand{\jjv}{\vec{j}}
+\newcommand{\kkv}{\vec{k}}
+\newcommand{\llv}{\vec{l}}
+\newcommand{\mmv}{\vec{m}}
+\newcommand{\nnv}{\vec{n}}
+\newcommand{\oov}{\vec{o}}
+\newcommand{\ppv}{\vec{p}}
+\newcommand{\qqv}{\vec{q}}
+\newcommand{\rrv}{\vec{r}}
+\newcommand{\ssv}{\vec{s}}
+\newcommand{\ttv}{\vec{t}}
+\newcommand{\uuv}{\vec{u}}
+\newcommand{\vvv}{\vec{v}}
+\newcommand{\wwv}{\vec{w}}
+\newcommand{\xxv}{\vec{x}}
+\newcommand{\yyv}{\vec{y}}
+\newcommand{\zzv}{\vec{z}}
+
+\newcommand{\Gammav}{\vec{\Gamma}}
+\newcommand{\Deltav}{\vec{\Delta}}
+\newcommand{\Thetav}{\vec{\Theta}}
+\newcommand{\Lambdav}{\vec{\Lambda}}
+\newcommand{\Xiv}{\vec{\Xi}}
+\newcommand{\Piv}{\vec{\Pi}}
+\newcommand{\Sigmav}{\vec{\Sigma}}
+\newcommand{\Upsilonv}{\vec{\Upsilon}}
+\newcommand{\Phiv}{\vec{\Phi}}
+\newcommand{\Psiv}{\vec{\Psi}}
+\newcommand{\Omegav}{\vec{\Omega}}
+
+%%% \mathit{\vec{\Gamma}} produces a tilde-like symbol
+\newcommand{\itGammav}{\vec{\mathit{\Gamma}}}
+\newcommand{\itDeltav}{\vec{\mathit{\Delta}}}
+\newcommand{\itThetav}{\vec{\mathit{\Theta}}}
+\newcommand{\itLambdav}{\vec{\mathit{\Lambda}}}
+\newcommand{\itXiv}{\vec{\mathit{\Xi}}}
+\newcommand{\itPiv}{\vec{\mathit{\Pi}}}
+\newcommand{\itSigmav}{\vec{\mathit{\Sigma}}}
+\newcommand{\itUpsilonv}{\vec{\mathit{\Upsilon}}}
+\newcommand{\itPhiv}{\vec{\mathit{\Phi}}}
+\newcommand{\itPsiv}{\vec{\mathit{\Psi}}}
+\newcommand{\itOmegav}{\vec{\mathit{\Omega}}}
+
+\newcommand{\alphav}{\vec{\alpha}}
+\newcommand{\betav}{\vec{\beta}}
+\newcommand{\gammav}{\vec{\gamma}}
+\newcommand{\deltav}{\vec{\delta}}
+\newcommand{\epsilonv}{\vec{\epsilon}}
+\newcommand{\epsv}{\vec{\epsilon}}
+\newcommand{\varepsilonv}{\vec{\varepsilon}}
+\newcommand{\vepsv}{\vec{\varepsilon}}
+\newcommand{\zetav}{\vec{\zeta}}
+\newcommand{\etav}{\vec{\eta}}
+\newcommand{\thetav}{\vec{\theta}}
+\newcommand{\varthetav}{\vec{\vartheta}}
+\newcommand{\iotav}{\vec{\iota}}
+\newcommand{\kappav}{\vec{\kappa}}
+\newcommand{\lambdav}{\vec{\lambda}}
+\newcommand{\muv}{\vec{\mu}}
+\newcommand{\nuv}{\vec{\nu}}
+\newcommand{\xiv}{\vec{\xi}}
+\newcommand{\piv}{\vec{\pi}}
+\newcommand{\varpiv}{\vec{\varpi}}
+\newcommand{\rhov}{\vec{\rho}}
+\newcommand{\varrhov}{\vec{\varrho}}
+\newcommand{\sigmav}{\vec{\sigma}}
+\newcommand{\varsigmav}{\vec{\varsigma}}
+\newcommand{\tauv}{\vec{\tau}}
+\newcommand{\upsilonv}{\vec{\upsilon}}
+\newcommand{\phiv}{\vec{\phi}}
+\newcommand{\varphiv}{\vec{\varphi}}
+\newcommand{\chiv}{\vec{\chi}}
+\newcommand{\psiv}{\vec{\psi}}
+\newcommand{\omegav}{\vec{\omega}}
+
+\newcommand{\partialv}{\vec{\partial}}
+\newcommand{\nablav}{\vec{\nabla}}
+
+\newcommand{\zrov}{\vec{0}}
+\newcommand{\onev}{\vec{1}}
+\newcommand{\twov}{\vec{2}}
+\newcommand{\thrv}{\vec{3}}
+\newcommand{\forv}{\vec{4}}
+\newcommand{\fivv}{\vec{5}}
+\newcommand{\sixv}{\vec{6}}
+\newcommand{\sevv}{\vec{7}}
+\newcommand{\eitv}{\vec{8}}
+\newcommand{\ninv}{\vec{9}}
+\fi
+
+
+% item symbols
+\ifdefined\changdefsnoitems\else
+\RequirePackage{xspace}
+\newcommand{\itemi}{\textbf{(i)}\xspace}
+\newcommand{\itemii}{\textbf{(ii)}\xspace}
+\newcommand{\itemiii}{\textbf{(iii)}\xspace}
+\newcommand{\itemiv}{\textbf{(iv)}\xspace}
+\newcommand{\itemv}{\textbf{(v)}\xspace}
+\newcommand{\itemvi}{\textbf{(vi)}\xspace}
+\newcommand{\itemvii}{\textbf{(vii)}\xspace}
+\newcommand{\itemviii}{\textbf{(viii)}\xspace}
+\newcommand{\itemix}{\textbf{(ix)}\xspace}
+\newcommand{\itemx}{\textbf{(x)}\xspace}
+
+\newcommand{\itemI}{\textbf{(I)}\xspace}
+\newcommand{\itemII}{\textbf{(II)}\xspace}
+\newcommand{\itemIII}{\textbf{(III)}\xspace}
+\newcommand{\itemIV}{\textbf{(IV)}\xspace}
+\newcommand{\itemV}{\textbf{(V)}\xspace}
+\newcommand{\itemVI}{\textbf{(VI)}\xspace}
+\newcommand{\itemVII}{\textbf{(VII)}\xspace}
+\newcommand{\itemVIII}{\textbf{(VIII)}\xspace}
+\newcommand{\itemIX}{\textbf{(IX)}\xspace}
+\newcommand{\itemX}{\textbf{(X)}\xspace}
+
+\newcommand{\itemzro}{\textbf{(0)}\xspace}
+\newcommand{\itemone}{\textbf{(1)}\xspace}
+\newcommand{\itemtwo}{\textbf{(2)}\xspace}
+\newcommand{\itemthr}{\textbf{(3)}\xspace}
+\newcommand{\itemfor}{\textbf{(4)}\xspace}
+\newcommand{\itemfiv}{\textbf{(5)}\xspace}
+\newcommand{\itemsix}{\textbf{(6)}\xspace}
+\newcommand{\itemsev}{\textbf{(7)}\xspace}
+\newcommand{\itemeit}{\textbf{(8)}\xspace}
+\newcommand{\itemnin}{\textbf{(9)}\xspace}
+\newcommand{\itemten}{\textbf{(10)}\xspace}
+
+\newcommand{\itema}{\textbf{(a)}\xspace}
+\newcommand{\itemb}{\textbf{(b)}\xspace}
+\newcommand{\itemc}{\textbf{(c)}\xspace}
+\newcommand{\itemd}{\textbf{(d)}\xspace}
+\newcommand{\iteme}{\textbf{(e)}\xspace}
+\newcommand{\itemf}{\textbf{(f)}\xspace}
+\newcommand{\itemg}{\textbf{(g)}\xspace}
+\newcommand{\itemh}{\textbf{(h)}\xspace}
+% The same `\itemi` already defined
+\newcommand{\itemj}{\textbf{(j)}\xspace}
+\newcommand{\itemk}{\textbf{(k)}\xspace}
+\newcommand{\iteml}{\textbf{(l)}\xspace}
+\newcommand{\itemm}{\textbf{(m)}\xspace}
+\newcommand{\itemn}{\textbf{(n)}\xspace}
+\newcommand{\itemo}{\textbf{(o)}\xspace}
+\newcommand{\itemp}{\textbf{(p)}\xspace}
+\newcommand{\itemq}{\textbf{(q)}\xspace}
+\newcommand{\itemr}{\textbf{(r)}\xspace}
+\newcommand{\items}{\textbf{(s)}\xspace}
+\newcommand{\itemt}{\textbf{(t)}\xspace}
+\newcommand{\itemu}{\textbf{(u)}\xspace}
+% The same `\itemv` already defined
+\newcommand{\itemw}{\textbf{(w)}\xspace}
+% The same `\itemx` already defined
+\newcommand{\itemy}{\textbf{(y)}\xspace}
+\newcommand{\itemz}{\textbf{(z)}\xspace}
+
+%%% emph version
+\newcommand{\emi}{\emph{(i)}\xspace}
+\newcommand{\emii}{\emph{(ii)}\xspace}
+\newcommand{\emiii}{\emph{(iii)}\xspace}
+\newcommand{\emiv}{\emph{(iv)}\xspace}
+\newcommand{\emv}{\emph{(v)}\xspace}
+\newcommand{\emvi}{\emph{(vi)}\xspace}
+\newcommand{\emvii}{\emph{(vii)}\xspace}
+\newcommand{\emviii}{\emph{(viii)}\xspace}
+\newcommand{\emix}{\emph{(ix)}\xspace}
+\newcommand{\emx}{\emph{(x)}\xspace}
+
+\newcommand{\emI}{\emph{(I)}\xspace}
+\newcommand{\emII}{\emph{(II)}\xspace}
+\newcommand{\emIII}{\emph{(III)}\xspace}
+\newcommand{\emIV}{\emph{(IV)}\xspace}
+\newcommand{\emV}{\emph{(V)}\xspace}
+\newcommand{\emVI}{\emph{(VI)}\xspace}
+\newcommand{\emVII}{\emph{(VII)}\xspace}
+\newcommand{\emVIII}{\emph{(VIII)}\xspace}
+\newcommand{\emIX}{\emph{(IX)}\xspace}
+\newcommand{\emX}{\emph{(X)}\xspace}
+
+\newcommand{\emzro}{\emph{(0)}\xspace}
+\newcommand{\emone}{\emph{(1)}\xspace}
+\newcommand{\emtwo}{\emph{(2)}\xspace}
+\newcommand{\emthr}{\emph{(3)}\xspace}
+\newcommand{\emfor}{\emph{(4)}\xspace}
+\newcommand{\emfiv}{\emph{(5)}\xspace}
+\newcommand{\emsix}{\emph{(6)}\xspace}
+\newcommand{\emsev}{\emph{(7)}\xspace}
+\newcommand{\emeit}{\emph{(8)}\xspace}
+\newcommand{\emnin}{\emph{(9)}\xspace}
+\newcommand{\emten}{\emph{(10)}\xspace}
+
+\newcommand{\ema}{\emph{(a)}\xspace}
+\newcommand{\emb}{\emph{(b)}\xspace}
+\newcommand{\emc}{\emph{(c)}\xspace}
+\newcommand{\emd}{\emph{(d)}\xspace}
+\newcommand{\eme}{\emph{(e)}\xspace}
+\newcommand{\emf}{\emph{(f)}\xspace}
+\newcommand{\emg}{\emph{(g)}\xspace}
+\newcommand{\emh}{\emph{(h)}\xspace}
+% The same `\emi` already defined
+\newcommand{\emj}{\emph{(j)}\xspace}
+\newcommand{\emk}{\emph{(k)}\xspace}
+\newcommand{\eml}{\emph{(l)}\xspace}
+\newcommand{\emm}{\emph{(m)}\xspace}
+\newcommand{\emn}{\emph{(n)}\xspace}
+\newcommand{\emo}{\emph{(o)}\xspace}
+\newcommand{\emp}{\emph{(p)}\xspace}
+\newcommand{\emq}{\emph{(q)}\xspace}
+\newcommand{\emr}{\emph{(r)}\xspace}
+\newcommand{\ems}{\emph{(s)}\xspace}
+\newcommand{\emt}{\emph{(t)}\xspace}
+\newcommand{\emu}{\emph{(u)}\xspace}
+% The same `\emv` already defined
+\newcommand{\emw}{\emph{(w)}\xspace}
+% The same `\emx` already defined
+\newcommand{\emy}{\emph{(y)}\xspace}
+\newcommand{\emz}{\emph{(z)}\xspace}
+
+%%% combined
+\newcommand{\itememi}{\textbf{\emph{(i)}}\xspace}
+\newcommand{\itememii}{\textbf{\emph{(ii)}}\xspace}
+\newcommand{\itememiii}{\textbf{\emph{(iii)}}\xspace}
+\newcommand{\itememiv}{\textbf{\emph{(iv)}}\xspace}
+\newcommand{\itememv}{\textbf{\emph{(v)}}\xspace}
+\newcommand{\itememvi}{\textbf{\emph{(vi)}}\xspace}
+\newcommand{\itememvii}{\textbf{\emph{(vii)}}\xspace}
+\newcommand{\itememviii}{\textbf{\emph{(viii)}}\xspace}
+\newcommand{\itememix}{\textbf{\emph{(ix)}}\xspace}
+\newcommand{\itememx}{\textbf{\emph{(x)}}\xspace}
+
+\newcommand{\itememI}{\textbf{\emph{(I)}}\xspace}
+\newcommand{\itememII}{\textbf{\emph{(II)}}\xspace}
+\newcommand{\itememIII}{\textbf{\emph{(III)}}\xspace}
+\newcommand{\itememIV}{\textbf{\emph{(IV)}}\xspace}
+\newcommand{\itememV}{\textbf{\emph{(V)}}\xspace}
+\newcommand{\itememVI}{\textbf{\emph{(VI)}}\xspace}
+\newcommand{\itememVII}{\textbf{\emph{(VII)}}\xspace}
+\newcommand{\itememVIII}{\textbf{\emph{(VIII)}}\xspace}
+\newcommand{\itememIX}{\textbf{\emph{(IX)}}\xspace}
+\newcommand{\itememX}{\textbf{\emph{(X)}}\xspace}
+\fi
+
+
+% Operators
+\DeclareMathOperator{\id}{id}
+\DeclareMathOperator{\Id}{Id}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\Tr}{Tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\Diag}{Diag}
+\DeclareMathOperator{\Exp}{Exp}
+\DeclareMathOperator{\expm}{expm}
+\DeclareMathOperator{\grad}{grad}
+\DeclareMathOperator{\divg}{div}
+\DeclareMathOperator{\curl}{curl}
+\DeclareMathOperator{\lap}{lap}
+\DeclareMathOperator{\Lap}{Lap}
+\DeclareMathOperator{\hess}{hess}
+\DeclareMathOperator{\Hess}{Hess}
+\DeclareMathOperator{\jac}{jac}
+\DeclareMathOperator{\Jac}{Jac}
+\DeclareMathOperator{\supp}{supp}
+\DeclareMathOperator{\var}{var}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\cov}{cov}
+\DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\pmaxargmax}{(max, argmax)}
+\DeclareMathOperator*{\pminargmin}{(min, argmin)}
+\DeclareMathOperator*{\bmaxargmax}{[max, argmax]}
+\DeclareMathOperator*{\bminargmin}{[min, argmin]}
+\DeclareMathOperator*{\brmaxargmax}{\{max, argmax\}}
+\DeclareMathOperator*{\brminargmin}{\{min, argmin\}}
+\DeclareMathOperator*{\amaxargmax}{\langle max, argmax \rangle}
+\DeclareMathOperator*{\aminargmin}{\langle min, argmin \rangle}
+\DeclareMathOperator*{\maxdargmax}{max \cdot argmax}
+\DeclareMathOperator*{\mindargmin}{min \cdot argmin}
+
+\newcommand\pperp{\protect\mathpalette{\protect\pperpType}{\perp}}
+\def\pperpType#1#2{\mathrel{\rlap{$#1#2$}\mkern2mu{#1#2}}}
+
+% \makeatletter % Taken from http://ctan.org/pkg/centernot
+% \newcommand*{\centernot}{\mathpalette\@centernot}
+% \def\@centernot#1#2{\mathrel{\rlap{%
+%       \settowidth\dimen@{$\m@th#1{#2}$}%
+%       \kern.5\dimen@
+%       \settowidth\dimen@{$\m@th#1=$}%
+%       \kern-.5\dimen@
+%       $\m@th#1\not$%
+% }{#2}}}
+% \makeatother
+% \newcommand{\notperp}{\centernot{\perp}}
+% \newcommand{\notpperp}{\centernot{\pperp}}
+\newcommand{\notperp}{\not\perp}
+\newcommand{\notpperp}{\not\pperp}
+
+
+% Deliminators
+\RequirePackage{mathtools}
+%% Originally, the stared versions of the newly defined commands automatically adjust their size based on contents.
+\DeclarePairedDelimiter\lrparen{\lparen}{\rparen}
+\DeclarePairedDelimiter\lrbrack{\lbrack}{\rbrack}
+\DeclarePairedDelimiter\lrbrace{\lbrace}{\rbrace}
+\DeclarePairedDelimiter\lrvert{\lvert}{\rvert}
+\DeclarePairedDelimiter\lrVert{\lVert}{\rVert}
+\DeclarePairedDelimiter\lrangle{\langle}{\rangle}
+\DeclarePairedDelimiter\llrrangle{\llangle}{\rrangle}
+\DeclarePairedDelimiter\lrceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\lrfloor{\lfloor}{\rfloor}
+\DeclarePairedDelimiterX\Set[2]{\lbrace}{\rbrace}{\, #1 \;\delimsize\vert\; #2 \,} % \vert: auto-resizable; \mid: auto-spacing
+%% Swap the definition of \lrvert* and \lrVert*, so that \lrvert and \lrVert resizes the size of the brackets, and the starred version does not.
+\let\origlrparen\lrparen
+\def\lrparen{\@ifstar{\origlrparen}{\origlrparen*}}
+\let\origlrbrack\lrbrack
+\def\lrbrack{\@ifstar{\origlrbrack}{\origlrbrack*}}
+\let\origlrbrace\lrbrace
+\def\lrbrace{\@ifstar{\origlrbrace}{\origlrbrace*}}
+\let\origlrvert\lrvert
+\def\lrvert{\@ifstar{\origlrvert}{\origlrvert*}}
+\let\origlrVert\lrVert
+\def\lrVert{\@ifstar{\origlrVert}{\origlrVert*}}
+\let\origlrangle\lrangle
+\def\lrangle{\@ifstar{\origlrangle}{\origlrangle*}}
+\let\origllrrangle\llrrangle
+\def\llrrangle{\@ifstar{\origllrrangle}{\origllrrangle*}}
+\let\origlrceil\lrceil
+\def\lrceil{\@ifstar{\origlrceil}{\origlrceil*}}
+\let\origlrfloor\lrfloor
+\def\lrfloor{\@ifstar{\origlrfloor}{\origlrfloor*}}
+\let\origSet\Set
+\def\Set{\@ifstar{\origSet}{\origSet*}}
+
+
+% Dirac's bra-ket notation
+\ifdefined\changdefsnobraket\else
+\DeclarePairedDelimiter\bra{\langle}{\rvert}
+\DeclarePairedDelimiter\ket{\lvert}{\rangle}
+\DeclarePairedDelimiterX\braket[2]{\langle}{\rangle}{#1 \delimsize\vert #2} % \vert: auto-resizable; \mid: auto-spacing
+\DeclarePairedDelimiterX\obraket[3]{\langle}{\rangle}{#1 \delimsize\vert #2 \delimsize\vert #3} % \vert: auto-resizable; \mid: auto-spacing
+%% Swap the definition of \lrvert* and \lrVert*, so that \lrvert and \lrVert resizes the size of the brackets, and the starred version does not.
+\let\origbra\bra
+\def\bra{\@ifstar{\origbra}{\origbra*}}
+\let\origket\ket
+\def\ket{\@ifstar{\origket}{\origket*}}
+\let\origbraket\braket
+\def\braket{\@ifstar{\origbraket}{\origbraket*}}
+\let\origobraket\obraket
+\def\obraket{\@ifstar{\origobraket}{\origobraket*}}
+\fi
+
+% \RequirePackage{stmaryrd}
+% \DeclarePairedDelimiter\lrbbrack{\llbracket}{\rrbracket}
+% \let\origlrbbrack\lrbbrack
+% \def\lrbbrack{\@ifstar{\origlrbbrack}{\origlrbbrack*}}
+% \DeclarePairedDelimiter\lrbag{\lbag}{\rbag}
+% \DeclarePairedDelimiter\lrBag{\lBag}{\rBag}
+%%% Use `\mathbbol` with option `[bbgreekl]`.
+\DeclarePairedDelimiter\lrbbrack{\Lbrack}{\Rbrack}
+
+% Special decorators
+\ifdefined\changdefsnodecorators\else
+\RequirePackage{accents}
+\newlength{\dhatheight}
+\newcommand{\doublehat}[1]{%
+  \settoheight{\dhatheight}{\ensuremath{\hat{#1}}}%
+  \addtolength{\dhatheight}{-0.35ex}%
+  \hat{\vphantom{\rule{1pt}{\dhatheight}}%
+  \smash{\hat{#1}}}
+}
+\newlength{\dtildeheight}
+\newcommand{\doubletilde}[1]{%
+  \settoheight{\dtildeheight}{\ensuremath{\tilde{#1}}}%
+  \addtolength{\dtildeheight}{-0.35ex}%
+  \tilde{\vphantom{\rule{1pt}{\dtildeheight}}%
+  \smash{\tilde{#1}}}
+}
+\fi
+
+
+% Theorems
+\ifdefined\changdefsnotheorems\else
+\RequirePackage{amsthm}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{innercustomthm}{Theorem}
+\newenvironment{theoremnum}[1]
+{\renewcommand\theinnercustomthm{#1}\innercustomthm}
+{\endinnercustomthm}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{assumption}[theorem]{Assumption}
+\newtheorem{condition}[theorem]{Condition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{hypothesis}[theorem]{Hypothesis}
+\newtheorem{postulate}[theorem]{Postulate}
+\newtheorem{principle}[theorem]{Principle}
+\newtheorem*{note}{Note}
+\fi
+
+\ifdefined\changdefsnocompactproof\else
+\makeatletter
+\renewenvironment{proof}[1][\textbf{\proofname}]{\par
+  % \vspace{-\topsep}% remove the space after the theorem
+  \pushQED{\qed}%
+  \normalfont
+  \topsep0pt \partopsep0pt % no space before
+  \trivlist
+  \item[\hskip\labelsep
+        \itshape
+    #1\@addpunct{.}]\ignorespaces
+}{%
+  \popQED\endtrivlist\@endpefalse
+  \addvspace{4pt plus 2pt} % some space after
+}
+\makeatother
+\fi
+
+\ifdefined\changdefschang
+  \RequirePackage{color}
+  \newcommand{\chang}[1]{{\color{blue}{\textsf{[Chang: #1]}}}}
+\fi
+\ifdefined\changdefshyperref
+  \RequirePackage[
+    unicode=true,
+    backref=section,
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=green,
+    filecolor=cyan,
+    menucolor=red,
+    urlcolor=magenta,
+    anchorcolor=red
+  ]{hyperref}
+  \AtBeginDocument{\let\textlabel\label} % trouble-shoots labels in align
+\fi
+
+% Global Behaviors
+\ifdefined\changdefsnoautonum\else
+  \RequirePackage{autonum} % Use package ``autonum'' (after ``hyperref'' and ``cleveref'' if needed) to display Eq. numbers only for in-text-referred equations. ``align*'' ``equation*'' environments disabled.
+\fi
+\ifdefined\changdefsnolege\else
+  \protected\def\le{\leqslant}
+  \protected\def\ge{\geqslant}
+\fi
+\ifdefined\changdefsalldisp
+  \everymath{\displaystyle} % Put in preamble to force all math envs. to use display style.
+\fi
+
+\newcommand{\eqnref}[1]{Eq.~\eqref{eqn:#1}}
+\newcommand{\secref}[1]{Sec.~\ref{sec:#1}}
+\newcommand{\appxref}[1]{Appx.~\ref{appx:#1}}
+\newcommand{\suppref}[1]{Supplementary~\ref{supp:#1}}
+\newcommand{\chapref}[1]{Chap.~\ref{chap:#1}}
+\newcommand{\figref}[1]{Fig.~\ref{fig:#1}}
+\newcommand{\tabref}[1]{Table~\ref{tab:#1}}
+\newcommand{\ftnref}[1]{Footnote~\ref{ftn:#1}}
+\newcommand{\thmref}[1]{Thm.~\ref{thm:#1}}
+\newcommand{\propref}[1]{Prop.~\ref{prop:#1}}
+\newcommand{\lemref}[1]{Lem.~\ref{lem:#1}}
+\newcommand{\corref}[1]{Cor.~\ref{cor:#1}}
+\newcommand{\assmref}[1]{Assm.~\ref{assm:#1}}
+\newcommand{\defref}[1]{Def.~\ref{def:#1}}
+\newcommand{\algref}[1]{Alg.~\ref{alg:#1}}
+\makeatletter
+\newcommand{\eqnsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Eqs.~(%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{eqn:\el}}\x%
+    }%
+  )
+}
+\makeatother
+\makeatletter
+\newcommand{\figsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Figs.~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{fig:\el}}\x%
+    }%
+}
+\makeatother
+\makeatletter
+\newcommand{\tabsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Tables~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{tab:\el}}\x%
+    }%
+}
+\makeatother
+\makeatletter
+\newcommand{\thmsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Thms.~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{thm:\el}}\x%
+    }%
+}
+\makeatother
+\makeatletter
+\newcommand{\propsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Props.~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{prop:\el}}\x%
+    }%
+}
+\makeatother
+\makeatletter
+\newcommand{\lemsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Lems.~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{lem:\el}}\x%
+    }%
+}
+\makeatother
+\makeatletter
+\newcommand{\corsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Cors.~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{cor:\el}}\x%
+    }%
+}
+\makeatother
+\makeatletter
+\newcommand{\defsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Defs.~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{def:\el}}\x%
+    }%
+}
+\makeatother
+\makeatletter
+\newcommand{\assmsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Assms.~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{assm:\el}}\x%
+    }%
+}
+\makeatother
+\makeatletter
+\newcommand{\algsref}[1]{%
+  \def\nextitem{\def\nextitem{, }}% deferred `\def`
+  Algs.~%
+    \@for \el:=#1\do{%
+      \nextitem\begingroup\protected@edef\x{\endgroup\noexpand\ref{alg:\el}}\x%
+    }%
+}
+\makeatother
+
+% Commands with Arguments
+\newcommand{\tabincell}[2]{\begin{tabular}{@{} #1 @{}} #2 \end{tabular}}
+\newcommand{\e}[1]{\times 10^{#1}}
+\newcommand*{\rfrac}[2]{{}^{#1}\!/_{\!#2}}
+% \RequirePackage{xparse}
+% \NewDocumentCommand{\fracpartial}{O{}mm}{%
+\newcommand{\fracpartial}[3][]{%
+  \def\temp{#1} \ifx\temp\empty
+  \frac{\partial #2}{\partial #3}
+  \else
+  \frac{\partial^{#1} #2}{{\partial #3}^{#1}}
+  \fi
+}
+\newcommand{\fracdiff}[3][]{%
+  \def\temp{#1} \ifx\temp\empty
+  \frac{\dd #2}{\dd #3}
+  \else
+  \frac{\dd^{#1} #2}{{\dd #3}^{#1}}
+  \fi
+}
+\newcommand{\fracdelta}[3][]{%
+  \def\temp{#1} \ifx\temp\empty
+  \frac{\rmdelta #2}{\rmdelta #3}
+  \else
+  \frac{\rmdelta^{#1} #2}{{\rmdelta #3}^{#1}}
+  \fi
+}
+\newcommand{\fracDelta}[3][]{%
+  \def\temp{#1} \ifx\temp\empty
+  \frac{\rmDelta #2}{\rmDelta #3}
+  \else
+  \frac{\rmDelta^{#1} #2}{{\rmDelta #3}^{#1}}
+  \fi
+}
+
+% Common functions / distributions
+\newcommand{\KL}{\mathrm{KL}}
+\newcommand{\JS}{\mathrm{JS}}
+\newcommand{\vMF}{\mathrm{vMF}}
+\newcommand{\Cat}{\mathrm{Cat}}
+\newcommand{\Dir}{\mathrm{Dir}}
+\newcommand{\Bern}{\mathrm{Bern}}
+\newcommand{\Mult}{\mathrm{Mult}}
+\newcommand{\Unif}{\mathrm{Unif}}
+
+\newcommand{\Sigm}{\mathrm{Sigm}}
+\newcommand{\sigm}{\mathrm{sigm}}
+\newcommand{\Sign}{\mathrm{Sign}}
+\newcommand{\sign}{\mathrm{sign}}
+\newcommand{\Sgn}{\mathrm{Sgn}}
+\newcommand{\sgn}{\mathrm{sgn}}
+
+
+% Common Symbols
+\newcommand{\dd}{\mathrm{d}} % for differentiation
+%\newcommand{\ud}{\mathop{}\,\mathrm{d}} % for integral
+\newcommand{\ud}{\,\mathrm{d}} % for integral
+\newcommand{\ee}{\mathrm{e}} % base of exponential
+\newcommand{\ii}{\mathrm{i}} % imaginary number unit
+\newcommand{\ui}{\mathrm{i}\,} % imaginary number unit
+\newcommand{\trs}{^{\top}}
+%\newcommand{\trs}{^{\mathrm{T}}}
+\newcommand{\asn}{\leftarrow}
+
+\RequirePackage{xspace}
+\newcommand{\const}{\mathrm{const}}
+\newcommand{\st}{\text{~s.t.~}}
+\newcommand{\etal}{\emph{et~al.}\xspace}
+\newcommand{\ie}{\emph{i.e.}\xspace}
+\newcommand{\eg}{\emph{e.g.}\xspace}
+\newcommand{\cf}{\emph{c.f.}\xspace}
+\newcommand{\etc}{\emph{etc.}\xspace}
+
+\endinput
+
+% Notes
+%
+%% Math Typesetting
+% 1. ``\numberwithin{equation}{section}'' in preamble to allow equation numbers like (1.1). Similarly for ``\numberwithin{theorem}{section}'', etc.
+% 2. Wrap env. ``align'' (or ``eqnarray'', ``multline'', etc) with env. ``subequations'' to allow numbers like (1.1a) (1.1b) for multiple lines of equations.
+% 3. Remember to use ``\substack{aaa \\ bbb}'' to type multi-line subscripts.
+% 4. ``\overset'' and ``\stackrel'' produce the same result. ``\underset'' available.
+% 5. Env. ``multiline'': first line of equation left aligned, last line right aligned.
+% 6. Env. ``aligned'' similar to ``split'': used within another math env.
+% 7. ``\abovedisplayskip=12pt'', ``\belowdisplayskip=12pt'', ``\abovedisplayshortskip=0pt'', ``\belowdisplayshortskip=7pt'' to control vertical white spaces around displayed math. Short skips are used if the preceding line ends, horizontally, before the formula. All commands should go after ``\begin{document}''.
+% 8. ``\text{some contents}'' is preferred over ``\mbox{contents}''.
+%    Use ``\intertext{contents}'' or ``\shortintertext{contents}'' (shorter vertical spacing) to temporarily get back to text mode from display math mode.
+% 9. Env. ``eqnarray'', ``$$ some math $$'' not recommended.
+% 10. Use ``\displaybreak'' within a display math env. to suggest that LaTeX insert a page break.
+%     Desirability d can be provided ``\displaybreak[d]'', where d=0 means permissible and d=4 (default) forces a break.
+%     (``\pagebreak'' has a similar behavior, except that it is used in normal text.)
+%     Alternatively, use ``\allowdisplaybreaks[d]'' globally in preamble or within ``\begin{document}'' or locally ``\bgroup\allowdisplaybreaks\begin{align} xyz \end{align}\egroup'' to enable automatic page break, where d=1 means "allow page breaks but avoid them" and d=4 means "break whenever you want". Prohibit a page break after a given line using ``\\*''.
+% 11. Use " \sum\nolimits' " to avoid the prime "'" going on top of the summation symbol.
+% 12. ``f(x) &= x^4 + 7x^3 \\
+%     ``&\qquad {} + 10x + 12'': use ``{}'' before ``+'' to make ``+'' a binary operator instead of a unary positive sign. This affects proper spacing.
+% 13. `` A &= \left(\int_t f(x) \mathrm d x \right. \\
+%     `` &\qquad \left.\vphantom{\int_t} g(x) \mathrm d x \right) '': an alternative to manually adjusting parentheses size. ``\vphantom'' informs the ``\left.''-``\right)'' pair of proper height.
+%     `` \left( ... \middle| ... \right) '': ``\middle|'' available.
+% 14. The column alignment in ``align'' is ``rlrlrl...'', where the last ``r'' flushes right. So you may need ``&&'' accordingly.
+%     For ``flalign'', it is ``lrlrlr...'', where the fisrt ``l'' flushes left.
+%     So ``\begin{flalign} \text{(Description)} && equation = 0 && \label{eqn:xx} \end{flalign}'' puts ``(Description)'' to the left and the equation in the middle of the page.
+% 15. ``\tag{words}'' displays ``(words)'' in place of the number of the equation. ``\tag*{}'' does not add parenthesis. (amsmath)
+%     The ``(words)'' is displayed even when ``autonum'' is active.
+%     The best way to use ``(words)'' as a ref is ``\refeq{eqn:xx}'' (mathtools; redefined as ``\origrefeq'') (use the same font as displayed in equation, ignore the ref'ing env).
+% 16. When using ``autonum'', ``align*'' envs are deleted. Use ``align+'' envs to enforce numbering (whether or not ref'ed). Do not use ``eqnarray'' env.
+%
+%% The Column Specification of the Tabular Env.
+% 1. ``@{content}'': acts as a column separator that inserts the content between the adjacent columns. It also kills inter-column space. E.g., ``{r@{.}l}''
+% 2. ``\usepackage{array}'' to allow ``>{pre-content}c<{post-content}'', which inserts pre-content before and post-content after the content in the column. E.g., ``{>{$}c<{$}}'', ``{>{\textbf\bgroup}c<{\egroup}}''.
+% 3. Column specifier ``p{width}'': makes a column of a text block with the specified width. Auto-wrapping and manual line break (using ``\newline'') are allowed. With ``\usepackage{array}'', ``m'' (vertically middle), ``b'' (vert. bottom) are available.
+%    For auto-wrapping, alternatively, ``\parbox[t/c/b]{width}{content1 \\ content2}''.
+% 4. ``{*{num_cols}{l/c/r}}''
+% 5. ``\multicolumn{num_cols}{l/c/r/p}{contents}''
+%    ``\multirow{num_rows}{width}{contents}'' (requires ``\usepackage{multirow}''), where taking ``width'' as ``*'' means the contents' natural width.
+%    (Note that lines after the first line of ``\multirow{...}'' also requires the same number of ``&''s.)
+%    The two can be used in a nested way: for 4 cols, ``\multicolumn{3}{c}{ \multirow{2}{*}{text1} } & text2 \\ & & & text3''. Note the first 3 cols in the second line are treated as THREE cells.
+%
+%% The Overlay of Beamers
+% 1. Basic Behaviors
+% 1.1. ``\only<overlay-spec>{text}<overlay-spec>'' (either ``<overlay-spec>'' is present) is the strongest. On unspecified slides, the text is completely thrown out.
+% 1.2. ``\visible<overlay-spec>{text}'' is the modest. On unspecified slides, the text is never shown, but still occupies space and is typeset. ``\invisible'' does the inverse.
+% 1.3. ``\uncover<overlay-spec>{text}'' is the weakest. On unspecified slides, the text will be shown in a transparent (shadowed) way if ``\setbeamercovered{transparent}'' is present, otherwise is not shown. The text still occupies space and is typeset.
+% 2. Other Commands
+% 2.1. ``\onslide<modifier><overlay-spec>{text}'': no modifier: covered; modifier is ``+'': invisible; modifier is ``*'': only.
+% 2.2. ``\alt<overlay-spec>{default-text}{alternative-text}'' behaves like ``only''.
+% 2.3. Commands like ``<+->'' in envs. like ``itemize'': behaves like ``uncover''.
+% 3. Overlay Specifiers
+% ``+'': create a new slide. ``-'': specify the range of slides. ``.'': present on the current slide (instead of creating a new slide). ``+(num)'' or ``.(num)'': offset the presented slide number by ``num'' (can be negative). ``|'': logic-and.
+%
+

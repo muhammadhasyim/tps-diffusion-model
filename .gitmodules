@@ -7,15 +7,9 @@
 [submodule "plumed2"]
 	path = plumed2
 	url = https://github.com/plumed/plumed2.git
-[submodule "all-atom-diffusion-transformer"]
-	path = all-atom-diffusion-transformer
-	url = https://github.com/facebookresearch/all-atom-diffusion-transformer
 [submodule "papers/PriceofFreedom"]
 	path = papers/PriceofFreedom
 	url = https://github.com/atomicarchitects/PriceofFreedom.git
 [submodule "papers/runs-n-poses"]
 	path = papers/runs-n-poses
 	url = https://github.com/plinder-org/runs-n-poses.git
-[submodule "RLDiff"]
-	path = RLDiff
-	url = https://github.com/oxpig/RLDiff.git

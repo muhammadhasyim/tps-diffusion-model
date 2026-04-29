@@ -2,7 +2,7 @@
 
 TDD scaffolding -- written before implementation.
 
-Tests (CPU, OpenMM required; skipped if not installed):
+Tests (CPU, OpenMM required):
   - After first __call__, _simulation must be non-None
   - Second __call__ with same coords reuses the same _simulation object (no rebuild)
   - Second __call__ with same coords returns same RMSD (cache hit)
@@ -19,14 +19,9 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import numpy as np
+import openmm  # noqa: F401
+import openmm.app  # noqa: F401
 import pytest
-
-_OPENMM_AVAILABLE = True
-try:
-    import openmm  # noqa: F401
-    import openmm.app  # noqa: F401
-except ImportError:
-    _OPENMM_AVAILABLE = False
 
 
 # Minimal ALA-ALA PDB (same as test_cv_rmsd.py)
@@ -60,18 +55,17 @@ def _make_fake_trajectory(coords_np: np.ndarray):
     return _FakeTraj(coords_np)
 
 
-@pytest.mark.skipif(not _OPENMM_AVAILABLE, reason="openmm not installed")
 class TestPersistentOpenMMContext:
     """Tests requiring a real OpenMM install; use ALA-ALA (no ligand) for speed."""
 
     def _make_cv(self, topo_npz: Path) -> "OpenMMLocalMinRMSD":
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+        from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
         return OpenMMLocalMinRMSD(topo_npz=topo_npz, platform="CPU", max_iter=100)
 
     def test_simulation_is_none_before_first_call(self, tmp_path):
         """_simulation attribute must not exist (or be None) before any call."""
-        pytest.importorskip("genai_tps.enhanced_sampling.openmm_cv")
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+        pytest.importorskip("genai_tps.simulation.openmm_cv")
+        from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
         # We just check attribute existence before calling
         cv = OpenMMLocalMinRMSD.__new__(OpenMMLocalMinRMSD)
         # Before __init__ -- _simulation not set; after __init__ it's None
@@ -84,14 +78,14 @@ class TestPersistentOpenMMContext:
         pytest.importorskip("openmm")
         pytest.importorskip("pdbfixer")
 
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+        from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
         # We can't easily construct a real topo_npz in unit test, so test via mock
         cv = MagicMock(spec=OpenMMLocalMinRMSD)
         # Simulate two calls with same coords -> same result via LRU cache
         coords = np.random.default_rng(0).standard_normal((11, 3)).astype(np.float32)
         cv._coord_hash = OpenMMLocalMinRMSD._coord_hash
         # The real cache is tested via the actual class if OpenMM available
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD as Real
+        from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD as Real
         key1 = Real._coord_hash(coords)
         key2 = Real._coord_hash(coords)
         assert key1 == key2, "Same coords must produce same cache key"
@@ -100,7 +94,7 @@ class TestPersistentOpenMMContext:
         """After building the context on first call, _simulation must be reused."""
         pytest.importorskip("pdbfixer")
 
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+        from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
 
         # Build a minimal npz by patching the underlying minimize call so we
         # don't need a real checkpoint
@@ -123,7 +117,7 @@ class TestPersistentOpenMMContext:
 
     def test_persistent_context_attribute_exists_on_class(self):
         """OpenMMLocalMinRMSD.__init__ must initialize _simulation to None."""
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
+        from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
         import inspect
         src = inspect.getsource(OpenMMLocalMinRMSD.__init__)
         assert "_simulation" in src, (
@@ -139,11 +133,11 @@ class TestOpenMMEnergyAttributes:
     """Structural tests for OpenMMEnergy that don't require OpenMM runtime."""
 
     def test_class_exists_and_is_callable(self):
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy
+        from genai_tps.simulation.openmm_cv import OpenMMEnergy
         assert callable(OpenMMEnergy), "OpenMMEnergy must be callable (has __call__)"
 
     def test_init_sets_cache_and_counters(self):
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy
+        from genai_tps.simulation.openmm_cv import OpenMMEnergy
         cv = OpenMMEnergy.__new__(OpenMMEnergy)
         cv.__init__(topo_npz="/tmp/fake.npz", platform="CPU")
         assert cv._n_calls == 0
@@ -153,40 +147,39 @@ class TestOpenMMEnergyAttributes:
         assert cv.fallback_value == 1e8
 
     def test_coord_hash_deterministic(self):
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy
+        from genai_tps.simulation.openmm_cv import OpenMMEnergy
         coords = np.random.default_rng(42).standard_normal((10, 3)).astype(np.float32)
         h1 = OpenMMEnergy._coord_hash(coords)
         h2 = OpenMMEnergy._coord_hash(coords)
         assert h1 == h2
 
     def test_coord_hash_differs_for_different_coords(self):
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy
+        from genai_tps.simulation.openmm_cv import OpenMMEnergy
         rng = np.random.default_rng(42)
         c1 = rng.standard_normal((10, 3)).astype(np.float32)
         c2 = rng.standard_normal((10, 3)).astype(np.float32)
         assert OpenMMEnergy._coord_hash(c1) != OpenMMEnergy._coord_hash(c2)
 
-    def test_fallback_when_coords_extraction_fails(self):
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy
+    def test_raises_when_coords_extraction_fails(self):
+        """OpenMMEnergy raises TypeError when snapshot has no coordinates."""
+        from genai_tps.simulation.openmm_cv import OpenMMEnergy
         cv = OpenMMEnergy.__new__(OpenMMEnergy)
         cv.__init__(topo_npz="/tmp/fake.npz", platform="CPU")
         cv._topo = "sentinel"
         cv._n_struct = 10
 
         class _NoCoordSnap:
-            tensor_coords = None
-            coordinates = None
+            pass
 
         class _FakeTraj:
             def __getitem__(self, idx):
                 return _NoCoordSnap()
 
-        result = cv(_FakeTraj())
-        assert result == cv.fallback_value
-        assert cv._n_failures == 1
+        with pytest.raises(TypeError, match="neither.*tensor_coords.*nor.*coordinates"):
+            cv(_FakeTraj())
 
     def test_stats_method(self):
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy
+        from genai_tps.simulation.openmm_cv import OpenMMEnergy
         cv = OpenMMEnergy.__new__(OpenMMEnergy)
         cv.__init__(topo_npz="/tmp/fake.npz", platform="CPU")
         cv._n_calls = 10
@@ -218,7 +211,7 @@ class TestOpenMMEnergyCacheBehavior:
 
     def test_cache_prevents_redundant_evaluation(self):
         """Calling with the same coords twice should hit the cache on the second call."""
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy
+        from genai_tps.simulation.openmm_cv import OpenMMEnergy
 
         cv = OpenMMEnergy.__new__(OpenMMEnergy)
         cv.__init__(topo_npz="/tmp/fake.npz", platform="CPU")
@@ -236,7 +229,7 @@ class TestOpenMMEnergyCacheBehavior:
 
     def test_cache_eviction_at_capacity(self):
         """LRU cache should evict oldest entry when exceeding cache_size."""
-        from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy
+        from genai_tps.simulation.openmm_cv import OpenMMEnergy
 
         cv = OpenMMEnergy.__new__(OpenMMEnergy)
         cv.__init__(topo_npz="/tmp/fake.npz", platform="CPU", cache_size=2)
@@ -262,30 +255,21 @@ class TestOpenMMEnergyCacheBehavior:
 class TestOpenMMCVAttributes:
     def test_simulation_attr_initialized_to_none(self):
         """_simulation must be None immediately after construction (before first call)."""
-        try:
-            from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
-        except ImportError:
-            pytest.skip("genai_tps not importable")
+        from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
 
-        # Patch the load to avoid needing real npz
         with patch.object(OpenMMLocalMinRMSD, "_load_topo"):
             cv = OpenMMLocalMinRMSD.__new__(OpenMMLocalMinRMSD)
             cv.__init__.__func__  # exists
-            # After the persistent-context refactor, __init__ must set _simulation = None
             import inspect
             src = inspect.getsource(OpenMMLocalMinRMSD.__init__)
             assert "_simulation" in src
 
     def test_ligand_smiles_cache_attr_initialized(self):
         """_ligand_smiles_cache must be initialized (or _cached_ligand_smiles) for reuse."""
-        try:
-            from genai_tps.enhanced_sampling.openmm_cv import OpenMMLocalMinRMSD
-        except ImportError:
-            pytest.skip("genai_tps not importable")
+        from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
+
         import inspect
         src = inspect.getsource(OpenMMLocalMinRMSD.__init__)
-        # After implementation, init must have some caching attribute for GAFF
-        # (either _simulation or _gaff_generator or _cached_system)
         has_cache = any(
             attr in src
             for attr in ("_simulation", "_cached_system", "_gaff_generator", "_context")

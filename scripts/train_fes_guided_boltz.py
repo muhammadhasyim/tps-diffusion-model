@@ -39,6 +39,18 @@ if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
 
+def _exit_if_rl_excluded() -> None:
+    try:
+        import genai_tps.rl.config  # noqa: F401
+    except ImportError:
+        print(
+            "This script requires the optional genai_tps.rl package.\n"
+            "Restore it with: git checkout HEAD -- src/python/genai_tps/rl",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
 def _build_boltz_session(
     *,
     yaml_path: Path,
@@ -186,6 +198,7 @@ def _write_ref_pdb_from_structure(structure, n_struct: int, out_pdb: Path) -> No
 
 
 def main() -> None:
+    _exit_if_rl_excluded()
     parser = argparse.ArgumentParser(description="FES-guided RL (OpenMM+OPES teacher, Boltz student).")
     parser.add_argument("--yaml", type=Path, default=None, help="Boltz input YAML (co-folding).")
     parser.add_argument("--cache", type=Path, default=None, help="Boltz cache dir (default ~/.boltz).")
@@ -226,9 +239,9 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        from genai_tps.analysis.boltz_npz_export import load_topo
+        from genai_tps.io.boltz_npz_export import load_topo
         from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
-        from genai_tps.enhanced_sampling.opes_bias import OPESBias
+        from genai_tps.simulation import OPESBias
         from genai_tps.rl.config import BoltzRLConfig, FESTeacherConfig
         from genai_tps.rl.fes_teacher import OpenMMTeacher, boltz_terminal_pose_cv_numpy
         from genai_tps.rl.rollout import rollout_forward_trajectory

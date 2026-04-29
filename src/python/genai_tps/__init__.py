@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import openpathsampling as paths
-
 __all__ = [
     "paths",
     "BoltzDiffusionEngine",
@@ -23,6 +21,10 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name == "paths":
+        import openpathsampling as paths
+
+        return paths
     if name == "BoltzDiffusionEngine":
         from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 

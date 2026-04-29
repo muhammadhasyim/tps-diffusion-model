@@ -12,11 +12,14 @@ All tests use MockDiffusion (no GPU, no checkpoint required).
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
 import torch
 import pytest
+
+os.environ["GENAI_TPS_NAN_FALLBACK"] = "1"
 
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore

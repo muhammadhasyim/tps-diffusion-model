@@ -12,16 +12,55 @@ with:
     beta_i = 1 + alpha_i * (1 - c_skip(t_hat))
     mu_i   = -alpha_i * c_out(t_hat) * c_in(t_hat)
 
-The scalar approximation log|det J_i| = 3M * log|1 + alpha_i|  treats
+The scalar approximation log|det J_i| = 3M * log|1 + alpha_i| treats
 nabla_z f_theta as zero (i.e. D_theta(x) ~ x).  For fixed-length TPS with a
 fixed schedule, alpha_i depends only on the step index (not the path), so
 this term cancels exactly in acceptance ratios for both forward and backward
-shooting.  The scalar approximation is therefore correct for MCMC purposes.
+shooting.  The scalar approximation is therefore useful for cancellation and
+diagnostics, but it is not a calibrated absolute neural-map determinant.
 
 The exact Jacobian (compute_log_det_jacobian_exact) is available for
-diagnostics and for absolute path probability evaluation.  It uses chunked
-forward-mode AD via torch.func.jvp + torch.func.vmap and is O(M * n_chunks)
-forward passes per step.
+diagnostics.  It uses chunked forward-mode AD via torch.func.jvp +
+torch.func.vmap and is O(M * n_chunks) forward passes per step.  Do not insert
+exact, state-dependent Jacobians into backward-shooting acceptance ratios
+without also deriving the matching proposal-ratio correction.
+
+Density convention
+------------------
+The TPS implementation samples an extended random-variable state consisting of
+coordinates plus per-step random draws (rotation, translation, churn noise).
+In that parameterization the path density is a product of priors over the
+draws and has no coordinate Jacobian.  A coordinate-density interpretation can
+instead include ``-log|det J_i|`` for the change of variables from noise to
+coordinates.  ``trajectory_log_path_prob`` and ``compute_log_path_prob`` return
+a reduced diagnostic score: initial-noise prior, churn-noise priors, and
+optional scalar Jacobian terms.  Haar factors are constant and translation
+priors are intentionally omitted because the implemented MH moves draw
+translation from the same prior in proposal and target ratios.
+
+Quotient-space sampling note
+-----------------------------
+When ``BoltzSamplerCore.quotient_space_sampling=True`` the Euler update is
+replaced by a horizontally projected step (arXiv:2604.21809, Eq. 13):
+
+    x_{i+1} = x_i + step_scale * (sigma_{i+1} - t_hat_i) * P_{x_i}(v_theta)
+
+The sampler applies the horizontal projection in a mask-centered shape frame
+to remove rotational vertical motion.  Boltz's random translation is retained
+as an auxiliary variable in the extended path state, so this implementation is
+an SO(3)-quotient sampler with translation noise rather than a fully
+CoM-free SE(3) coordinate sampler.
+
+The scalar log|det J_i| term above remains a schedule-only diagnostic in this
+mode.  No production code assumes it is a complete quotient-coordinate
+Jacobian.
+
+Forward shooting and global reshuffle remain valid because they sample from
+the same forward quotient-space kernel used in the path weight.  Backward
+shooting additionally requires quotient-aware fixed-point inversion of the
+projected map; this is handled in ``BoltzSamplerCore._solve_x_noisy_from_output``.
+Until the full backward Hastings correction is validated for production,
+``BoltzDiffusionBackwardShootMover`` refuses quotient-space cores.
 """
 
 from __future__ import annotations
@@ -220,7 +259,8 @@ def log_det_jacobian_step(alpha: float, n_coords: int) -> torch.Tensor:
     because alpha_i depends only on the schedule step index (not the path),
     so these terms cancel identically between old and new paths.
 
-    For absolute path probability evaluation, use compute_log_det_jacobian_exact.
+    For absolute diagnostics of the coordinate map, use
+    compute_log_det_jacobian_exact outside production MH ratios.
     """
     d = 3 * n_coords
     return d * torch.log(torch.abs(torch.tensor(1.0 + alpha)) + 1e-30)
@@ -259,40 +299,61 @@ def trajectory_log_path_prob(
     core: "BoltzSamplerCore",
     *,
     include_jacobian: bool = True,
+    strict: bool = True,
 ) -> float | None:
-    """Log path density :math:`\\log \\pi(\\text{path})` from stored frame noises (Boltz snapshots).
+    """Reduced log path score from stored frame noises (Boltz snapshots).
 
-    Uses the same factorization as :func:`compute_log_path_prob`: Gaussian draws at each
-    forward step plus optional Jacobian terms and the initial noise prior. Returns
-    ``None`` if frames are not :class:`BoltzSnapshot` or any step is missing ``eps_used``.
+    Uses the same convention as :func:`compute_log_path_prob`: initial-noise
+    prior, Gaussian churn-noise draws at each forward step, and optional scalar
+    Jacobian diagnostics.  Haar factors and translation priors are omitted, so
+    this is not a complete calibrated extended-state log density.
+
+    Parameters
+    ----------
+    strict:
+        When ``True`` (default), raises ``ValueError`` if the trajectory is too
+        short, contains non-BoltzSnapshot frames, or is missing ``eps_used``.
+        When ``False``, returns ``None`` for these cases (legacy behavior).
+
     If any lower frame was produced by backward re-noising, uses
     :func:`prefix_forward_transitions_log_prob_tensor` and recovered forward noises.
     """
     n = len(traj)
     if n < 2:
+        if strict:
+            raise ValueError(
+                f"trajectory_log_path_prob: trajectory has {n} frames (need >= 2)."
+            )
         return None
     snap0 = traj[0]
     if not isinstance(snap0, BoltzSnapshot):
+        if strict:
+            raise TypeError(
+                f"trajectory_log_path_prob: first snapshot is {type(snap0).__name__}, "
+                "not BoltzSnapshot. Path probability requires BoltzSnapshot frames."
+            )
         return None
     use_mixed = any(
         isinstance(traj[i], BoltzSnapshot) and getattr(traj[i], "generated_by_backward", False)
         for i in range(n - 1)
     )
     if use_mixed:
-        try:
-            trans = prefix_forward_transitions_log_prob_tensor(
-                traj, core, include_jacobian=include_jacobian
-            )
-            x0 = _tensor_batch(snap0, core)
-            prior = log_prior_initial(x0, float(core.schedule[0].sigma_tm)).sum()
-            return float((trans + prior).detach().cpu().item())
-        except (TypeError, ValueError, RuntimeError):
-            return None
+        trans = prefix_forward_transitions_log_prob_tensor(
+            traj, core, include_jacobian=include_jacobian
+        )
+        x0 = _tensor_batch(snap0, core)
+        prior = log_prior_initial(x0, float(core.schedule[0].sigma_tm)).sum()
+        return float((trans + prior).detach().cpu().item())
 
     eps_list: list[torch.Tensor] = []
     for i in range(n - 1):
         snap = traj[i + 1]
         if not isinstance(snap, BoltzSnapshot) or snap.eps_used is None:
+            if strict:
+                raise ValueError(
+                    f"trajectory_log_path_prob: frame {i + 1} is not a BoltzSnapshot "
+                    f"or has eps_used=None (type={type(snap).__name__})."
+                )
             return None
         eps_list.append(snap.eps_used)
     x0 = snap0.tensor_coords
@@ -321,14 +382,16 @@ def compute_log_path_prob(
     include_jacobian: bool = True,
     n_atoms: int | None = None,
 ) -> torch.Tensor:
-    """Sum log p over stochastic draws (noise terms) and optional Jacobian factors.
+    """Sum the reduced path score over noise draws and optional Jacobian terms.
 
     Uses the scalar Jacobian approximation (log_det_jacobian_step).  For
     fixed-length TPS the Jacobian terms cancel in acceptance ratios so
     ``include_jacobian=True`` has no effect on MCMC correctness; it is
-    included here for absolute log-density evaluation.  Haar and translation
-    densities are omitted (constant w.r.t. state; cancel in ratios).  If
-    ``initial_coords`` and ``sigma0`` are given, adds log rho(x_0).
+    included here only as a diagnostic coordinate-density correction.  Haar
+    densities are constant.  Translation densities are nonconstant in ``tau``
+    but are omitted because every implemented MH proposal draws ``tau`` from
+    the same prior, so these factors cancel in accepted-ratio calculations.
+    If ``initial_coords`` and ``sigma0`` are given, adds log rho(x_0).
     """
     device = eps_list[0].device if eps_list else torch.device("cpu")
     total = torch.zeros((), device=device, dtype=torch.float32)
@@ -343,7 +406,7 @@ def compute_log_path_prob(
             step_scale = float(meta["step_scale"])
             alpha = step_scale * (sigma_t - t_hat) / t_hat
             m = n_atoms if n_atoms is not None else eps.shape[1]
-            total = total + log_det_jacobian_step(alpha, m).to(device)
+            total = total - log_det_jacobian_step(alpha, m).to(device)
     if initial_coords is not None and sigma0 is not None:
         total = total + log_prior_initial(initial_coords, sigma0).sum()
     return total
@@ -357,8 +420,9 @@ def min_metropolis_acceptance_path(
 ) -> float:
     """Standard Metropolis acceptance :math:`\\min(1, \\pi_\\mathrm{new}/\\pi_\\mathrm{old})`.
 
-    ``log_p_*`` are natural logs of the **factorized path density** in
-    :func:`compute_log_path_prob` (noise likelihoods, Jacobian terms, initial prior).
+    ``log_p_*`` are natural logs of the reduced path score in
+    :func:`compute_log_path_prob` (noise likelihoods, optional scalar Jacobian
+    terms, initial prior).
     OpenPathSampling’s shooting movers *also* apply proposal (selector / modifier)
     Hastings factors through ``sample.bias``; those are **not** included here—compare
     with ``metropolis_acceptance`` in the log for the OPS product including bias.
@@ -444,7 +508,7 @@ def prefix_forward_transitions_log_prob_tensor(
             sigma_t = float(meta["sigma_t"])
             step_scale = float(meta["step_scale"])
             alpha = step_scale * (sigma_t - t_hat) / t_hat
-            total = total + log_det_jacobian_step(alpha, n_atoms).to(device)
+            total = total - log_det_jacobian_step(alpha, n_atoms).to(device)
     return total
 
 
@@ -474,9 +538,13 @@ def prefix_backward_proposal_log_prob_tensor(
         else:
             if s_hi.rotation_R is None or s_hi.translation_t is None:
                 raise ValueError("backward recovery requires R,tau on upper frame")
-            cm = _tensor_batch(s_lo, core).mean(dim=-2, keepdim=True)
+            x_lo = _tensor_batch(s_lo, core)
+            if hasattr(core, "_masked_center_of_mass"):
+                cm = core._masked_center_of_mass(x_lo)
+            else:
+                cm = x_lo.mean(dim=-2, keepdim=True)
             eps, _ = core.recover_backward_noise(
-                _tensor_batch(s_lo, core),
+                x_lo,
                 _tensor_batch(s_hi, core),
                 j,
                 s_hi.rotation_R,
@@ -494,6 +562,7 @@ def backward_shooting_metropolis_bias(
     core: "BoltzSamplerCore",
     *,
     include_jacobian: bool = True,
+    exact_jacobian: bool = False,
 ) -> float:
     """Hastings factor for backward shooting under non-reversible diffusion dynamics.
 
@@ -521,6 +590,12 @@ def backward_shooting_metropolis_bias(
     Returns :math:`\\min(1, \\exp(\\log r))`, where :math:`k` is ``shooting_index``
     and prefixes include frames ``0..k``.
     """
+    if exact_jacobian:
+        raise NotImplementedError(
+            "Exact Jacobians are not supported in backward_shooting_metropolis_bias. "
+            "Use the scalar schedule-dependent Jacobian, which cancels for "
+            "fixed-length TPS moves."
+        )
     k = int(shooting_index)
     if k < 0 or k >= len(old_traj) or len(new_traj) != len(old_traj):
         return 1.0

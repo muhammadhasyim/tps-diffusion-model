@@ -243,19 +243,28 @@ with scalars
 
 \subsection{Log path probability}
 
+In the extended random-variable parameterization, the sampled
+$(R_i,\tau_i,\varepsilon_i)$ are part of the path state and the density is a
+product of their priors, with no coordinate-change Jacobian:
+
 \begin{equation}
-  \log P(\mathcal{X})
+  \log P_{\rm ext}(\mathcal{X}_{\rm ext})
   = \log\rho(x_0)
   + \sum_{i=0}^{L-1}
     \Bigl[
       \underbrace{\log\Haar(R_i)}_{\text{const.}}
       + \underbrace{\log\N(\tau_i;\, 0,\, s_{\mathrm{trans}}^2 I)}_{\text{Gaussian}}
       + \underbrace{\log\N(\varepsilon_i;\, 0,\, v_i I)}_{\text{Gaussian}}
-      - \underbrace{\log|\det J_i|}_{\text{Jacobian}}
     \Bigr],
   \label{eq:log-path-prob}
 \end{equation}
-where $J_i = \partial x_{i+1}/\partial\varepsilon_i$.
+For coordinate-density diagnostics, the noise-to-coordinate map additionally
+contributes $-\log|\det J_i|$, where
+$J_i = \partial x_{i+1}/\partial\varepsilon_i$.  The implementation reports a
+reduced path score consisting of the initial prior, the $\varepsilon_i$ priors,
+and an optional scalar schedule-only Jacobian approximation.  It omits Haar
+terms and the nonconstant $\tau_i$ priors because these factors cancel in the
+implemented MH ratios.
 
 \subsection{Exact Jacobian}
 \label{sec:jacobian}
@@ -274,10 +283,10 @@ $\mu_i = -\alpha_i\,\cout(\that_i)\,\cin(\that_i)$.
 \subsection{Cancellation in acceptance ratios}
 \label{sec:jacobian-cancellation}
 
-\begin{proposition}[Forward shooting: Jacobians cancel]
+\begin{proposition}[Forward shooting: scalar Jacobians cancel]
 \label{prop:oneway-cancel}
-For one-way forward shooting from point $k$, the Jacobian
-log-determinants cancel exactly in the Metropolis acceptance ratio.
+For one-way forward shooting from point $k$, the scalar schedule-dependent
+Jacobian approximation cancels exactly in the Metropolis acceptance ratio.
 The remaining acceptance factor is $\HAB(\Xnew)$.
 \end{proposition}
 \begin{proof}
@@ -286,9 +295,12 @@ are drawn from their priors for $i \geq k$.  The proposal probability
 $G(\Xnew|\Xold,k) = \prod_{i\geq k}\Haar(R_i^\mathrm{n})\N(\tau_i^\mathrm{n})\N(\varepsilon_i^\mathrm{n})$.
 In the MH ratio $P(\Xnew)/P(\Xold)\times G(\Xold)/G(\Xnew)$, the Haar,
 translation, and noise terms from $G$ cancel the same factors from $P$.
-The Jacobian terms $|\det J_i|$ remain; because $\alpha_i$ depends only
-on schedule step $i$, we have $|\det J_i^\mathrm{n}|=|\det J_i^\mathrm{o}|$
-for each $i\geq k$, giving exact cancellation.
+Under the scalar approximation, the Jacobian terms $|\det J_i|$ remain;
+because $\alpha_i$ depends only on schedule step $i$, we have
+$|\det J_i^\mathrm{n}|=|\det J_i^\mathrm{o}|$ for each $i\geq k$, giving
+exact cancellation.  Exact Jacobians are state-dependent diagnostics and
+should not be inserted into the backward-shooting Hastings ratio without a
+separate proposal derivation.
 \end{proof}
 
 \subsection{Two-way acceptance ratio}
@@ -313,8 +325,8 @@ where
      - \log|\det J_i|,
   \label{eq:pfwd-logprob}\\
   \log\pbwd(x_i \mid x_{i+1})
-  &= -\frac{\|x_i - x_{i+1}\|^2}{2(\sigma_{i-1}^2 - \sigma_i^2)}
-     - \frac{3M}{2}\log\bigl(2\pi(\sigma_{i-1}^2 - \sigma_i^2)\bigr).
+  &= -\frac{\|\varepsilon_i^{\mathrm{bwd}}\|^2}{2v_i}
+     - \frac{3M}{2}\log\bigl(2\pi v_i\bigr).
   \label{eq:pbwd-logprob}
 \end{align}
 In implementation form:

@@ -7,6 +7,7 @@ import torch
 
 from genai_tps.backends.boltz.path_probability import (
     acceptance_ratio_fixed_length,
+    backward_shooting_metropolis_bias,
     compute_log_path_prob,
     log_det_jacobian_step,
     log_gaussian_isotropic,
@@ -94,12 +95,25 @@ def test_path_prob_consistency_with_manual_sum():
     )
 
 
-def test_path_prob_with_jacobian_increases_for_positive_alpha():
-    """For alpha > 0, scalar Jacobian term is positive, increasing log path prob."""
+def test_path_prob_with_jacobian_decreases_for_positive_alpha():
+    """For alpha > 0, coordinate-space density includes -log|det J|."""
     eps = [torch.ones(1, 2, 3) * 0.1]
     meta = [{"noise_var": 1.0, "t_hat": 2.0, "sigma_t": 3.0, "step_scale": 1.5}]
     lp_no_jac = compute_log_path_prob(eps, meta, include_jacobian=False, n_atoms=2)
     lp_with_jac = compute_log_path_prob(eps, meta, include_jacobian=True, n_atoms=2)
-    # alpha = 1.5 * (3.0 - 2.0) / 2.0 = 0.75 > 0 => log|1+0.75| > 0
-    assert float(lp_with_jac) > float(lp_no_jac)
+    # alpha = 1.5 * (3.0 - 2.0) / 2.0 = 0.75 > 0, so the density
+    # correction is -log|1+alpha| per coordinate.
+    assert float(lp_with_jac) < float(lp_no_jac)
+
+
+def test_backward_shooting_rejects_exact_jacobian_mode():
+    """Backward shooting only supports schedule-cancelling scalar Jacobians."""
+    with pytest.raises(NotImplementedError, match="Exact Jacobians"):
+        backward_shooting_metropolis_bias(
+            None,
+            None,
+            shooting_index=0,
+            core=None,
+            exact_jacobian=True,
+        )
 

@@ -1,0 +1,256 @@
+%% Nature Computational Science Brief Communication draft
+%% Initial-submission PDF target; preserve the PRL-style manuscript separately.
+
+\documentclass[aps,prl,twocolumn,superscriptaddress,floatfix]{revtex4-2}
+
+\usepackage{amsmath,amssymb,bm}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage{lineno}
+
+\newcommand{\HAB}{H_{AB}}
+\newcommand{\pacc}{p_{\mathrm{acc}}}
+\newcommand{\Xnew}{X^{\mathrm{n}}}
+\newcommand{\Xold}{X^{\mathrm{o}}}
+
+\begin{document}
+\linenumbers
+
+\title{Path Sampling Diagnoses Protein Diffusion Models}
+
+\author{Muhammad R.~Hasyim}
+\affiliation{Simons Center for Computational Physical Chemistry,
+New York University, New York, NY~10003}
+\email{mh7373@nyu.edu}
+
+\date{\today}
+
+\begin{abstract}
+Diffusion models now generate protein--ligand structures routinely, but a
+single prediction gives little information about the stochastic landscape that
+produced it. Here I adapt transition path sampling to explicit-noise
+structure diffusion and combine it with on-the-fly probability enhanced
+sampling to map ligand-pose landscapes. The method records the random
+variables used by Boltz-2 reverse diffusion, assigns exact path weights, and
+resamples whole denoising trajectories rather than isolated structures. For a
+held-out MEK1--FZC complex, the biased trajectory ensemble reveals a dominant
+native-like pose and persistent secondary basins with ligand RMSD above
+1~\AA. These rare basins are invisible to single forward passes but stable
+over tens to hundreds of Monte Carlo steps, providing a path-level diagnostic
+for memorization, ambiguity and physical plausibility in generative structure
+models.
+\end{abstract}
+
+\maketitle
+
+Diffusion-based structure models such as AlphaFold~3 and Boltz-2 can produce
+protein complexes and ligand poses in seconds~\cite{alphafold3,boltz2}. Their
+speed is transformative for computational biology, yet it also sharpens an old
+question: when a generated pose looks chemically plausible, has the model
+sampled a physically meaningful binding mode, or has it returned a memorized
+training-set attractor? Recent protein--ligand benchmarks report strong
+dependence on similarity to known complexes and adversarial failures in which
+co-folding models preserve ligand placement after binding-site mutations
+remove the expected interactions~\cite{masters2024,skrinjar2025}. These
+findings motivate diagnostics that interrogate the distribution of denoising
+trajectories for a fixed input, not only the final structure from one random
+seed.
+
+Transition path sampling (TPS) provides such a diagnostic. Classical TPS
+samples rare dynamical trajectories connecting two state volumes rather than
+configurations drawn independently~\cite{dellago1998,bolhuis2002}. A reverse
+diffusion sampler has the same minimal ingredients when its random variables
+are explicit. At denoising step $i$, Boltz-2 draws an SE(3) augmentation and
+Gaussian churn noise, then maps the current coordinates deterministically to
+the next coordinates. Recording these draws gives a path density that
+factorizes over known priors. Forward shooting resamples the suffix of a
+denoising path; backward shooting proposes a new prefix with a Hastings
+correction; global reshuffling draws a fresh trajectory from the prior. The
+full derivation, including Jacobian cancellations, non-reversible proposals and
+the relation to quotient-space diffusion, is given in Supplementary Notes 1,
+2 and 5.
+
+Plain TPS samples the unbiased reactive ensemble and therefore remains
+concentrated in whichever basin dominates the denoising landscape. To reveal
+rare terminal poses, I coupled TPS to on-the-fly probability enhanced sampling
+(OPES)~\cite{invernizzi2020,invernizzi2022}. OPES builds an adaptive bias on
+terminal collective variables, here ligand heavy-atom RMSD $s_1$ and
+ligand--pocket distance $s_2$, and penalizes already visited regions while
+preserving a reweightable path ensemble. The result is a controlled exploration
+of a projected denoising landscape rather than a collection of unrelated
+Boltz-2 predictions.
+
+\begin{figure}[t]
+\centering
+\fbox{\parbox{0.94\columnwidth}{\centering
+\vspace{0.45in}
+Placeholder for the final three-panel OPES--TPS landscape: OPES kernel
+mixture, reweighted density and visited $(s_1,s_2)$ histogram.
+\vspace{0.45in}}}
+\caption{\textbf{TPS+OPES maps the terminal ligand-pose landscape.}
+The two-dimensional collective variable combines ligand pose RMSD $s_1$ and
+ligand--pocket distance $s_2$. In the MEK1--FZC case study, the run comprised
+11,590 Monte Carlo steps, 3,184 accepted moves and a 27.5\% acceptance rate.
+The projected landscape contains a dominant native-like basin near
+$(0.07~\mathrm{\AA}, 5.37~\mathrm{\AA})$ and secondary high-RMSD regions
+around larger pocket distances. Numerical definitions and OPES reweighting are
+reported in Supplementary Notes 3 and 4.}
+\label{fig:landscape}
+\end{figure}
+
+I applied this protocol to the MEK1 kinase MAP2K1 with ligand FZC from PDB
+7XLP, a post-training-cutoff protein--ligand system highlighted in recent
+co-folding analyses as lying in the low-similarity regime where memorized
+ligand placement is expected to be least reliable~\cite{masters2024}. A
+one-dimensional TPS+OPES run using only $s_1$ already showed a broad tail:
+4,180 Monte Carlo steps sampled ligand RMSD from near zero to 1.3~\AA, with
+approximately 47\% of accepted paths above 0.5~\AA. This indicated that the
+terminal denoising landscape was not a single rigid pose, but the RMSD
+coordinate alone could not identify how the ligand moved.
+
+The two-dimensional run resolves this ambiguity (Fig.~\ref{fig:landscape}).
+With biasfactor $\gamma=10$, 11,590 Monte Carlo steps produced 3,184 accepted
+paths and 1,159 OPES depositions compressed to 82 kernels. The dominant basin,
+B$_0$, is native-like at $s_1 \approx 0.07$~\AA\ and
+$s_2 \approx 5.37$~\AA. Three additional regions are reproducibly visited:
+B$_1$ at $s_1 \approx 0.35$~\AA, B$_2$ at
+$s_1 \approx 0.75$~\AA\ with the ligand center displaced by about
+0.19~\AA, and a far-tail basin B$_3$ near $s_1 \approx 1.10$~\AA. Across all
+logged steps, 8.8\% exceeded 1~\AA\ ligand RMSD and these high-RMSD visits
+occurred in persistent runs, with mean dwell length about 73 Monte Carlo steps
+and a maximum of 196. The result is not simply stochastic jitter around a
+single pose: the model can stabilize alternative terminal geometries.
+
+\begin{figure}[t]
+\centering
+\fbox{\parbox{0.94\columnwidth}{\centering
+\vspace{0.45in}
+Placeholder for basin-resolved structural ensemble: B$_0$, B$_1$, B$_2$ and
+B$_3$ terminal structures with ligand sticks and protein cartoon/surface.
+\vspace{0.45in}}}
+\caption{\textbf{Representative structures from denoising basins.}
+B$_0$ is a tightly packed native-like pose, B$_1$ shows partial ligand slippage,
+B$_2$ is a displaced pocket-engagement mode and B$_3$ contains partially
+egressed ligand configurations with subtle pocket-rim loop deformation.
+Selection criteria and metric definitions are given in Supplementary Note 3.}
+\label{fig:basins}
+\end{figure}
+
+Structural inspection of representative terminal frames supports this
+interpretation (Fig.~\ref{fig:basins}). B$_0$ retains the compact binding pose,
+B$_1$ slips along the pocket axis with the protein fold intact, B$_2$ changes
+side-chain contact patterns, and B$_3$ partially exposes the ligand at the
+pocket rim. These configurations should not be interpreted immediately as
+physical alternative binding modes: the free-energy surface is projected onto
+two collective variables, OPES convergence is finite, and independent energy
+or geometry checks remain necessary. Instead, they demonstrate what the
+diagnostic is designed to expose: a generative model may be highly focused in
+ordinary sampling while still containing rare, stable denoising basins that
+matter for uncertainty, memorization and downstream drug-discovery decisions.
+
+This path-level view complements standard confidence scores and direct
+multi-seed sampling. It applies whenever a generator can expose its stochastic
+inputs and evaluate their densities, including score-based diffusion and
+closely related generative samplers. The same framework can therefore compare
+models, MSA depths or ligand scaffolds by asking how the reactive trajectory
+ensemble changes, rather than only whether the top-ranked pose is close to a
+reference. The 228-residue co-folding control, additional diagnostics,
+evaluation metrics and computational workflow are reported in the
+Supplementary Information.
+
+\section*{Methods}
+
+\paragraph{System and sampler.}
+The main case study used Boltz-2 in protein--ligand co-folding mode for MEK1
+(MAP2K1) with ligand FZC from PDB 7XLP. Reverse diffusion was treated as a
+fixed-length Markov chain over coordinates and recorded random variables. State
+A is the high-noise start of denoising and state B is the terminal structured
+Boltz-2 output. Software, command-line workflow and output files are listed in
+Supplementary Note 4.
+
+\paragraph{TPS and OPES settings.}
+TPS moves combined forward shooting, backward shooting and global reshuffling.
+Forward shooting has unit Metropolis ratio after the endpoint test because the
+resampled suffix is drawn from the same prior as the target path density.
+Backward shooting uses the non-reversible Hastings correction derived in
+Supplementary Note 1. OPES was applied to terminal-frame CVs with biasfactor
+$\gamma=10$ and barrier $5\,k_BT$; the two-dimensional run used 11,590 Monte
+Carlo steps.
+
+\paragraph{Metrics and availability.}
+The primary CVs were ligand heavy-atom RMSD to the reference pose and
+ligand-center-to-pocket C$\alpha$ distance. Additional diagnostics include
+contact order, steric clashes, lDDT, Ramachandran outliers, radius of gyration,
+PoseBusters-style ligand checks and ensemble-distribution metrics
+(Supplementary Note 3). Code is available at
+\url{https://github.com/muhammadhasyim/tps-diffusion-model}. Large language
+model assistance was used for manuscript restructuring and prose drafting; the
+author reviewed all scientific content and remains accountable for the work.
+
+\begin{acknowledgments}
+The author acknowledges support from the Simons Center for Computational
+Physical Chemistry at New York University and NYU IT High Performance
+Computing resources.
+\end{acknowledgments}
+
+\begin{thebibliography}{25}
+
+\bibitem{alphafold3}
+J.~Abramson \textit{et al.}, \textit{Nature} \textbf{630}, 493 (2024).
+
+\bibitem{boltz2}
+J.~Wohlwend, G.~Corso, S.~Passaro, M.~Reveiz, V.~Portnoi, R.~Gondal,
+T.~Hothorn, R.~Barzilay and T.~Jaakkola, \textit{bioRxiv}
+(2025), \url{https://doi.org/10.1101/2025.05.06.651165}.
+
+\bibitem{masters2024}
+S.~L.~Masters \textit{et al.}, \textit{bioRxiv}
+(2024), \url{https://doi.org/10.1101/2024.06.03.597219}.
+
+\bibitem{skrinjar2025}
+P.~\v{S}krinjar, J.~Eberhardt, G.~Tauriello, T.~Schwede and J.~Durairaj,
+\textit{bioRxiv} (2025), \url{https://doi.org/10.1101/2025.02.03.636309}.
+
+\bibitem{dellago1998}
+C.~Dellago, P.~G.~Bolhuis, F.~S.~Csajka and D.~Chandler,
+\textit{J.~Chem.~Phys.} \textbf{108}, 1964 (1998).
+
+\bibitem{bolhuis2002}
+P.~G.~Bolhuis, D.~Chandler, C.~Dellago and P.~L.~Geissler,
+\textit{Annu.~Rev.~Phys.~Chem.} \textbf{53}, 291 (2002).
+
+\bibitem{karras2022}
+T.~Karras, M.~Aittala, T.~Aila and S.~Laine,
+\textit{Adv.~Neural Inf.~Process.~Syst.} \textbf{35}, 26565 (2022).
+
+\bibitem{invernizzi2020}
+M.~Invernizzi and M.~Parrinello,
+\textit{J.~Phys.~Chem.~Lett.} \textbf{11}, 2731 (2020).
+
+\bibitem{invernizzi2022}
+M.~Invernizzi and M.~Parrinello,
+\textit{J.~Chem.~Theory Comput.} \textbf{18}, 3988 (2022).
+
+\bibitem{song2021}
+Y.~Song, J.~Sohl-Dickstein, D.~P.~Kingma, A.~Kumar, S.~Ermon and B.~Poole,
+\textit{ICLR} (2021).
+
+\bibitem{xu2026}
+Y.~Xu, Y.~Wang, S.~Luo, K.~Gao, T.~He, D.~He and C.~Liu,
+\textit{ICLR} (2026), arXiv:2604.21809.
+
+\bibitem{ops}
+D.~W.~Swenson, J.-H.~Prinz, F.~Noe, J.~D.~Chodera and P.~G.~Bolhuis,
+\textit{J.~Chem.~Theory Comput.} \textbf{15}, 813 (2019).
+
+\bibitem{mariani2013lddt}
+V.~Mariani, M.~Biasini, A.~Barbato and T.~Schwede,
+\textit{Bioinformatics} \textbf{29}, 2722 (2013).
+
+\bibitem{posebusters2024}
+C.~Bouysset and S.~Fiorucci, \textit{J.~Cheminform.} \textbf{13}, 72 (2021).
+
+\end{thebibliography}
+
+\end{document}

@@ -11,7 +11,7 @@
 pip install posebusters==0.6.5
 ```
 
-Also listed in [`environment.yml`](../environment.yml) and the `enhanced_sampling` extra in [`pyproject.toml`](../pyproject.toml).
+Also listed in [`environment.yml`](../environment.yml) and the `sampling` extra in [`pyproject.toml`](../pyproject.toml).
 
 ## Backend modes
 

@@ -99,7 +99,7 @@ dependencies:
   - openmmforcefields>=0.14
   # OpenFF Toolkit: OpenFF Molecule / protonation paths for GAFF2 ligands in compute_cv_rmsd.
   - openff-toolkit>=0.14.0
-  # ProDy: scripts/analyze_terminal_ensemble_prody.py, genai_tps.analysis.terminal_ensemble_prody
+  # ProDy: scripts/analyze_terminal_ensemble_prody.py, genai_tps.evaluation.terminal_ensemble_prody
   - prody>=2.4
   # PyMOL: scripts/visualize_cofolding_trajectory.py --render-cartoon (ribbon cartoons)
   - pymol-open-source>=2.5
@@ -110,6 +110,7 @@ dependencies:
     #        with numpy 2.x ABI.  Repeated here so pip also enforces the cap and
     #        prevents jax or other packages from upgrading to 2.4.x.
     - "numpy>=2.0,<2.3"
+    - "pandas>=2.2.2"
     - "scipy==1.13.1"
 
     # ── torch is NOT listed here — it is driver-specific ─────────────────────
@@ -122,9 +123,9 @@ dependencies:
     # packages, causing cascading undefined-symbol ImportErrors.  Using
     # jax[cpu] keeps the nvidia package set solely under torch's control.
     - -e ./boltz
-    # enhanced_sampling pulls pymbar + openmmforcefields + openff-toolkit on pip; conda
+    # sampling extra pulls pymbar + openmmforcefields + openff-toolkit on pip; conda
     # already provides openmm, pdbfixer, openmmforcefields, openff-toolkit, prody, pymol.
-    - -e .[boltz,dev,enhanced_sampling]
+    - -e .[boltz,dev,sampling,analysis]
 
     # ── torchmetrics: required by pytorch-lightning==2.5.0 ───────────────────
     # Listed explicitly so it survives cleanup operations that rm -rf torch*

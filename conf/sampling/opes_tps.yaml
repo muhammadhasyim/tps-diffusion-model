@@ -1,0 +1,6 @@
+# OPES-TPS on Boltz-2 — illustrative defaults (override per run).
+shoot_rounds: 2000
+diffusion_steps: 32
+opes_barrier: 5.0
+opes_biasfactor: 10.0
+bias_cv: rmsd

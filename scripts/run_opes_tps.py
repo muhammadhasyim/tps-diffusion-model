@@ -33,7 +33,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import sys
 from collections.abc import Callable
 from dataclasses import asdict
@@ -44,7 +43,6 @@ import torch
 from openpathsampling.engines.trajectory import Trajectory
 
 from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
-from genai_tps.backends.boltz.bridge import snapshot_from_gpu
 from genai_tps.backends.boltz.collective_variables import (
     PoseCVIndexer,
     ca_contact_count,
@@ -63,7 +61,7 @@ from genai_tps.backends.boltz.collective_variables import (
     shape_kappa2,
 )
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
-from genai_tps.enhanced_sampling.openmm_cv import OpenMMEnergy, OpenMMLocalMinRMSD
+from genai_tps.simulation.openmm_cv import OpenMMEnergy, OpenMMLocalMinRMSD
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.snapshot import (
     BoltzSnapshot,
@@ -71,15 +69,19 @@ from genai_tps.backends.boltz.snapshot import (
     snapshot_frame_numpy_copy,
 )
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
-from genai_tps.enhanced_sampling import OPESBias
-from genai_tps.analysis.posebusters_gpu import (
+from genai_tps.simulation import OPESBias
+from genai_tps.evaluation.posebusters import (
+    POSEBUSTERS_CV_PREFIX,
     POSEBUSTERS_GPU_CV_PREFIX,
     POSEBUSTERS_GPU_PASS_FRACTION,
+    validate_posebusters_bias_cv_names,
     validate_posebusters_gpu_bias_cv_names,
 )
-from genai_tps.analysis.posebusters_traj import (
-    POSEBUSTERS_CV_PREFIX,
-    validate_posebusters_bias_cv_names,
+from genai_tps.evaluation.tps_runner import (
+    atomic_write_json,
+    initial_trajectory,
+    opes_state_checkpoint_callback,
+    trajectory_checkpoint_callback,
 )
 
 # All supported single-CV names for --bias-cv
@@ -104,18 +106,6 @@ _SINGLE_CV_NAMES = [
     "posebusters_pass_fraction",
     POSEBUSTERS_GPU_PASS_FRACTION,
 ]
-
-
-def _atomic_write_json(path: Path, payload: dict) -> None:
-    """Write JSON atomically (tmp + replace) for crash-safe incremental outputs."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
 
 
 def _bias_cv_string_needs_topo_early(bias_cv_raw: str, list_posebusters_cvs: bool) -> bool:
@@ -296,7 +286,7 @@ def _make_cv_function(
                 f"--bias-cv {cv_type} requires reference coordinates from the "
                 "initial trajectory snapshot."
             )
-        from genai_tps.analysis.boltz_npz_export import load_topo  # noqa: PLC0415
+        from genai_tps.io.boltz_npz_export import load_topo  # noqa: PLC0415
 
         structure, _ = load_topo(Path(topo_npz))
         ref_np = (
@@ -351,7 +341,7 @@ def _make_cv_function(
             raise ValueError(
                 "--bias-cv posebusters_pass_fraction requires PoseBusters setup (internal error)."
             )
-        from genai_tps.analysis.posebusters_traj import (  # noqa: PLC0415
+        from genai_tps.evaluation.posebusters import (  # noqa: PLC0415
             make_posebusters_pass_fraction_traj_fn,
         )
 
@@ -361,7 +351,7 @@ def _make_cv_function(
             raise ValueError(
                 "--bias-cv posebusters_gpu_pass_fraction requires GPU PoseBusters setup (internal error)."
             )
-        from genai_tps.analysis.posebusters_gpu import (  # noqa: PLC0415
+        from genai_tps.evaluation.posebusters import (  # noqa: PLC0415
             make_posebusters_gpu_pass_fraction_traj_fn,
         )
 
@@ -431,7 +421,7 @@ def _make_multi_cv_function(
             )
         if posebusters_context is None or posebusters_context.get("ordered_columns") is None:
             raise ValueError("internal error: posebusters_context missing ordered_columns")
-        from genai_tps.analysis.posebusters_traj import (  # noqa: PLC0415
+        from genai_tps.evaluation.posebusters import (  # noqa: PLC0415
             make_posebusters_cached_column_scalar_fns,
         )
 
@@ -449,7 +439,7 @@ def _make_multi_cv_function(
             )
         if posebusters_context is None or posebusters_context.get("gpu_ordered_columns") is None:
             raise ValueError("internal error: posebusters_context missing gpu_ordered_columns")
-        from genai_tps.analysis.posebusters_gpu import (  # noqa: PLC0415
+        from genai_tps.evaluation.posebusters import (  # noqa: PLC0415
             make_posebusters_gpu_cached_column_scalar_fns,
         )
 
@@ -498,98 +488,6 @@ def _make_multi_cv_function(
         return np.array([fn(traj) for fn in scalar_fns], dtype=np.float64)
 
     return _vector_cv, ndim
-
-
-def _write_tps_checkpoint_npz(traj: Trajectory, out_npz: Path, *, mc_step: int) -> bool:
-    stack = []
-    for snap in traj:
-        if not isinstance(snap, BoltzSnapshot) or snap.tensor_coords is None:
-            continue
-        stack.append(snapshot_frame_numpy_copy(snap))
-    if not stack:
-        return False
-    arr = np.stack(stack, axis=0)
-    if not np.any(np.isfinite(arr)):
-        return False
-    out_npz.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        out_npz,
-        coords=arr,
-        frame_indices=np.arange(arr.shape[0], dtype=np.int32),
-        mc_step=np.int64(mc_step),
-    )
-    return True
-
-
-def _trajectory_checkpoint_callback(work_root: Path) -> Callable[[int, Trajectory], None]:
-    def cb(mc_step: int, traj: Trajectory) -> None:
-        ck = work_root / "trajectory_checkpoints"
-        ck.mkdir(parents=True, exist_ok=True)
-        tagged = ck / f"tps_mc_step_{mc_step:08d}.npz"
-        wrote = _write_tps_checkpoint_npz(traj, tagged, mc_step=mc_step)
-        if wrote:
-            latest = ck / "latest.npz"
-            shutil.copyfile(tagged, latest)
-            snap = traj[-1]
-            if isinstance(snap, BoltzSnapshot) and snap.tensor_coords is not None:
-                lf = snapshot_frame_numpy_copy(snap)
-                if np.any(np.isfinite(lf)):
-                    last_only = ck / "last_frame_only.npz"
-                    np.savez_compressed(
-                        last_only,
-                        coords=lf.reshape(1, *lf.shape),
-                        mc_step=np.int64(mc_step),
-                    )
-            print(
-                f"[TPS-OPES] checkpoint MC step {mc_step} -> {tagged.name}",
-                file=sys.stderr, flush=True,
-            )
-    return cb
-
-
-def _opes_state_checkpoint_callback(
-    bias: OPESBias,
-    work_root: Path,
-    every: int,
-    bias_cv: str,
-    bias_cv_names: list[str],
-) -> Callable[[int, Trajectory], None]:
-    """Periodic OPES state checkpoints for restart and analysis."""
-    def cb(mc_step: int, _traj: Trajectory) -> None:
-        if every <= 0 or mc_step % every != 0:
-            return
-        state_dir = work_root / "opes_states"
-        state_dir.mkdir(parents=True, exist_ok=True)
-        tagged = state_dir / f"opes_state_{mc_step:08d}.json"
-        bias.save_state(
-            tagged, bias_cv=bias_cv, bias_cv_names=bias_cv_names,
-        )
-        latest = state_dir / "opes_state_latest.json"
-        shutil.copyfile(tagged, latest)
-        print(
-            f"[TPS-OPES] OPES state checkpoint MC step {mc_step} "
-            f"({bias.n_kernels} kernels, {bias.counter} depositions)",
-            file=sys.stderr, flush=True,
-        )
-    return cb
-
-
-def _initial_trajectory(core: BoltzSamplerCore, n_steps: int | None = None) -> Trajectory:
-    x = core.sample_initial_noise()
-    n = n_steps if n_steps is not None else core.num_sampling_steps
-    snaps = []
-    sig0 = float(core.schedule[0].sigma_tm)
-    snaps.append(snapshot_from_gpu(x, 0, None, None, None, sig0, center_mean_before_step=None))
-    for step in range(n):
-        x, eps, rr, tr, meta = core.single_forward_step(x, step)
-        snaps.append(
-            snapshot_from_gpu(
-                x, step + 1, eps, rr, tr,
-                float(meta["sigma_t"]),
-                center_mean_before_step=meta.get("center_mean"),
-            )
-        )
-    return Trajectory(snaps)
 
 
 def _build_diagnostic_cv_functions(
@@ -647,6 +545,15 @@ def main() -> None:
     parser.add_argument("--yaml", type=Path, default=None)
     parser.add_argument("--out", type=Path, default=Path("opes_tps_out"))
     parser.add_argument("--cache", type=Path, default=None)
+    parser.add_argument(
+        "--finetuned-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Optional WDSM fine-tuned Boltz-2 model state_dict. "
+            "When provided, TPS runs against this model instead of the baseline checkpoint."
+        ),
+    )
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--recycling-steps", type=int, default=3)
     parser.add_argument("--diffusion-steps", type=int, default=32)
@@ -991,7 +898,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    repo = _repo_root()
+    repo = Path(__file__).resolve().parents[1]
     yaml_path = args.yaml or (repo / "examples" / "cofolding_multimer_msa_empty.yaml")
     if not yaml_path.is_file():
         print(f"Input YAML not found: {yaml_path}", file=sys.stderr)
@@ -1081,6 +988,14 @@ def main() -> None:
         msa_args=asdict(msa_args),
         steering_args=asdict(steering),
     )
+    if args.finetuned_checkpoint is not None:
+        finetuned_checkpoint = args.finetuned_checkpoint.expanduser().resolve()
+        if not finetuned_checkpoint.is_file():
+            print(f"Fine-tuned checkpoint not found: {finetuned_checkpoint}", file=sys.stderr)
+            sys.exit(1)
+        state = torch.load(str(finetuned_checkpoint), map_location="cpu")
+        model.load_state_dict(state)
+        print(f"[TPS-OPES] Loaded fine-tuned checkpoint: {finetuned_checkpoint}", flush=True)
     model.to(device)
     model.eval()
 
@@ -1109,7 +1024,7 @@ def main() -> None:
     n_atoms = int(atom_mask.shape[1])
 
     torch.manual_seed(0)
-    init_traj = _initial_trajectory(core)
+    init_traj = initial_trajectory(core)
 
     last_snap = init_traj[-1]
     ref_coords = None
@@ -1170,8 +1085,8 @@ def main() -> None:
                 flush=True,
             )
             sys.exit(1)
-        from genai_tps.analysis.boltz_npz_export import load_topo  # noqa: PLC0415
-        from genai_tps.analysis.posebusters_gpu import (  # noqa: PLC0415
+        from genai_tps.io.boltz_npz_export import load_topo  # noqa: PLC0415
+        from genai_tps.evaluation.posebusters import (  # noqa: PLC0415
             GPUPoseBustersEvaluator,
             expand_bias_cv_posebusters_gpu_all,
             expand_posebusters_gpu_all_to_cv_names,
@@ -1240,7 +1155,7 @@ def main() -> None:
             if str(args.posebusters_backend) == "hybrid":
                 try:
                     import posebusters  # noqa: F401, PLC0415
-                    from genai_tps.analysis.posebusters_traj import PoseBustersTrajEvaluator  # noqa: PLC0415
+                    from genai_tps.evaluation.posebusters import PoseBustersTrajEvaluator  # noqa: PLC0415
 
                     gpu_ev.cpu_evaluator = PoseBustersTrajEvaluator(
                         structure,
@@ -1289,7 +1204,7 @@ def main() -> None:
                     flush=True,
                 )
                 sys.exit(1)
-            from genai_tps.analysis.posebusters_traj import (  # noqa: PLC0415
+            from genai_tps.evaluation.posebusters import (  # noqa: PLC0415
                 PoseBustersTrajEvaluator,
                 expand_bias_cv_posebusters_all,
                 expand_posebusters_all_to_cv_names,
@@ -1391,8 +1306,8 @@ def main() -> None:
 
     skrinjar_context: tuple | None = None
     if "training_sucos_pocket_qcov" in bias_cv_names:
-        from genai_tps.analysis.boltz_npz_export import load_topo  # noqa: PLC0415
-        from genai_tps.analysis.skrinjar_similarity import IncrementalSkrinjarScorer  # noqa: PLC0415
+        from genai_tps.io.boltz_npz_export import load_topo  # noqa: PLC0415
+        from genai_tps.evaluation.skrinjar_similarity import IncrementalSkrinjarScorer  # noqa: PLC0415
 
         if topo_npz is None:
             print(
@@ -1509,13 +1424,13 @@ def main() -> None:
     save_traj_every = max(0, int(args.save_trajectory_every))
     periodic_extra: list[tuple[Callable[[int, Trajectory], None], int]] = []
     if save_traj_every > 0:
-        periodic_extra.append((_trajectory_checkpoint_callback(work_root), save_traj_every))
+        periodic_extra.append((trajectory_checkpoint_callback(work_root), save_traj_every))
 
     save_opes_every = max(0, int(args.save_opes_state_every))
     if save_opes_every > 0:
         periodic_extra.append(
             (
-                _opes_state_checkpoint_callback(
+                opes_state_checkpoint_callback(
                     bias, work_root, save_opes_every,
                     args.bias_cv, bias_cv_names,
                 ),
@@ -1557,7 +1472,7 @@ def main() -> None:
             jf.write(json.dumps(entry, default=str) + "\n")
             jf.flush()
         if save_cv_every > 0 and mc_step % save_cv_every == 0 and cv_values_log:
-            _atomic_write_json(
+            atomic_write_json(
                 cv_data_path,
                 {
                     "cv_type": args.bias_cv,
@@ -1654,7 +1569,7 @@ def main() -> None:
         "cv_values": [entry["cv"] for entry in cv_values_log if "cv" in entry],
         "mc_steps": [entry["mc_step"] for entry in cv_values_log if "cv" in entry],
     }
-    _atomic_write_json(cv_data_path, cv_data)
+    atomic_write_json(cv_data_path, cv_data)
 
     cv_stats = {}
     if ndim == 1 and isinstance(cv_function, (OpenMMLocalMinRMSD, OpenMMEnergy)):

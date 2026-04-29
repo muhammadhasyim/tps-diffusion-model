@@ -5,11 +5,30 @@ Reads trajectory checkpoint NPZs and the converged OPES state, computes
 per-structure log importance weights, and writes the (coords, logw, atom_mask)
 NPZ expected by ``weighted_dsm/dataset.py``.
 
+.. warning::
+    **EVALUATION / ANALYSIS USE ONLY — DO NOT USE FOR SFT TRAINING DATA.**
+
+    This script extracts structures from OPES-TPS runs where the model itself
+    generated the trajectories (Boltz-2 reverse-diffusion paths).  Using these
+    structures as supervised fine-tuning reference data would constitute
+    circular training: the model would be trained on its own outputs rather
+    than on ground-truth physics.
+
+    Ground-truth reference data for supervised fine-tuning MUST come from
+    independent physical simulations — i.e. OpenMM OPES-MD via
+    ``scripts/run_openmm_opes_md.py`` followed by
+    ``scripts/assemble_wdsm_dataset.py``.
+
+    Legitimate uses of this script:
+    - Post-hoc FES analysis of TPS run outcomes
+    - Visualising convergence of path-ensemble CVs
+    - Comparing model-generated ensembles against MD reference (in Script 05)
+
 Example::
 
     python scripts/export_opes_tps_dataset.py \
         --opes-dir /mnt/shared/.../opes_tps_mek1_fzc_500 \
-        --output /mnt/shared/.../mek1_fzc_wdsm_data.npz \
+        --output /mnt/shared/.../mek1_fzc_tps_analysis.npz \
         --pocket-radius 8.0
 """
 
@@ -30,21 +49,30 @@ if str(_REPO_ROOT / "src" / "python") not in sys.path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Export OPES-TPS data to weighted DSM NPZ.")
+    import warnings
+    warnings.warn(
+        "\n\n"
+        "  *** EVALUATION / ANALYSIS USE ONLY ***\n"
+        "  export_opes_tps_dataset.py produces NPZs from model-generated TPS paths.\n"
+        "  DO NOT feed this output into train_weighted_dsm.py as SFT reference data.\n"
+        "  For ground-truth training data use: run_openmm_opes_md.py + assemble_wdsm_dataset.py\n",
+        stacklevel=1,
+    )
+    parser = argparse.ArgumentParser(description="Export OPES-TPS data to analysis NPZ (NOT for SFT training).")
     parser.add_argument("--opes-dir", type=Path, required=True, help="OPES-TPS output directory.")
     parser.add_argument("--output", type=Path, required=True, help="Output NPZ path.")
     parser.add_argument("--topo-npz", type=Path, default=None, help="Override topology NPZ.")
     parser.add_argument("--pocket-radius", type=float, default=8.0)
     args = parser.parse_args()
 
-    from genai_tps.analysis.boltz_npz_export import load_topo
+    from genai_tps.io.boltz_npz_export import load_topo
     from genai_tps.backends.boltz.collective_variables import (
         PoseCVIndexer,
         ligand_pocket_distance,
         ligand_pose_rmsd,
     )
-    from genai_tps.enhanced_sampling.opes_bias import OPESBias
-    from genai_tps.weighted_dsm.diagnostics import effective_sample_size, weight_statistics
+    from genai_tps.simulation import OPESBias
+    from genai_tps.training.diagnostics import effective_sample_size, weight_statistics
 
     opes_dir = Path(args.opes_dir)
 

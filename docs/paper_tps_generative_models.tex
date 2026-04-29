@@ -190,47 +190,59 @@ where $\bar{x}_i$ is the mass-weighted centroid, $\hat{x}_i = c_\mathrm{skip}
 x_i^\mathrm{noisy} + c_\mathrm{out} f_\theta(c_\mathrm{in}
 x_i^\mathrm{noisy}, \cdot)$ is the preconditioned denoiser output, and $s$ is a
 step-scale factor.  Because each step is a \emph{deterministic} function of the
-random draw $(R_i, \tau_i, \varepsilon_i)$, the joint density of a full path
-$\mathcal{X} = \{(x_i, R_i, \tau_i, \varepsilon_i)\}_{i=0}^{L-1} \cup \{x_L\}$
-factorizes as
+random draw $(R_i, \tau_i, \varepsilon_i)$, the natural TPS state is the
+extended random-variable path
+$\mathcal{X}_{\rm ext} =
+\{(x_i, R_i, \tau_i, \varepsilon_i)\}_{i=0}^{L-1} \cup \{x_L\}$.
+In this parameterization the joint density factorizes over the sampled random
+variables and contains no coordinate-change Jacobian:
 %
 \begin{equation}
-\log P(\mathcal{X}) = \log\rho(x_0)
+\log P_{\rm ext}(\mathcal{X}_{\rm ext}) = \log\rho(x_0)
   + \sum_{i=0}^{L-1}\left[
+    \log p_{\mathrm{Haar}}(R_i)
     -\frac{\|\varepsilon_i\|^2}{2v_i}
     - \frac{\|\tau_i\|^2}{2s_\tau^2}
-    + \log|\det J_i|
   \right],
 \label{eq:logpath}
 \end{equation}
 %
 where $\rho(x_0) \propto \mathcal{N}(0,\sigma_0^2 I)$ is the initial noise
-prior, and $\log|\det J_i| = 3M \log|1 + s(\sigma_i^t - \hat{t})/\hat{t}|$ is
-the per-step Jacobian arising from the affine map $\varepsilon_i \to
-x_{i+1}$~\cite{boltz2_tps_theory}.  The Haar term for $R_i$ is constant and
-drops from acceptance ratios.  State volumes are defined on the diffusion
-coordinate: A at high $\sigma$ (disordered) and B at low $\sigma$ (structured),
-so every accepted path is a complete denoising trajectory.
+prior.  A coordinate-density diagnostic for the same path may additionally
+include the change-of-variables term $-\log|\det J_i|$ for the map
+$\varepsilon_i \to x_{i+1}$.  In our implementation this Jacobian is the scalar
+schedule-only approximation
+$\log|\det J_i| \approx 3M \log|1 + s(\sigma_i^t - \hat{t})/\hat{t}|$; it
+cancels in fixed-length acceptance ratios and should not be interpreted as a
+calibrated neural-map determinant.  The diagnostic path score used in code also
+omits the nonconstant $\tau_i$ density, because translation is always drawn
+from the same prior in proposal and target ratios and cancels in the MH
+criteria.  State volumes are defined on the diffusion coordinate: A at high
+$\sigma$ (disordered) and B at low $\sigma$ (structured), so every accepted path
+is a complete denoising trajectory.
 
 A forward shooting move at frame $i^*$ resamples all noise variables
 $(\xi_i)_{i \geq i^*}$ and forward-integrates from that point, leaving the
-prefix $(x_0, \ldots, x_{i^*})$ unchanged.  The Metropolis--Hastings
-log-ratio follows directly from the factorization in Eq.~(\ref{eq:logpath}):
+prefix $(x_0, \ldots, x_{i^*})$ unchanged.  The proposal draws exactly the
+same prior factors that appear in Eq.~(\ref{eq:logpath}), so the forward
+shooting Metropolis--Hastings log-ratio is
 %
 \begin{equation}
-\Delta = \sum_{i \geq i^*}
-  \left[
-    \log\frac{\pi_i(\xi_i^{\mathrm{new}})}{\pi_i(\xi_i^{(k-1)})}
-    + \log\frac{|\det J_i^{\mathrm{new}}|}{|\det J_i^{(k-1)}|}
-  \right] .
+\Delta_{\mathrm{fwd}} = 0
+\quad\text{for fixed length and fixed schedule,}
 \label{eq:delta}
 \end{equation}
 %
-The proposed path is accepted with probability $\min(1,e^{\Delta})$.
+up to the reactive-path indicator.  The proposed path is therefore accepted
+whenever it remains in the $A\to B$ ensemble.  Backward shooting requires the
+explicit Hastings correction below.
 Backward shooting at $k$ uses the Hastings-corrected ratio
-$\Delta_{\mathrm{bwd}} = [\log\pi_{\mathrm{fwd}}(X'_{0:k}) -
+\begin{equation}
+\Delta_{\mathrm{bwd}} = [\log\pi_{\mathrm{fwd}}(X'_{0:k}) -
 \log\pi_{\mathrm{fwd}}(X_{0:k})] + [\log q_{\mathrm{bwd}}(X_{0:k}) -
-\log q_{\mathrm{bwd}}(X'_{0:k})] + \log\rho(x_0')/\rho(x_0)$,
+\log q_{\mathrm{bwd}}(X'_{0:k})] + \log\rho(x_0')/\rho(x_0),
+\label{eq:deltabwd}
+\end{equation}
 with $q_{\mathrm{bwd}}$ Gaussian in the backward noise~\cite{falkner2024}.
 
 \section{Results}
@@ -241,7 +253,8 @@ The system comprises $M = 1792$ padded atoms,
 $L = 32$ denoising steps, and initial noise scale $\sigma_0 = 2560$~\AA.
 An initial reactive trajectory is obtained from a single forward pass; TPS
 then runs 100 shooting MC steps using OpenPathSampling~\cite{ops},
-with acceptance evaluated via Eq.~(\ref{eq:delta}).
+with acceptance evaluated via Eq.~(\ref{eq:delta}) for forward moves and
+Eq.~(\ref{eq:deltabwd}) for backward moves.
 
 The shooting acceptance rate is $\approx 53\%$, consistent with a well-tuned
 shooting distribution~\cite{bolhuis2002}, and all accepted paths remain
@@ -450,9 +463,10 @@ Several directions follow naturally.  Applying TPS across MSA depths would
 directly quantify how evolutionary information focuses the model's stochastic
 landscape.  For disordered or multi-basin proteins a broad TPS ensemble would
 serve as an early warning against over-interpreting the single-best prediction.
-The path weights in Eq.~(\ref{eq:logpath}) can further be used to compute
-free-energy-like averages over structural order parameters without any
-modification of the model itself.
+The extended path weights in Eq.~(\ref{eq:logpath}) can further be used for
+reactive-ensemble reweighting.  Absolute free-energy-like estimates require the
+full extended-state density, including translation priors, rather than the
+reduced diagnostic score logged by the implementation.
 
 In summary, we show that the reverse diffusion of Boltz-2 admits a rigorous
 TPS formulation on an extended state that includes SE(3) augmentation and

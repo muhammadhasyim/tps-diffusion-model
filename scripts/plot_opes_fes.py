@@ -74,7 +74,7 @@ def _ensure_genai_tps_path() -> None:
 
 _ensure_genai_tps_path()
 
-from genai_tps.enhanced_sampling.opes_bias import OPESBias  # noqa: E402
+from genai_tps.simulation import OPESBias  # noqa: E402
 
 # Matplotlib mathtext on axes (explicit sizes override rcParams after _apply_plot_rcparams).
 _MPL_LABEL_FS = 18

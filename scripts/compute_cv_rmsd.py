@@ -441,6 +441,129 @@ def _register_ligand_params(
 # ---------------------------------------------------------------------------
 
 
+def _ligand_openmm_positions_from_pdb_heavy_atoms(
+    chain_id: str,
+    orig_topology: object,
+    orig_positions: object,
+    lig_topo: object,
+    conf_nm: np.ndarray,
+) -> tuple[list, bool]:
+    """Build OpenMM position list for a GAFF ligand, preferring PDB heavy-atom coords.
+
+    OpenFF ``from_smiles`` + ``generate_conformers`` places the ligand in an
+    arbitrary gas-phase pose (near the origin).  For protein–ligand complexes we
+    instead take **heavy-atom** coordinates from the original PDB (same chain)
+    when atom **names** match OpenMM/OpenFF atom names; hydrogens and any heavy
+    atom without a PDB name match keep the conformer coordinates.
+
+    Parameters
+    ----------
+    chain_id
+        PDB chain identifier for the ligand.
+    orig_topology, orig_positions
+        Topology and positions from the initial ``PDBFile`` read (before strip).
+    lig_topo
+        OpenMM ``Topology`` from ``OpenFFMolecule.to_topology().to_openmm()``.
+    conf_nm
+        Conformer coordinates in **nanometres**, shape ``(n_atoms, 3)``, same atom
+        order as *lig_topo*.
+
+    Returns
+    -------
+    positions, used_pdb_merge
+        ``positions`` is a list of ``openmm.Vec3 * nanometer`` in lig_topo atom
+        order.  *used_pdb_merge* is True when enough heavy atoms matched PDB
+        names to trust the merged pose; otherwise a pure gas-phase conformer list
+        is returned.
+    """
+    import openmm
+    from openmm import unit as mm_unit
+
+    conf_nm = np.asarray(conf_nm, dtype=np.float64)
+    atoms_omm = list(lig_topo.atoms())
+    if conf_nm.shape[0] != len(atoms_omm):
+        raise ValueError(
+            "Conformer atom count does not match OpenMM ligand topology: "
+            f"{conf_nm.shape[0]} vs {len(atoms_omm)}."
+        )
+
+    pdb_by_name: dict[str, object] = {}
+    for chain in orig_topology.chains():
+        if chain.id.strip() != chain_id.strip():
+            continue
+        for atom in chain.atoms():
+            if atom.element is None or atom.element.symbol == "H":
+                continue
+            pdb_by_name[atom.name.strip().upper()] = orig_positions[atom.index]
+        break
+
+    n_omm_heavy = sum(
+        1
+        for a in atoms_omm
+        if a.element is not None and a.element.symbol != "H"
+    )
+    lig_pos: list = []
+    n_matched = 0
+    for i, atom in enumerate(atoms_omm):
+        el = atom.element
+        is_h = el is None or el.symbol == "H"
+        name_key = atom.name.strip().upper()
+        if (not is_h) and name_key in pdb_by_name:
+            lig_pos.append(pdb_by_name[name_key])
+            n_matched += 1
+        else:
+            lig_pos.append(
+                openmm.Vec3(
+                    float(conf_nm[i, 0]),
+                    float(conf_nm[i, 1]),
+                    float(conf_nm[i, 2]),
+                )
+                * mm_unit.nanometer
+            )
+
+    min_match = max(1, (min(len(pdb_by_name), n_omm_heavy) + 1) // 2)
+    used_pdb_merge = n_matched >= min_match
+    if not used_pdb_merge and n_matched > 0:
+        warnings.warn(
+            f"{chain_id}: only {n_matched}/{n_omm_heavy} heavy atoms matched PDB "
+            f"names (need >= {min_match}); using gas-phase conformer for all atoms.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        lig_pos = [
+            openmm.Vec3(
+                float(conf_nm[i, 0]),
+                float(conf_nm[i, 1]),
+                float(conf_nm[i, 2]),
+            )
+            * mm_unit.nanometer
+            for i in range(len(atoms_omm))
+        ]
+    elif not used_pdb_merge:
+        if len(pdb_by_name) == 0:
+            merge_msg = (
+                f"{chain_id}: no PDB heavy-atom rows for this chain in the input "
+                "topology; using gas-phase conformer."
+            )
+        else:
+            merge_msg = (
+                f"{chain_id}: PDB has {len(pdb_by_name)} heavy-atom names but none "
+                "matched OpenFF/OpenMM ligand atom names; using gas-phase conformer."
+            )
+        warnings.warn(merge_msg, RuntimeWarning, stacklevel=3)
+        lig_pos = [
+            openmm.Vec3(
+                float(conf_nm[i, 0]),
+                float(conf_nm[i, 1]),
+                float(conf_nm[i, 2]),
+            )
+            * mm_unit.nanometer
+            for i in range(len(atoms_omm))
+        ]
+
+    return lig_pos, used_pdb_merge
+
+
 def build_md_simulation_from_pdb(
     pdb_path: Path,
     *,
@@ -643,15 +766,13 @@ def build_md_simulation_from_pdb(
                     lig_topo = mol.to_topology().to_openmm()
                     conf_ang = mol.conformers[0].magnitude
                     conf_nm = conf_ang / 10.0
-                    lig_pos = [
-                        openmm.Vec3(
-                            float(conf_nm[i, 0]),
-                            float(conf_nm[i, 1]),
-                            float(conf_nm[i, 2]),
-                        )
-                        * unit.nanometer
-                        for i in range(int(conf_nm.shape[0]))
-                    ]
+                    lig_pos, _pdb_pose = _ligand_openmm_positions_from_pdb_heavy_atoms(
+                        chain_id,
+                        orig_topology,
+                        orig_positions,
+                        lig_topo,
+                        conf_nm,
+                    )
                     modeller.add(lig_topo, lig_pos)
         else:
             try:
@@ -728,8 +849,10 @@ def minimize_pdb(
     isomorphism on **all** atoms.  A heavy-atom-only cofactor in the PDB
     therefore does not match a protonated SMILES molecule.  The implementation
     strips non–protein residues, runs PDBFixer on the protein-only structure,
-    then re-inserts each ligand.  Multi-atom ligands use an OpenFF conformer
-    (coordinates not taken from the PDB).  Monoatomic tip3p ions use the
+    then re-inserts each ligand.  Multi-atom ligands use OpenFF for topology and
+    GAFF parameters, but **heavy-atom coordinates are merged from the original
+    PDB** when atom names match (hydrogens use the OpenFF conformer).  Monoatomic
+    tip3p ions use the
     original PDB position of that chain.  Cα-RMSD compares original vs
     minimised **protein** Cα only.
 

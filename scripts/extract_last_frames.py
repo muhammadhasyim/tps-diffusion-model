@@ -39,7 +39,7 @@ def load_topo(topo_npz: Path):
     tuple[Structure, int]
         Boltz Structure object and the number of atoms.
     """
-    from genai_tps.analysis.boltz_npz_export import load_topo as _load_topo
+    from genai_tps.io.boltz_npz_export import load_topo as _load_topo
     return _load_topo(topo_npz)
 
 

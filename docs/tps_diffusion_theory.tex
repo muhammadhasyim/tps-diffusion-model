@@ -337,19 +337,31 @@ can be computed.  Both conditions are satisfied here.
 
 \subsection{Log path probability}
 
+There are two useful conventions.  In the extended random-variable
+parameterization of \cref{eq:transition-kernel}, the sampled variables
+$(R_i,\tau_i,\varepsilon_i)$ are part of the state and no
+change-of-variables Jacobian appears:
+
 \begin{equation}
-  \log P(\mathcal{X})
+  \log P_{\rm ext}(\mathcal{X}_{\rm ext})
   = \log\rho(x_0)
   + \sum_{i=0}^{L-1}
     \Bigl[
       \underbrace{\log\Haar(R_i)}_{\text{constant}}
       + \underbrace{\log\N(\tau_i;\, 0,\, s_{\mathrm{trans}}^2 I)}_{\text{Gaussian}}
       + \underbrace{\log\N(\varepsilon_i;\, 0,\, v_i I)}_{\text{Gaussian}}
-      - \underbrace{\log|\det J_i|}_{\text{Jacobian}}
     \Bigr],
   \label{eq:log-path-prob}
 \end{equation}
-where $J_i = \partial x_{i+1}/\partial\varepsilon_i$.
+
+If one instead reports a coordinate-density diagnostic, the noise-to-coordinate
+map contributes $-\log|\det J_i|$, where
+$J_i = \partial x_{i+1}/\partial\varepsilon_i$.  The production code's
+``trajectory_log_path_prob`` diagnostic includes the initial prior, the
+$\varepsilon_i$ priors, and an optional scalar schedule-only approximation to
+this Jacobian.  It omits the Haar factors and the nonconstant $\tau_i$ priors,
+which cancel in the implemented MH ratios because the same translation prior
+appears in proposal and target factors.
 
 \subsection{The exact Jacobian $J_i$}
 \label{sec:jacobian}
@@ -426,11 +438,11 @@ $M$ (atoms) & $3M$ & Chunks & $\approx$ time/step & Feasible? \\
 \subsection{Cancellation of Jacobians in acceptance ratios}
 \label{sec:jacobian-cancellation}
 
-\begin{proposition}[One-way forward shooting: Jacobians cancel]
+\begin{proposition}[One-way forward shooting: scalar Jacobians cancel]
 \label{prop:oneway-cancel}
-For one-way forward shooting from shooting point $k$, the
-Jacobian log-determinant terms cancel exactly in the Metropolis
-acceptance ratio.
+For one-way forward shooting from shooting point $k$, the scalar
+schedule-dependent Jacobian approximation cancels exactly in the
+Metropolis acceptance ratio.
 \end{proposition}
 
 \begin{proof}
@@ -446,10 +458,14 @@ divided by the same for the old.
 The Metropolis acceptance is $P(\Xnew)/P(\Xold) \times G(\Xold)/G(\Xnew)$.
 The $\Haar$, $\N(\tau)$, and $\N(\varepsilon)$ terms from $G$ cancel
 the corresponding terms from $P$ in both numerator and denominator.
-The Jacobian terms $|\det J_i^{\mathrm{n}}|$ appear in the $P$ ratio
-but not in $G$; however, they cancel because $\alpha_i$ depends only
-on the schedule step $i$ (not on $\varepsilon_i$ or $x_i$), so
-$|\det J_i^{\mathrm{n}}| = |\det J_i^{\mathrm{o}}|$ for each $i \geq k$.
+Under the scalar approximation, the Jacobian terms
+$|\det J_i^{\mathrm{n}}|$ appear in the $P$ ratio but not in $G$;
+however, they cancel because $\alpha_i$ depends only on the schedule
+step $i$ (not on $\varepsilon_i$ or $x_i$), so
+$|\det J_i^{\mathrm{n}}| = |\det J_i^{\mathrm{o}}|$ for each
+$i \geq k$.  Exact Jacobians need not be path-independent and therefore
+must be treated as diagnostics unless the full proposal ratio is derived
+with those state-dependent determinants.
 The remaining acceptance ratio is $\HAB(\Xnew)$.
 \end{proof}
 
@@ -517,8 +533,8 @@ where
      - \log|\det J_i|,
   \label{eq:pfwd-logprob}\\
   \log\pbwd(x_i \mid x_{i+1})
-  &= -\frac{\|x_i - x_{i+1}\|^2}{2(\sigma_{i-1}^2 - \sigma_i^2)}
-     - \frac{3M}{2}\log\bigl(2\pi(\sigma_{i-1}^2 - \sigma_i^2)\bigr).
+  &= -\frac{\|\varepsilon_i^{\mathrm{bwd}}\|^2}{2v_i}
+     - \frac{3M}{2}\log\bigl(2\pi v_i\bigr).
   \label{eq:pbwd-logprob}
 \end{align}
 In log form (as implemented in \texttt{backward\_shooting\_metropolis\_bias}):
@@ -585,9 +601,12 @@ bug was identified and fixed in commit \texttt{f0c6731}.
             \texttt{log\_det\_jacobian\_step}($\alpha_i$, $M$).
             These terms cancel in the ratio (\cref{prop:oneway-cancel}),
             so including or excluding them has no effect.
-          \item For the exact Jacobian (diagnostic mode): use
+          \item For the exact Jacobian (diagnostic mode only): compute
             \texttt{compute\_log\_det\_jacobian\_exact} from
-            \texttt{path\_probability.py}.
+            \texttt{path\_probability.py}; do not use these
+            state-dependent determinants in
+            \texttt{backward\_shooting\_metropolis\_bias} without a
+            separately derived proposal ratio.
         \end{itemize}
   \item Accept with probability $\pacc$ from \cref{eq:logr-implementation}.
 \end{enumerate}
