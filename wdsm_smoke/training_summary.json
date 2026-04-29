@@ -1,0 +1,17 @@
+{
+  "config": {
+    "epochs": 2,
+    "batch_size": 4,
+    "learning_rate": 3e-06,
+    "beta": 0.01,
+    "gamma": 1.0,
+    "max_grad_norm": 1.0,
+    "data_path": "/__modal/volumes/vo-Y6gJnb7Z13CYnHbTxZjkhG/26-04-22-tps-diffusion/mek1_fzc_wdsm_data.npz",
+    "n_samples": 14,
+    "n_eff": 14.0
+  },
+  "epoch_losses": [
+    1.2628793716430664,
+    1.4384553879499435
+  ]
+}

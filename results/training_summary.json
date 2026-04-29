@@ -1,0 +1,24 @@
+{
+  "config": {
+    "epochs": 10,
+    "batch_size": 4,
+    "learning_rate": 3e-06,
+    "beta": 0.01,
+    "gamma": 1.0,
+    "max_grad_norm": 1.0,
+    "data_path": "/__modal/volumes/vo-Y6gJnb7Z13CYnHbTxZjkhG/26-04-22-tps-diffusion/openmm_opes_md/train_remapped.npz",
+    "n_samples": 7984,
+    "n_eff": 6117.3044940177915
+  },
+  "epoch_losses": [
+    0.835884989651745,
+    0.8397539107237227,
+    0.8002429920918717,
+    0.8319994435236903,
+    0.7820979858634766,
+    0.7981713375147574,
+    0.7965390474156651,
+    0.7753302215380158,
+    0.7899800347265058
+  ]
+}

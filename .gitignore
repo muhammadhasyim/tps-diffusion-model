@@ -51,6 +51,10 @@ htmlcov/
 *.out
 *.mod
 *.ptx
+# PyTorch checkpoints (often multi-GB — GitHub max file size ~100 MiB via normal git push)
+*.pt
+*.pth
+*.ckpt
 *.fatbin
 *.cubin
 CMakeCache.txt

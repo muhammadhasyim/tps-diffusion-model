@@ -1,0 +1,4224 @@
+{
+  "bias_type": "opes_adaptive",
+  "opes_barrier": 5.0,
+  "opes_biasfactor": 10.0,
+  "opes_pace": 1,
+  "opes_explore": false,
+  "bias_cv": "ligand_rmsd,ligand_pocket_dist",
+  "bias_cv_names": [
+    "ligand_rmsd",
+    "ligand_pocket_dist"
+  ],
+  "ndim": 2,
+  "total_steps": 300,
+  "n_kernels_final": 2,
+  "n_depositions": 500,
+  "n_merges": 498,
+  "zed_final": 34.00119582268923,
+  "rct_final": 0.04906011477812577,
+  "opes_state_path": "/__modal/volumes/vo-Y6gJnb7Z13CYnHbTxZjkhG/26-04-22-tps-diffusion/opes_tps_mek1_fzc_500/opes_state_final.json",
+  "cv_values_path": "/__modal/volumes/vo-Y6gJnb7Z13CYnHbTxZjkhG/26-04-22-tps-diffusion/opes_tps_mek1_fzc_500/cv_values.json",
+  "cv_stats": {},
+  "tps_steps": [
+    {
+      "step": 1,
+      "accepted": true,
+      "metropolis_acceptance": 0.9664789324327618,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08270510256685862,
+        1.4006906493781788
+      ]
+    },
+    {
+      "step": 2,
+      "accepted": true,
+      "metropolis_acceptance": 1.0085097203083155,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.061924197930066635,
+        1.4351813448967925
+      ]
+    },
+    {
+      "step": 3,
+      "accepted": true,
+      "metropolis_acceptance": 0.983520849887639,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12352587665718605,
+        1.3881878616181929
+      ]
+    },
+    {
+      "step": 4,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000032168582242,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12352017385172423,
+        1.3881375153771496
+      ]
+    },
+    {
+      "step": 5,
+      "accepted": true,
+      "metropolis_acceptance": 1.0139705553844178,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06399873759315643,
+        1.395458171615433
+      ]
+    },
+    {
+      "step": 6,
+      "accepted": true,
+      "metropolis_acceptance": 0.983754786711644,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.15878151114127698,
+        1.382239874809336
+      ]
+    },
+    {
+      "step": 7,
+      "accepted": true,
+      "metropolis_acceptance": 1.004024932364961,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11267019311894129,
+        1.3986222019742978
+      ]
+    },
+    {
+      "step": 8,
+      "accepted": true,
+      "metropolis_acceptance": 1.012555055980609,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06412861390683479,
+        1.389126413404481
+      ]
+    },
+    {
+      "step": 9,
+      "accepted": true,
+      "metropolis_acceptance": 1.0014923817588104,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05941654231648293,
+        1.3914603471378497
+      ]
+    },
+    {
+      "step": 10,
+      "accepted": true,
+      "metropolis_acceptance": 0.9917622893949258,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10115017991712903,
+        1.444416134741291
+      ]
+    },
+    {
+      "step": 11,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000065227510195,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10111918920154467,
+        1.4444169539980707
+      ]
+    },
+    {
+      "step": 12,
+      "accepted": true,
+      "metropolis_acceptance": 0.9967554148795085,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1011287978388549,
+        1.397206829532317
+      ]
+    },
+    {
+      "step": 13,
+      "accepted": true,
+      "metropolis_acceptance": 1.0013985669183416,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09621625568432098,
+        1.3868303644174211
+      ]
+    },
+    {
+      "step": 14,
+      "accepted": true,
+      "metropolis_acceptance": 0.9937036313642786,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.14974290010670321,
+        1.3758065273082434
+      ]
+    },
+    {
+      "step": 15,
+      "accepted": true,
+      "metropolis_acceptance": 1.0173863274758843,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05962914570394654,
+        1.3761360559530351
+      ]
+    },
+    {
+      "step": 16,
+      "accepted": true,
+      "metropolis_acceptance": 1.002875588130513,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.04931879614313072,
+        1.3868414975886854
+      ]
+    },
+    {
+      "step": 17,
+      "accepted": true,
+      "metropolis_acceptance": 0.9986745451834121,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05258125495369384,
+        1.390074238908793
+      ]
+    },
+    {
+      "step": 18,
+      "accepted": true,
+      "metropolis_acceptance": 0.9987486093419355,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05667459177362732,
+        1.3863545436628966
+      ]
+    },
+    {
+      "step": 19,
+      "accepted": true,
+      "metropolis_acceptance": 0.9855575520139551,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11458532508816052,
+        1.3941811339321277
+      ]
+    },
+    {
+      "step": 20,
+      "accepted": true,
+      "metropolis_acceptance": 1.0093826000131796,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07195010983724993,
+        1.3979871238181325
+      ]
+    },
+    {
+      "step": 21,
+      "accepted": true,
+      "metropolis_acceptance": 1.005357132100879,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.055142272801291956,
+        1.395218711672792
+      ]
+    },
+    {
+      "step": 22,
+      "accepted": true,
+      "metropolis_acceptance": 1.000027173905571,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05498258161682402,
+        1.3967536635912674
+      ]
+    },
+    {
+      "step": 23,
+      "accepted": true,
+      "metropolis_acceptance": 0.9848687312273354,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12286189374557979,
+        1.3861812294432976
+      ]
+    },
+    {
+      "step": 24,
+      "accepted": true,
+      "metropolis_acceptance": 1.0008724989515332,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11390600932162755,
+        1.4065663320385877
+      ]
+    },
+    {
+      "step": 25,
+      "accepted": true,
+      "metropolis_acceptance": 1.0019729931110224,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10224397659020623,
+        1.4077609592034703
+      ]
+    },
+    {
+      "step": 26,
+      "accepted": true,
+      "metropolis_acceptance": 1.0044425605506277,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0892148516892661,
+        1.3689166618203397
+      ]
+    },
+    {
+      "step": 27,
+      "accepted": true,
+      "metropolis_acceptance": 1.005655627247114,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08183434817735319,
+        1.4572114725356802
+      ]
+    },
+    {
+      "step": 28,
+      "accepted": true,
+      "metropolis_acceptance": 1.003671126337557,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06949722414705782,
+        1.4589284382132506
+      ]
+    },
+    {
+      "step": 29,
+      "accepted": true,
+      "metropolis_acceptance": 0.9892046850739784,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08878737616780512,
+        1.405081278792974
+      ]
+    },
+    {
+      "step": 30,
+      "accepted": true,
+      "metropolis_acceptance": 0.9941455251266298,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.14088005723844005,
+        1.3733288486844413
+      ]
+    },
+    {
+      "step": 31,
+      "accepted": true,
+      "metropolis_acceptance": 1.000012283679498,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.140784448010096,
+        1.3732583829418596
+      ]
+    },
+    {
+      "step": 32,
+      "accepted": true,
+      "metropolis_acceptance": 1.1801157736876413,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4807627928341515,
+        1.3878785358399068
+      ]
+    },
+    {
+      "step": 33,
+      "accepted": true,
+      "metropolis_acceptance": 0.98979870561296,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.470808228559301,
+        1.3934918990298488
+      ]
+    },
+    {
+      "step": 34,
+      "accepted": true,
+      "metropolis_acceptance": 0.8644299630322546,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08659614995196029,
+        1.4070925735487643
+      ]
+    },
+    {
+      "step": 35,
+      "accepted": true,
+      "metropolis_acceptance": 0.9971004189479894,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09986560574915584,
+        1.4034954894593068
+      ]
+    },
+    {
+      "step": 36,
+      "accepted": true,
+      "metropolis_acceptance": 1.0047461858594167,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0790286740285651,
+        1.4054267227235502
+      ]
+    },
+    {
+      "step": 37,
+      "accepted": true,
+      "metropolis_acceptance": 0.9899422322945777,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.14637131260465383,
+        1.4015949449044107
+      ]
+    },
+    {
+      "step": 38,
+      "accepted": true,
+      "metropolis_acceptance": 1.2576831541635713,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5379478910785693,
+        1.3994098692307673
+      ]
+    },
+    {
+      "step": 39,
+      "accepted": true,
+      "metropolis_acceptance": 1.1758807678407925,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6552808932836136,
+        1.3906514262870682
+      ]
+    },
+    {
+      "step": 40,
+      "accepted": true,
+      "metropolis_acceptance": 0.932078084859372,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6053643738197257,
+        1.4455778451415096
+      ]
+    },
+    {
+      "step": 41,
+      "accepted": true,
+      "metropolis_acceptance": 0.9977736102750976,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6062070492847584,
+        1.3943138802968846
+      ]
+    },
+    {
+      "step": 42,
+      "accepted": true,
+      "metropolis_acceptance": 1.006242329610747,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6104498183181079,
+        1.3865512064727838
+      ]
+    },
+    {
+      "step": 43,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000118784110528,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6104463541653892,
+        1.3862368523095294
+      ]
+    },
+    {
+      "step": 44,
+      "accepted": true,
+      "metropolis_acceptance": 0.7496849129262773,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.04387633836091336,
+        1.4084506850372016
+      ]
+    },
+    {
+      "step": 45,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000150813616762,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.04383607224417905,
+        1.408428331318824
+      ]
+    },
+    {
+      "step": 46,
+      "accepted": true,
+      "metropolis_acceptance": 0.9964789363570719,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0539237591260735,
+        1.3879092685618801
+      ]
+    },
+    {
+      "step": 47,
+      "accepted": true,
+      "metropolis_acceptance": 0.9952618252697395,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06835709567423823,
+        1.387590320484192
+      ]
+    },
+    {
+      "step": 48,
+      "accepted": true,
+      "metropolis_acceptance": 1.0015067807510065,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06287031671973572,
+        1.3934154489444064
+      ]
+    },
+    {
+      "step": 49,
+      "accepted": true,
+      "metropolis_acceptance": 0.9967530480882323,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07322047837878179,
+        1.4031275073548075
+      ]
+    },
+    {
+      "step": 50,
+      "accepted": true,
+      "metropolis_acceptance": 0.9919306356092229,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10832540537235061,
+        1.402230387813107
+      ]
+    },
+    {
+      "step": 51,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000288564617241,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1081557998846445,
+        1.4020862634284814
+      ]
+    },
+    {
+      "step": 52,
+      "accepted": true,
+      "metropolis_acceptance": 1.3474797906938643,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5999240459296,
+        1.394306155684651
+      ]
+    },
+    {
+      "step": 53,
+      "accepted": true,
+      "metropolis_acceptance": 0.9877614884822995,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5908272742374352,
+        1.3950989756844057
+      ]
+    },
+    {
+      "step": 54,
+      "accepted": false,
+      "metropolis_acceptance": 0.7594885533378039,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5908272742374352,
+        1.3950989756844057
+      ]
+    },
+    {
+      "step": 55,
+      "accepted": true,
+      "metropolis_acceptance": 0.7540966793138433,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12807235897568994,
+        1.407111642059421
+      ]
+    },
+    {
+      "step": 56,
+      "accepted": true,
+      "metropolis_acceptance": 1.0002571306619117,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.17569686603434528,
+        1.4371725921079128
+      ]
+    },
+    {
+      "step": 57,
+      "accepted": true,
+      "metropolis_acceptance": 1.0130723521250378,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06687801466669215,
+        1.3982432574793666
+      ]
+    },
+    {
+      "step": 58,
+      "accepted": true,
+      "metropolis_acceptance": 0.9976568211296998,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0746123539705309,
+        1.4013159399005564
+      ]
+    },
+    {
+      "step": 59,
+      "accepted": true,
+      "metropolis_acceptance": 1.0007370256928223,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0722561757651907,
+        1.3958520143986066
+      ]
+    },
+    {
+      "step": 60,
+      "accepted": true,
+      "metropolis_acceptance": 0.9989491692568767,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07596398165495431,
+        1.3950202188502792
+      ]
+    },
+    {
+      "step": 61,
+      "accepted": true,
+      "metropolis_acceptance": 1.00018899013852,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07510990074984875,
+        1.4038476831892954
+      ]
+    },
+    {
+      "step": 62,
+      "accepted": true,
+      "metropolis_acceptance": 0.9974910628461123,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08563922170581977,
+        1.3881955731507993
+      ]
+    },
+    {
+      "step": 63,
+      "accepted": true,
+      "metropolis_acceptance": 1.1522486118165998,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4721081982135214,
+        1.4034175756112564
+      ]
+    },
+    {
+      "step": 64,
+      "accepted": true,
+      "metropolis_acceptance": 0.9278627046345209,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.381906030288778,
+        1.3984823097130015
+      ]
+    },
+    {
+      "step": 65,
+      "accepted": true,
+      "metropolis_acceptance": 1.0912024356061756,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4849781146291169,
+        1.3989706766533903
+      ]
+    },
+    {
+      "step": 66,
+      "accepted": true,
+      "metropolis_acceptance": 0.8683330487383459,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.054995918999269026,
+        1.3952167705491378
+      ]
+    },
+    {
+      "step": 67,
+      "accepted": true,
+      "metropolis_acceptance": 0.9996130600683503,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05607955913295,
+        1.3954913422961581
+      ]
+    },
+    {
+      "step": 68,
+      "accepted": true,
+      "metropolis_acceptance": 0.9852248460143922,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11422669713291059,
+        1.398110361765831
+      ]
+    },
+    {
+      "step": 69,
+      "accepted": true,
+      "metropolis_acceptance": 1.000247298529049,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11268434444637646,
+        1.4032858754175468
+      ]
+    },
+    {
+      "step": 70,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999950259903541,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11270608790787118,
+        1.4031118018179878
+      ]
+    },
+    {
+      "step": 71,
+      "accepted": true,
+      "metropolis_acceptance": 0.9998376786247363,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11373702637243235,
+        1.4037814185061515
+      ]
+    },
+    {
+      "step": 72,
+      "accepted": true,
+      "metropolis_acceptance": 1.0047216108512733,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10337465382374642,
+        1.3608692025983575
+      ]
+    },
+    {
+      "step": 73,
+      "accepted": true,
+      "metropolis_acceptance": 1.004979545438144,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07151888762971907,
+        1.396420875681281
+      ]
+    },
+    {
+      "step": 74,
+      "accepted": true,
+      "metropolis_acceptance": 1.145883820471784,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4657078126446369,
+        1.4521328793650425
+      ]
+    },
+    {
+      "step": 75,
+      "accepted": true,
+      "metropolis_acceptance": 0.9952226372648916,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4620087937044924,
+        1.4444507648836362
+      ]
+    },
+    {
+      "step": 76,
+      "accepted": true,
+      "metropolis_acceptance": 0.87141755213695,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1087318722046186,
+        1.4011456842717886
+      ]
+    },
+    {
+      "step": 77,
+      "accepted": true,
+      "metropolis_acceptance": 1.0109045577646312,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06537619504931513,
+        1.3986604708506916
+      ]
+    },
+    {
+      "step": 78,
+      "accepted": true,
+      "metropolis_acceptance": 0.9927750785600203,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09945521673673413,
+        1.4322393984404729
+      ]
+    },
+    {
+      "step": 79,
+      "accepted": true,
+      "metropolis_acceptance": 1.1765198375593513,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.49298553620565516,
+        1.3988281769789763
+      ]
+    },
+    {
+      "step": 80,
+      "accepted": true,
+      "metropolis_acceptance": 1.0004145283032937,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4933676492545744,
+        1.397133559372324
+      ]
+    },
+    {
+      "step": 81,
+      "accepted": true,
+      "metropolis_acceptance": 1.1004460214772889,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5762706312605687,
+        1.396127780133462
+      ]
+    },
+    {
+      "step": 82,
+      "accepted": true,
+      "metropolis_acceptance": 0.9993024800609448,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5757343954431469,
+        1.3969309391021532
+      ]
+    },
+    {
+      "step": 83,
+      "accepted": true,
+      "metropolis_acceptance": 1.0052306285721482,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5798228469000715,
+        1.3967858744118133
+      ]
+    },
+    {
+      "step": 84,
+      "accepted": true,
+      "metropolis_acceptance": 0.9921576686251244,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5735302177654786,
+        1.3926037545400267
+      ]
+    },
+    {
+      "step": 85,
+      "accepted": true,
+      "metropolis_acceptance": 0.778010614775894,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12264767270942227,
+        1.393206814991131
+      ]
+    },
+    {
+      "step": 86,
+      "accepted": true,
+      "metropolis_acceptance": 0.9997317500877304,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12560344351390818,
+        1.3887109951552619
+      ]
+    },
+    {
+      "step": 87,
+      "accepted": true,
+      "metropolis_acceptance": 1.1062865753507407,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4271596064529007,
+        1.3952396464286079
+      ]
+    },
+    {
+      "step": 88,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000085379462749,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.427151056489892,
+        1.3945513603398199
+      ]
+    },
+    {
+      "step": 89,
+      "accepted": true,
+      "metropolis_acceptance": 0.9133163285052658,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08535692919170658,
+        1.3877064439319906
+      ]
+    },
+    {
+      "step": 90,
+      "accepted": true,
+      "metropolis_acceptance": 1.0031595875314228,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07350553804434613,
+        1.4004907066792904
+      ]
+    },
+    {
+      "step": 91,
+      "accepted": true,
+      "metropolis_acceptance": 0.9983636898060476,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09773282716589084,
+        1.4535093669130317
+      ]
+    },
+    {
+      "step": 92,
+      "accepted": true,
+      "metropolis_acceptance": 1.0078849998124648,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05532099199165034,
+        1.4058604891420157
+      ]
+    },
+    {
+      "step": 93,
+      "accepted": true,
+      "metropolis_acceptance": 2.267021053247481,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.9067305335340916,
+        1.4250309305610227
+      ]
+    },
+    {
+      "step": 94,
+      "accepted": true,
+      "metropolis_acceptance": 1.0111208439209527,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.911826699147875,
+        1.4206805967679148
+      ]
+    },
+    {
+      "step": 95,
+      "accepted": true,
+      "metropolis_acceptance": 0.9968640454453228,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.9105210151114326,
+        1.4169014950852252
+      ]
+    },
+    {
+      "step": 96,
+      "accepted": true,
+      "metropolis_acceptance": 0.8044305250213634,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.8052603218093666,
+        1.3852340367278586
+      ]
+    },
+    {
+      "step": 97,
+      "accepted": false,
+      "metropolis_acceptance": 0.551814517327889,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.8052603218093666,
+        1.3852340367278586
+      ]
+    },
+    {
+      "step": 98,
+      "accepted": false,
+      "metropolis_acceptance": 0.6332222723083192,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.8052603218093666,
+        1.3852340367278586
+      ]
+    },
+    {
+      "step": 99,
+      "accepted": true,
+      "metropolis_acceptance": 1.0018639706519905,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.8063317453673613,
+        1.3884617674624435
+      ]
+    },
+    {
+      "step": 100,
+      "accepted": true,
+      "metropolis_acceptance": 1.0317577437910206,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.8228276411393206,
+        1.397211839819591
+      ]
+    },
+    {
+      "step": 101,
+      "accepted": true,
+      "metropolis_acceptance": 1.1979173814426072,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.9109650848070409,
+        1.4087916048494633
+      ]
+    },
+    {
+      "step": 102,
+      "accepted": true,
+      "metropolis_acceptance": 1.0694721367754387,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.9411905823225253,
+        1.4223048841091297
+      ]
+    },
+    {
+      "step": 103,
+      "accepted": true,
+      "metropolis_acceptance": 0.41895272255565835,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11780441671751252,
+        1.3998489250926507
+      ]
+    },
+    {
+      "step": 104,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999951155315229,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11783008389114145,
+        1.3998873661115705
+      ]
+    },
+    {
+      "step": 105,
+      "accepted": true,
+      "metropolis_acceptance": 1.0002811103916716,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11632113807244031,
+        1.3995159246510476
+      ]
+    },
+    {
+      "step": 106,
+      "accepted": true,
+      "metropolis_acceptance": 0.9994754278913651,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1196939776201325,
+        1.3939976583022542
+      ]
+    },
+    {
+      "step": 107,
+      "accepted": true,
+      "metropolis_acceptance": 1.0033876398479158,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10253800373291903,
+        1.4014198870839416
+      ]
+    },
+    {
+      "step": 108,
+      "accepted": true,
+      "metropolis_acceptance": 1.0204788723430198,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.04153447573374385,
+        1.385559264744196
+      ]
+    },
+    {
+      "step": 109,
+      "accepted": true,
+      "metropolis_acceptance": 0.9823600202388193,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09281580484239374,
+        1.4043726426270242
+      ]
+    },
+    {
+      "step": 110,
+      "accepted": true,
+      "metropolis_acceptance": 1.0030809228806694,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08158207889610344,
+        1.4034775866903677
+      ]
+    },
+    {
+      "step": 111,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000539770615977,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08139573541952946,
+        1.4034332870760435
+      ]
+    },
+    {
+      "step": 112,
+      "accepted": true,
+      "metropolis_acceptance": 0.9899296242499426,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.14421142467288997,
+        1.3683429800252604
+      ]
+    },
+    {
+      "step": 113,
+      "accepted": true,
+      "metropolis_acceptance": 1.1905877741962163,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5129540282994542,
+        1.4055464539298128
+      ]
+    },
+    {
+      "step": 114,
+      "accepted": true,
+      "metropolis_acceptance": 0.9979641791392033,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5110036198121792,
+        1.3992866427757846
+      ]
+    },
+    {
+      "step": 115,
+      "accepted": true,
+      "metropolis_acceptance": 0.8436504022523815,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.15700276580048056,
+        1.3614218563982454
+      ]
+    },
+    {
+      "step": 116,
+      "accepted": true,
+      "metropolis_acceptance": 1.0103645900465306,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08235813399411508,
+        1.3962885059733712
+      ]
+    },
+    {
+      "step": 117,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000289047707225,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08226334408964348,
+        1.3962131466452263
+      ]
+    },
+    {
+      "step": 118,
+      "accepted": true,
+      "metropolis_acceptance": 0.991128841576111,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12276251480564415,
+        1.3874696841541532
+      ]
+    },
+    {
+      "step": 119,
+      "accepted": true,
+      "metropolis_acceptance": 1.0038469433578747,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10193083752332278,
+        1.393759460204727
+      ]
+    },
+    {
+      "step": 120,
+      "accepted": true,
+      "metropolis_acceptance": 0.9978262924554565,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11297625512986559,
+        1.389404360762952
+      ]
+    },
+    {
+      "step": 121,
+      "accepted": true,
+      "metropolis_acceptance": 1.196075638098186,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5201233336280078,
+        1.3919991989831868
+      ]
+    },
+    {
+      "step": 122,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999816154893094,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5201059674671125,
+        1.3920014928460303
+      ]
+    },
+    {
+      "step": 123,
+      "accepted": true,
+      "metropolis_acceptance": 0.8401818990976984,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10167874651088604,
+        1.4033826592932663
+      ]
+    },
+    {
+      "step": 124,
+      "accepted": true,
+      "metropolis_acceptance": 1.0079513149624246,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07346093490520053,
+        1.392300224386499
+      ]
+    },
+    {
+      "step": 125,
+      "accepted": true,
+      "metropolis_acceptance": 0.9851551583619407,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.19880622126153472,
+        1.3837679165309063
+      ]
+    },
+    {
+      "step": 126,
+      "accepted": true,
+      "metropolis_acceptance": 1.023637094579794,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05135284600171434,
+        1.3819508103188745
+      ]
+    },
+    {
+      "step": 127,
+      "accepted": true,
+      "metropolis_acceptance": 0.9791195806797759,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.21881510813399271,
+        1.4158618092810338
+      ]
+    },
+    {
+      "step": 128,
+      "accepted": true,
+      "metropolis_acceptance": 1.1827870489993755,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5079290565675106,
+        1.3998613428916107
+      ]
+    },
+    {
+      "step": 129,
+      "accepted": true,
+      "metropolis_acceptance": 0.8495781538215355,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11516522729518917,
+        1.3718837182310344
+      ]
+    },
+    {
+      "step": 130,
+      "accepted": true,
+      "metropolis_acceptance": 1.0002858395604224,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11556935830752652,
+        1.3685413329038165
+      ]
+    },
+    {
+      "step": 131,
+      "accepted": true,
+      "metropolis_acceptance": 1.0191181079391542,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.046016607854865874,
+        1.3971985792637258
+      ]
+    },
+    {
+      "step": 132,
+      "accepted": true,
+      "metropolis_acceptance": 1.001588899163814,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.04216480334299415,
+        1.39763655284314
+      ]
+    },
+    {
+      "step": 133,
+      "accepted": true,
+      "metropolis_acceptance": 0.9806641886518314,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10298899331702664,
+        1.3960568416015007
+      ]
+    },
+    {
+      "step": 134,
+      "accepted": true,
+      "metropolis_acceptance": 1.0102590238947264,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06666785904535423,
+        1.3980410799374445
+      ]
+    },
+    {
+      "step": 135,
+      "accepted": true,
+      "metropolis_acceptance": 0.9970190485871173,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07596637408236204,
+        1.3961340458547784
+      ]
+    },
+    {
+      "step": 136,
+      "accepted": true,
+      "metropolis_acceptance": 1.1617426235526598,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4996766024968113,
+        1.3944198220612383
+      ]
+    },
+    {
+      "step": 137,
+      "accepted": true,
+      "metropolis_acceptance": 0.8641431084838851,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0677636440983814,
+        1.3976826059652354
+      ]
+    },
+    {
+      "step": 138,
+      "accepted": true,
+      "metropolis_acceptance": 0.998811688794222,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07159100232201707,
+        1.3935085821929063
+      ]
+    },
+    {
+      "step": 139,
+      "accepted": true,
+      "metropolis_acceptance": 1.0052541483227575,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05629296150503533,
+        1.4041008728216713
+      ]
+    },
+    {
+      "step": 140,
+      "accepted": true,
+      "metropolis_acceptance": 0.9988903574837668,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0593331653305605,
+        1.396597515341303
+      ]
+    },
+    {
+      "step": 141,
+      "accepted": true,
+      "metropolis_acceptance": 0.981025263657851,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1460950929369414,
+        1.3980849419932018
+      ]
+    },
+    {
+      "step": 142,
+      "accepted": true,
+      "metropolis_acceptance": 0.9993730385968187,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.15679813654890776,
+        1.3932244522983002
+      ]
+    },
+    {
+      "step": 143,
+      "accepted": true,
+      "metropolis_acceptance": 1.02306194760764,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.055434875585839774,
+        1.430577012070221
+      ]
+    },
+    {
+      "step": 144,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999410044909921,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.054795202954867346,
+        1.427708943426284
+      ]
+    },
+    {
+      "step": 145,
+      "accepted": true,
+      "metropolis_acceptance": 0.9866415419361028,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09431000384191317,
+        1.396457758095463
+      ]
+    },
+    {
+      "step": 146,
+      "accepted": true,
+      "metropolis_acceptance": 0.9942089829205847,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1241830711722749,
+        1.393730994340471
+      ]
+    },
+    {
+      "step": 147,
+      "accepted": true,
+      "metropolis_acceptance": 1.0065879039623407,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09188042078140604,
+        1.3898219329794106
+      ]
+    },
+    {
+      "step": 148,
+      "accepted": true,
+      "metropolis_acceptance": 0.990569450578301,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.15661285501384567,
+        1.3883438543185758
+      ]
+    },
+    {
+      "step": 149,
+      "accepted": true,
+      "metropolis_acceptance": 1.0087056904555993,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09842661323739348,
+        1.3770903060499005
+      ]
+    },
+    {
+      "step": 150,
+      "accepted": true,
+      "metropolis_acceptance": 0.9926646684855606,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.13661183243934646,
+        1.3991086684921366
+      ]
+    },
+    {
+      "step": 151,
+      "accepted": true,
+      "metropolis_acceptance": 1.0127582074879982,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07503275588016173,
+        1.3936061962244901
+      ]
+    },
+    {
+      "step": 152,
+      "accepted": true,
+      "metropolis_acceptance": 1.001138246440371,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07125986725194224,
+        1.405716919974734
+      ]
+    },
+    {
+      "step": 153,
+      "accepted": true,
+      "metropolis_acceptance": 1.1693366213051395,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5021538371016389,
+        1.4050329700424455
+      ]
+    },
+    {
+      "step": 154,
+      "accepted": true,
+      "metropolis_acceptance": 0.8470261807953547,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1165404684482488,
+        1.4115029355836335
+      ]
+    },
+    {
+      "step": 155,
+      "accepted": true,
+      "metropolis_acceptance": 0.9980644773923862,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12786261066567342,
+        1.403014596917261
+      ]
+    },
+    {
+      "step": 156,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000896994714892,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1277381311881448,
+        1.3933558559593116
+      ]
+    },
+    {
+      "step": 157,
+      "accepted": true,
+      "metropolis_acceptance": 1.001273326203913,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11898915587680253,
+        1.3942578204143479
+      ]
+    },
+    {
+      "step": 158,
+      "accepted": true,
+      "metropolis_acceptance": 0.9970356774766513,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.142745658601283,
+        1.4043045627531845
+      ]
+    },
+    {
+      "step": 159,
+      "accepted": true,
+      "metropolis_acceptance": 1.0153745542573342,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06813504556842784,
+        1.3949439597291737
+      ]
+    },
+    {
+      "step": 160,
+      "accepted": true,
+      "metropolis_acceptance": 1.1806236197057411,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5112825191368429,
+        1.4167778406349567
+      ]
+    },
+    {
+      "step": 161,
+      "accepted": true,
+      "metropolis_acceptance": 0.8380966386764037,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11730838713310279,
+        1.4132596349005841
+      ]
+    },
+    {
+      "step": 162,
+      "accepted": true,
+      "metropolis_acceptance": 1.0106648641609213,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07264538231675922,
+        1.388169577892422
+      ]
+    },
+    {
+      "step": 163,
+      "accepted": true,
+      "metropolis_acceptance": 0.9904525850514893,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11413506291595148,
+        1.3801322656053183
+      ]
+    },
+    {
+      "step": 164,
+      "accepted": true,
+      "metropolis_acceptance": 0.9992738078243386,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11419829937647953,
+        1.3982555886486785
+      ]
+    },
+    {
+      "step": 165,
+      "accepted": true,
+      "metropolis_acceptance": 1.0042817176737726,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09398633260348241,
+        1.3930591715368044
+      ]
+    },
+    {
+      "step": 166,
+      "accepted": true,
+      "metropolis_acceptance": 1.1563672521789463,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.48352551123184595,
+        1.3949924869659087
+      ]
+    },
+    {
+      "step": 167,
+      "accepted": true,
+      "metropolis_acceptance": 1.0117816105859219,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.49525027352369044,
+        1.3902272367279018
+      ]
+    },
+    {
+      "step": 168,
+      "accepted": true,
+      "metropolis_acceptance": 0.85286886093026,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11437441585472945,
+        1.3941597232670178
+      ]
+    },
+    {
+      "step": 169,
+      "accepted": true,
+      "metropolis_acceptance": 1.0130136224272992,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06402707823590495,
+        1.3997765795242185
+      ]
+    },
+    {
+      "step": 170,
+      "accepted": true,
+      "metropolis_acceptance": 0.999182332972451,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06648158118515819,
+        1.4008603842032146
+      ]
+    },
+    {
+      "step": 171,
+      "accepted": true,
+      "metropolis_acceptance": 1.004266762920967,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05570037621148446,
+        1.417317065577515
+      ]
+    },
+    {
+      "step": 172,
+      "accepted": true,
+      "metropolis_acceptance": 1.0001146713348974,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05769205855461397,
+        1.372660401000785
+      ]
+    },
+    {
+      "step": 173,
+      "accepted": true,
+      "metropolis_acceptance": 0.9953651998697488,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0728867106500403,
+        1.3690962377380047
+      ]
+    },
+    {
+      "step": 174,
+      "accepted": true,
+      "metropolis_acceptance": 1.0055444463354921,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05664848374825318,
+        1.3677383426484038
+      ]
+    },
+    {
+      "step": 175,
+      "accepted": true,
+      "metropolis_acceptance": 1.077165159440525,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4159634346574262,
+        1.4002113230164688
+      ]
+    },
+    {
+      "step": 176,
+      "accepted": true,
+      "metropolis_acceptance": 1.0358220163443927,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4582174240376228,
+        1.3971860907792653
+      ]
+    },
+    {
+      "step": 177,
+      "accepted": true,
+      "metropolis_acceptance": 1.0407241060958534,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.49976959716687663,
+        1.3900949973479373
+      ]
+    },
+    {
+      "step": 178,
+      "accepted": true,
+      "metropolis_acceptance": 0.8521345133572141,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09575762516225929,
+        1.398692394078544
+      ]
+    },
+    {
+      "step": 179,
+      "accepted": true,
+      "metropolis_acceptance": 1.0015903065744258,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08964144450222189,
+        1.4067560461114397
+      ]
+    },
+    {
+      "step": 180,
+      "accepted": true,
+      "metropolis_acceptance": 1.1501802021391914,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4803830460970935,
+        1.3925679102729298
+      ]
+    },
+    {
+      "step": 181,
+      "accepted": true,
+      "metropolis_acceptance": 0.8675782234263599,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10261039141245198,
+        1.4028596805320708
+      ]
+    },
+    {
+      "step": 182,
+      "accepted": true,
+      "metropolis_acceptance": 1.0108801106990422,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06375795830576826,
+        1.3946558203437265
+      ]
+    },
+    {
+      "step": 183,
+      "accepted": true,
+      "metropolis_acceptance": 0.985830222157659,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12498676774439,
+        1.3826680080378297
+      ]
+    },
+    {
+      "step": 184,
+      "accepted": true,
+      "metropolis_acceptance": 1.0008977074912193,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11835019263746356,
+        1.384770545594642
+      ]
+    },
+    {
+      "step": 185,
+      "accepted": true,
+      "metropolis_acceptance": 1.0004331894210177,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11614051674895748,
+        1.3836286186614757
+      ]
+    },
+    {
+      "step": 186,
+      "accepted": true,
+      "metropolis_acceptance": 1.1196161244997196,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.44401824933577266,
+        1.385325373386528
+      ]
+    },
+    {
+      "step": 187,
+      "accepted": false,
+      "metropolis_acceptance": 0.8934689536995428,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.44401824933577266,
+        1.385325373386528
+      ]
+    },
+    {
+      "step": 188,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999568075032196,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4439629395773715,
+        1.385255651332908
+      ]
+    },
+    {
+      "step": 189,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000834532902687,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.444057183690113,
+        1.3851807145146264
+      ]
+    },
+    {
+      "step": 190,
+      "accepted": true,
+      "metropolis_acceptance": 0.9929966920090136,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4356953112229049,
+        1.3871773241896779
+      ]
+    },
+    {
+      "step": 191,
+      "accepted": true,
+      "metropolis_acceptance": 0.9984195657362531,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.433101482898204,
+        1.3785688307634105
+      ]
+    },
+    {
+      "step": 192,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000850247345683,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4330135568916549,
+        1.3765978598170294
+      ]
+    },
+    {
+      "step": 193,
+      "accepted": true,
+      "metropolis_acceptance": 1.1282524547349209,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5561837466859066,
+        1.3918716363116244
+      ]
+    },
+    {
+      "step": 194,
+      "accepted": false,
+      "metropolis_acceptance": 0.7994170155844896,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5561837466859066,
+        1.3918716363116244
+      ]
+    },
+    {
+      "step": 195,
+      "accepted": true,
+      "metropolis_acceptance": 0.8166826970806664,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06267842810194248,
+        1.4198434344893707
+      ]
+    },
+    {
+      "step": 196,
+      "accepted": true,
+      "metropolis_acceptance": 0.9977820156626225,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06703022259017154,
+        1.4044353796484825
+      ]
+    },
+    {
+      "step": 197,
+      "accepted": true,
+      "metropolis_acceptance": 0.998362174058269,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07179267496516208,
+        1.3987871566527044
+      ]
+    },
+    {
+      "step": 198,
+      "accepted": true,
+      "metropolis_acceptance": 0.9860915132922451,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.133068072461027,
+        1.4059292703605224
+      ]
+    },
+    {
+      "step": 199,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000203033905253,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.13271157434991818,
+        1.4045923243419183
+      ]
+    },
+    {
+      "step": 200,
+      "accepted": true,
+      "metropolis_acceptance": 1.019030763381358,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.058863770201417,
+        1.3843077579900924
+      ]
+    },
+    {
+      "step": 201,
+      "accepted": true,
+      "metropolis_acceptance": 0.9978693741052816,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06420282304446273,
+        1.3890746600980115
+      ]
+    },
+    {
+      "step": 202,
+      "accepted": true,
+      "metropolis_acceptance": 0.9889187707091224,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.24410040728313326,
+        1.4158122654407679
+      ]
+    },
+    {
+      "step": 203,
+      "accepted": true,
+      "metropolis_acceptance": 1.1519805267699978,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.48440892808653513,
+        1.3947269897420382
+      ]
+    },
+    {
+      "step": 204,
+      "accepted": true,
+      "metropolis_acceptance": 1.2465011342664831,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6643120381405985,
+        1.4146623544511536
+      ]
+    },
+    {
+      "step": 205,
+      "accepted": true,
+      "metropolis_acceptance": 0.8317680277786733,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5197290165827927,
+        1.3965785495810783
+      ]
+    },
+    {
+      "step": 206,
+      "accepted": true,
+      "metropolis_acceptance": 0.8423848692105301,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1016958686584382,
+        1.434834621763266
+      ]
+    },
+    {
+      "step": 207,
+      "accepted": true,
+      "metropolis_acceptance": 1.0028097415980104,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0912305462085813,
+        1.4361513216781514
+      ]
+    },
+    {
+      "step": 208,
+      "accepted": true,
+      "metropolis_acceptance": 0.9966068526447136,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09519138588622758,
+        1.4007334074065683
+      ]
+    },
+    {
+      "step": 209,
+      "accepted": true,
+      "metropolis_acceptance": 0.9965897609077267,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10997278238746193,
+        1.3988217649429695
+      ]
+    },
+    {
+      "step": 210,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999621279744346,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11019731043128846,
+        1.3974119189965115
+      ]
+    },
+    {
+      "step": 211,
+      "accepted": true,
+      "metropolis_acceptance": 0.9973217305597392,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12504069156488526,
+        1.3954591993288663
+      ]
+    },
+    {
+      "step": 212,
+      "accepted": true,
+      "metropolis_acceptance": 1.000007266750787,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12482977344806902,
+        1.3977573075605696
+      ]
+    },
+    {
+      "step": 213,
+      "accepted": true,
+      "metropolis_acceptance": 0.9981934301277456,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.13793685688325974,
+        1.4013910172214126
+      ]
+    },
+    {
+      "step": 214,
+      "accepted": true,
+      "metropolis_acceptance": 1.006276380805721,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10358596185619875,
+        1.3851760143323253
+      ]
+    },
+    {
+      "step": 215,
+      "accepted": true,
+      "metropolis_acceptance": 1.01110291860588,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06444860768642408,
+        1.4095454538122303
+      ]
+    },
+    {
+      "step": 216,
+      "accepted": true,
+      "metropolis_acceptance": 0.9841663552958304,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.13429135796773126,
+        1.378533188922088
+      ]
+    },
+    {
+      "step": 217,
+      "accepted": true,
+      "metropolis_acceptance": 1.0088055657130857,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08758265879854725,
+        1.4104658454720038
+      ]
+    },
+    {
+      "step": 218,
+      "accepted": true,
+      "metropolis_acceptance": 1.004374951800098,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07244987662676816,
+        1.4054261549674574
+      ]
+    },
+    {
+      "step": 219,
+      "accepted": true,
+      "metropolis_acceptance": 0.9892718643438602,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11467067228101964,
+        1.398313795401818
+      ]
+    },
+    {
+      "step": 220,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999885273860479,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11473340537297358,
+        1.3982724441827776
+      ]
+    },
+    {
+      "step": 221,
+      "accepted": true,
+      "metropolis_acceptance": 1.0058012265533431,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08950330549023493,
+        1.3927467642522922
+      ]
+    },
+    {
+      "step": 222,
+      "accepted": true,
+      "metropolis_acceptance": 1.000100622900741,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08889776939345757,
+        1.3958708714601056
+      ]
+    },
+    {
+      "step": 223,
+      "accepted": true,
+      "metropolis_acceptance": 1.0127963193805163,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.050232892783305644,
+        1.395057154327497
+      ]
+    },
+    {
+      "step": 224,
+      "accepted": true,
+      "metropolis_acceptance": 0.989210876204663,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0822468139865171,
+        1.4027451089981167
+      ]
+    },
+    {
+      "step": 225,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999981591630509,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0822491674991185,
+        1.4026352527124957
+      ]
+    },
+    {
+      "step": 226,
+      "accepted": true,
+      "metropolis_acceptance": 0.999987914489029,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08248008608645599,
+        1.4059314469517163
+      ]
+    },
+    {
+      "step": 227,
+      "accepted": true,
+      "metropolis_acceptance": 1.0040560887201595,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06900759730529511,
+        1.3992579414878183
+      ]
+    },
+    {
+      "step": 228,
+      "accepted": true,
+      "metropolis_acceptance": 0.9983364956281936,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07478838755154706,
+        1.3900610069588843
+      ]
+    },
+    {
+      "step": 229,
+      "accepted": true,
+      "metropolis_acceptance": 0.9929865820629942,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10074176476873947,
+        1.3966448446516357
+      ]
+    },
+    {
+      "step": 230,
+      "accepted": true,
+      "metropolis_acceptance": 1.0100864138678085,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06493990763869448,
+        1.4016457941057616
+      ]
+    },
+    {
+      "step": 231,
+      "accepted": true,
+      "metropolis_acceptance": 0.9992722427412511,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0671073767090574,
+        1.3987422756169972
+      ]
+    },
+    {
+      "step": 232,
+      "accepted": true,
+      "metropolis_acceptance": 1.0025945049982485,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.059648487186981694,
+        1.394561424053311
+      ]
+    },
+    {
+      "step": 233,
+      "accepted": true,
+      "metropolis_acceptance": 0.9926700399074228,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08286574355095458,
+        1.4014378249673733
+      ]
+    },
+    {
+      "step": 234,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999923227342505,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08289364344817932,
+        1.4014464996590212
+      ]
+    },
+    {
+      "step": 235,
+      "accepted": true,
+      "metropolis_acceptance": 0.9917112603392625,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.14466138379225413,
+        1.3612164578763561
+      ]
+    },
+    {
+      "step": 236,
+      "accepted": true,
+      "metropolis_acceptance": 1.0012642779085488,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1266335194243951,
+        1.3664990062734284
+      ]
+    },
+    {
+      "step": 237,
+      "accepted": true,
+      "metropolis_acceptance": 1.002169771020588,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10294917429715397,
+        1.3980234619154934
+      ]
+    },
+    {
+      "step": 238,
+      "accepted": true,
+      "metropolis_acceptance": 0.9998252642008857,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10450269357527987,
+        1.3902666750684236
+      ]
+    },
+    {
+      "step": 239,
+      "accepted": true,
+      "metropolis_acceptance": 1.0937647169284834,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4164692005706852,
+        1.3898001230205808
+      ]
+    },
+    {
+      "step": 240,
+      "accepted": true,
+      "metropolis_acceptance": 0.9114369342576074,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12571454134938215,
+        1.3915504344503062
+      ]
+    },
+    {
+      "step": 241,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000012519238632,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1257148022022186,
+        1.3915051052958953
+      ]
+    },
+    {
+      "step": 242,
+      "accepted": true,
+      "metropolis_acceptance": 1.000115975989581,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1248546906866817,
+        1.3916724915054708
+      ]
+    },
+    {
+      "step": 243,
+      "accepted": true,
+      "metropolis_acceptance": 1.001492263182823,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.11474054701045534,
+        1.3975999645062849
+      ]
+    },
+    {
+      "step": 244,
+      "accepted": true,
+      "metropolis_acceptance": 1.0009896365947861,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1093474206828685,
+        1.402253445673864
+      ]
+    },
+    {
+      "step": 245,
+      "accepted": true,
+      "metropolis_acceptance": 1.004307465899016,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09023310228264043,
+        1.3921228591080839
+      ]
+    },
+    {
+      "step": 246,
+      "accepted": true,
+      "metropolis_acceptance": 1.0097515874528675,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.05785584248689927,
+        1.399636392637695
+      ]
+    },
+    {
+      "step": 247,
+      "accepted": true,
+      "metropolis_acceptance": 0.9867355612943847,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10824815784195549,
+        1.3845312193675212
+      ]
+    },
+    {
+      "step": 248,
+      "accepted": true,
+      "metropolis_acceptance": 1.0105873160380086,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.06645436864339173,
+        1.391204733180176
+      ]
+    },
+    {
+      "step": 249,
+      "accepted": true,
+      "metropolis_acceptance": 1.2580329696124333,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5645215021733693,
+        1.3874746143375527
+      ]
+    },
+    {
+      "step": 250,
+      "accepted": true,
+      "metropolis_acceptance": 0.8757113253224101,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.43597890611650686,
+        1.401230552699814
+      ]
+    },
+    {
+      "step": 251,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000151541821487,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.43599644545378397,
+        1.4013095204929593
+      ]
+    },
+    {
+      "step": 252,
+      "accepted": true,
+      "metropolis_acceptance": 1.0388072375330752,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.47755255801571433,
+        1.3767744572645473
+      ]
+    },
+    {
+      "step": 253,
+      "accepted": true,
+      "metropolis_acceptance": 1.0082115072704247,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4863710370644678,
+        1.381861843609924
+      ]
+    },
+    {
+      "step": 254,
+      "accepted": true,
+      "metropolis_acceptance": 1.098221331598144,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5713889355512628,
+        1.393710696221495
+      ]
+    },
+    {
+      "step": 255,
+      "accepted": true,
+      "metropolis_acceptance": 0.9389404460118541,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5166593951340377,
+        1.4014775740798429
+      ]
+    },
+    {
+      "step": 256,
+      "accepted": true,
+      "metropolis_acceptance": 2.1869950309317825,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.9695211441013333,
+        1.4021017621878122
+      ]
+    },
+    {
+      "step": 257,
+      "accepted": true,
+      "metropolis_acceptance": 0.4449935397808425,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4877461849160063,
+        1.4005328349741049
+      ]
+    },
+    {
+      "step": 258,
+      "accepted": true,
+      "metropolis_acceptance": 0.9550347456880282,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.43631740885220205,
+        1.3944793058110747
+      ]
+    },
+    {
+      "step": 259,
+      "accepted": true,
+      "metropolis_acceptance": 1.2010872399102241,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6071596260652922,
+        1.3959638116674227
+      ]
+    },
+    {
+      "step": 260,
+      "accepted": true,
+      "metropolis_acceptance": 0.759976016756734,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07591112673320087,
+        1.395895105780232
+      ]
+    },
+    {
+      "step": 261,
+      "accepted": true,
+      "metropolis_acceptance": 1.1494929569613013,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4891381747666957,
+        1.4064871675155064
+      ]
+    },
+    {
+      "step": 262,
+      "accepted": true,
+      "metropolis_acceptance": 0.9898452699384586,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.47758773756143535,
+        1.4216829888848852
+      ]
+    },
+    {
+      "step": 263,
+      "accepted": true,
+      "metropolis_acceptance": 0.9991263428821918,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4766038653698372,
+        1.4222158419995419
+      ]
+    },
+    {
+      "step": 264,
+      "accepted": false,
+      "metropolis_acceptance": 0.8824086431767003,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4766038653698372,
+        1.4222158419995419
+      ]
+    },
+    {
+      "step": 265,
+      "accepted": true,
+      "metropolis_acceptance": 1.0351736483989966,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5125774147733018,
+        1.3879596201702107
+      ]
+    },
+    {
+      "step": 266,
+      "accepted": true,
+      "metropolis_acceptance": 0.8429067589166088,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.12816752091595643,
+        1.3932308218431784
+      ]
+    },
+    {
+      "step": 267,
+      "accepted": true,
+      "metropolis_acceptance": 0.9998926274376441,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1294266425031894,
+        1.39015606198892
+      ]
+    },
+    {
+      "step": 268,
+      "accepted": true,
+      "metropolis_acceptance": 1.0112507530463926,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.0801345193033059,
+        1.3920078642701523
+      ]
+    },
+    {
+      "step": 269,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000024051878706,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08012178787434834,
+        1.392065063508134
+      ]
+    },
+    {
+      "step": 270,
+      "accepted": true,
+      "metropolis_acceptance": 1.0031246669484837,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07017175600359316,
+        1.395976135720903
+      ]
+    },
+    {
+      "step": 271,
+      "accepted": true,
+      "metropolis_acceptance": 0.9926745235573848,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09524968565016165,
+        1.4064168601905636
+      ]
+    },
+    {
+      "step": 272,
+      "accepted": true,
+      "metropolis_acceptance": 0.9941769572132673,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.13973214179932705,
+        1.436442538565542
+      ]
+    },
+    {
+      "step": 273,
+      "accepted": true,
+      "metropolis_acceptance": 0.9971468778122939,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.14450504496142283,
+        1.3915819299262164
+      ]
+    },
+    {
+      "step": 274,
+      "accepted": true,
+      "metropolis_acceptance": 1.012250614194475,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08336558908925752,
+        1.3859214808427465
+      ]
+    },
+    {
+      "step": 275,
+      "accepted": true,
+      "metropolis_acceptance": 0.998085406343046,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.08927407111817248,
+        1.3927869348128639
+      ]
+    },
+    {
+      "step": 276,
+      "accepted": true,
+      "metropolis_acceptance": 1.1358941313005562,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.4725683608432125,
+        1.4278419381138086
+      ]
+    },
+    {
+      "step": 277,
+      "accepted": true,
+      "metropolis_acceptance": 0.877437056348547,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.23448569863077054,
+        1.3626577649439435
+      ]
+    },
+    {
+      "step": 278,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999337650103427,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.2350199752520839,
+        1.3639384812310813
+      ]
+    },
+    {
+      "step": 279,
+      "accepted": true,
+      "metropolis_acceptance": 1.002231924937869,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.100902854238374,
+        1.3758551553317402
+      ]
+    },
+    {
+      "step": 280,
+      "accepted": true,
+      "metropolis_acceptance": 1.001319780696784,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09529742838356389,
+        1.4216257331634365
+      ]
+    },
+    {
+      "step": 281,
+      "accepted": true,
+      "metropolis_acceptance": 1.0059907166207012,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07212274333235655,
+        1.3916157096842527
+      ]
+    },
+    {
+      "step": 282,
+      "accepted": true,
+      "metropolis_acceptance": 1.000001335191425,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07212084364992585,
+        1.391589447897192
+      ]
+    },
+    {
+      "step": 283,
+      "accepted": true,
+      "metropolis_acceptance": 0.990445384877965,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.10704990866123358,
+        1.399264083650599
+      ]
+    },
+    {
+      "step": 284,
+      "accepted": true,
+      "metropolis_acceptance": 0.9933491972908262,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.17098080232173601,
+        1.3805462316416706
+      ]
+    },
+    {
+      "step": 285,
+      "accepted": true,
+      "metropolis_acceptance": 1.0015640949614313,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.15238042297300675,
+        1.3711838142225738
+      ]
+    },
+    {
+      "step": 286,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000002415908662,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.15236399952971091,
+        1.3711931482824558
+      ]
+    },
+    {
+      "step": 287,
+      "accepted": true,
+      "metropolis_acceptance": 0.9999629649161412,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.15285021868164156,
+        1.371220837478785
+      ]
+    },
+    {
+      "step": 288,
+      "accepted": true,
+      "metropolis_acceptance": 1.276648409208898,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5728900834029071,
+        1.393457423726549
+      ]
+    },
+    {
+      "step": 289,
+      "accepted": true,
+      "metropolis_acceptance": 0.7957574672163812,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.07274321999021618,
+        1.4107684541029146
+      ]
+    },
+    {
+      "step": 290,
+      "accepted": true,
+      "metropolis_acceptance": 0.9850417982621108,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1411495829050893,
+        1.3979626361776307
+      ]
+    },
+    {
+      "step": 291,
+      "accepted": true,
+      "metropolis_acceptance": 0.9996311176240611,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.14519357153942447,
+        1.3941313432383868
+      ]
+    },
+    {
+      "step": 292,
+      "accepted": true,
+      "metropolis_acceptance": 1.0000008530780666,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1451771409814833,
+        1.3941721368292064
+      ]
+    },
+    {
+      "step": 293,
+      "accepted": true,
+      "metropolis_acceptance": 1.000629089827168,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.13963237963287697,
+        1.3915311615487642
+      ]
+    },
+    {
+      "step": 294,
+      "accepted": true,
+      "metropolis_acceptance": 1.2765813134132868,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5723936592926295,
+        1.4136691533142132
+      ]
+    },
+    {
+      "step": 295,
+      "accepted": true,
+      "metropolis_acceptance": 1.011715232423599,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5820837285812108,
+        1.4043870132199294
+      ]
+    },
+    {
+      "step": 296,
+      "accepted": true,
+      "metropolis_acceptance": 0.9696002429892308,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.5566054029416415,
+        1.3985012886813615
+      ]
+    },
+    {
+      "step": 297,
+      "accepted": true,
+      "metropolis_acceptance": 1.0754128780800256,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6120710010091419,
+        1.441985746126841
+      ]
+    },
+    {
+      "step": 298,
+      "accepted": false,
+      "metropolis_acceptance": 0.7500149500667831,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.6120710010091419,
+        1.441985746126841
+      ]
+    },
+    {
+      "step": 299,
+      "accepted": true,
+      "metropolis_acceptance": 0.755548958332022,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.09176384155362537,
+        1.4391299405503164
+      ]
+    },
+    {
+      "step": 300,
+      "accepted": true,
+      "metropolis_acceptance": 0.989213098792085,
+      "mover": "PathSimulatorMover",
+      "path_logp_old": null,
+      "path_logp_new": null,
+      "path_reactive": true,
+      "min_1_r": null,
+      "cv_value": [
+        0.1304635250564856,
+        1.3897805299399684
+      ]
+    }
+  ]
+}

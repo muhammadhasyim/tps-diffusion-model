@@ -1,0 +1,184 @@
+{
+  "config": {
+    "epochs": 15,
+    "rollouts_per_epoch": 4,
+    "learning_rate": 3e-06,
+    "clip_range": 0.1,
+    "max_grad_norm": 0.5,
+    "diffusion_steps": 16,
+    "pocket_radius": 8.0,
+    "contact_r0": 4.0,
+    "w_rmsd": -0.05,
+    "w_contacts": 0.04,
+    "w_pocket_dist": -0.1
+  },
+  "best_epoch": 12,
+  "best_avg_reward": 11.371037705095976,
+  "epoch_summaries": [
+    {
+      "epoch": 1,
+      "avg_loss": 2.5957539081573486,
+      "avg_reward": 11.259460954262298,
+      "avg_rmsd": 11.39820188353764,
+      "avg_contacts": 321.4885482788086,
+      "avg_pocket_dist": 10.301708827131659,
+      "avg_hbonds": 4.0,
+      "best_rmsd": 11.370041149974208,
+      "best_contacts": 322.4423828125
+    },
+    {
+      "epoch": 2,
+      "avg_loss": 2.348113179206848,
+      "avg_reward": 11.308430637519542,
+      "avg_rmsd": 11.41077626195231,
+      "avg_contacts": 322.7174758911133,
+      "avg_pocket_dist": 10.29729585027372,
+      "avg_hbonds": 3.5,
+      "best_rmsd": 11.34431729003526,
+      "best_contacts": 323.69287109375
+    },
+    {
+      "epoch": 3,
+      "avg_loss": 2.2132863998413086,
+      "avg_reward": 11.296309658906619,
+      "avg_rmsd": 11.406392467746885,
+      "avg_contacts": 322.3917007446289,
+      "avg_pocket_dist": 10.290387474911933,
+      "avg_hbonds": 4.0,
+      "best_rmsd": 11.356980435641539,
+      "best_contacts": 326.8392333984375
+    },
+    {
+      "epoch": 4,
+      "avg_loss": 2.47342848777771,
+      "avg_reward": 11.312102134411038,
+      "avg_rmsd": 11.347781679961336,
+      "avg_contacts": 322.57860565185547,
+      "avg_pocket_dist": 10.23653007665116,
+      "avg_hbonds": 3.75,
+      "best_rmsd": 11.333662104371557,
+      "best_contacts": 324.96551513671875
+    },
+    {
+      "epoch": 5,
+      "avg_loss": 2.2047251500189304,
+      "avg_reward": 11.264233462343602,
+      "avg_rmsd": 11.385458123002806,
+      "avg_contacts": 321.4987106323242,
+      "avg_pocket_dist": 10.264420567992266,
+      "avg_hbonds": 4.0,
+      "best_rmsd": 11.302431500233197,
+      "best_contacts": 323.5503845214844
+    },
+    {
+      "epoch": 6,
+      "avg_loss": 2.569745898246765,
+      "avg_reward": 11.2873789700843,
+      "avg_rmsd": 11.39779515534563,
+      "avg_contacts": 322.13380432128906,
+      "avg_pocket_dist": 10.28083444999982,
+      "avg_hbonds": 4.0,
+      "best_rmsd": 11.34400775070589,
+      "best_contacts": 323.96429443359375
+    },
+    {
+      "epoch": 7,
+      "avg_loss": 2.3552801609039307,
+      "avg_reward": 11.323520409246424,
+      "avg_rmsd": 11.414500705992,
+      "avg_contacts": 323.0596923828125,
+      "avg_pocket_dist": 10.28142250766476,
+      "avg_hbonds": 3.75,
+      "best_rmsd": 11.361647542622102,
+      "best_contacts": 326.54736328125
+    },
+    {
+      "epoch": 8,
+      "avg_loss": 2.3660640120506287,
+      "avg_reward": 11.3297254667673,
+      "avg_rmsd": 11.371755882953558,
+      "avg_contacts": 323.09571838378906,
+      "avg_pocket_dist": 10.25515474436586,
+      "avg_hbonds": 3.25,
+      "best_rmsd": 11.30643383300681,
+      "best_contacts": 325.4349060058594
+    },
+    {
+      "epoch": 9,
+      "avg_loss": 2.398627758026123,
+      "avg_reward": 11.263800662108045,
+      "avg_rmsd": 11.39512514354117,
+      "avg_contacts": 321.56433868408203,
+      "avg_pocket_dist": 10.290166280781786,
+      "avg_hbonds": 3.75,
+      "best_rmsd": 11.341727918769319,
+      "best_contacts": 325.0891418457031
+    },
+    {
+      "epoch": 10,
+      "avg_loss": 2.666349172592163,
+      "avg_reward": 11.1934378127388,
+      "avg_rmsd": 11.357556029660543,
+      "avg_contacts": 319.6263122558594,
+      "avg_pocket_dist": 10.23736876012548,
+      "avg_hbonds": 3.75,
+      "best_rmsd": 11.221603054713649,
+      "best_contacts": 321.90625
+    },
+    {
+      "epoch": 11,
+      "avg_loss": 2.3274914026260376,
+      "avg_reward": 11.26791865970846,
+      "avg_rmsd": 11.383969283945145,
+      "avg_contacts": 321.58204650878906,
+      "avg_pocket_dist": 10.26164736445844,
+      "avg_hbonds": 3.75,
+      "best_rmsd": 11.356265473577867,
+      "best_contacts": 322.387451171875
+    },
+    {
+      "epoch": 12,
+      "avg_loss": 2.564703106880188,
+      "avg_reward": 11.371037705095976,
+      "avg_rmsd": 11.344838420088987,
+      "avg_contacts": 324.0531234741211,
+      "avg_pocket_dist": 10.238453128644196,
+      "avg_hbonds": 4.0,
+      "best_rmsd": 11.278789065485906,
+      "best_contacts": 326.1124267578125
+    },
+    {
+      "epoch": 13,
+      "avg_loss": 2.714937448501587,
+      "avg_reward": 11.211110933960246,
+      "avg_rmsd": 11.460736862622648,
+      "avg_contacts": 320.39940643310547,
+      "avg_pocket_dist": 10.318284802328424,
+      "avg_hbonds": 3.75,
+      "best_rmsd": 11.443174263809478,
+      "best_contacts": 322.5727233886719
+    },
+    {
+      "epoch": 14,
+      "avg_loss": 2.5207449197769165,
+      "avg_reward": 11.257713962187765,
+      "avg_rmsd": 11.380141100194098,
+      "avg_contacts": 321.36714935302734,
+      "avg_pocket_dist": 10.279649569236248,
+      "avg_hbonds": 4.0,
+      "best_rmsd": 11.32207036653871,
+      "best_contacts": 323.7476806640625
+    },
+    {
+      "epoch": 15,
+      "avg_loss": 2.3349061608314514,
+      "avg_reward": 11.292522666825189,
+      "avg_rmsd": 11.387142277849035,
+      "avg_contacts": 322.2574920654297,
+      "avg_pocket_dist": 10.28419901899546,
+      "avg_hbonds": 4.0,
+      "best_rmsd": 11.323645270318973,
+      "best_contacts": 323.801513671875
+    }
+  ]
+}

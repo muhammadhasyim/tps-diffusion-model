@@ -960,6 +960,20 @@ def main() -> None:
             "evaluations as a parity probe. 0 disables CPU fallback work (default: 0)."
         ),
     )
+    wdsm_group = parser.add_argument_group("WDSM data collection")
+    wdsm_group.add_argument(
+        "--save-wdsm-data-every", type=int, default=0,
+        help=(
+            "Save terminal-frame coords + OPES logw every N MC steps for weighted "
+            "DSM training. 0 disables (default: 0). Each step produces a small NPZ "
+            "in --wdsm-data-dir with guaranteed coord/CV/logw consistency."
+        ),
+    )
+    wdsm_group.add_argument(
+        "--wdsm-data-dir", type=Path, default=None,
+        help="Directory for per-step WDSM NPZ files (default: {out}/wdsm_samples/).",
+    )
+
     opes_group.add_argument(
         "--save-opes-state-every", type=int, default=100,
         help="Save OPES state every N MC steps. (default: 100)",
@@ -1558,6 +1572,53 @@ def main() -> None:
         (_opes_step_postprocess, 1),
     ]
 
+    # WDSM data collection: paired callbacks that atomically save terminal
+    # frame coords + CV + logw at the same MC step, guaranteeing consistency.
+    save_wdsm_every = max(0, int(args.save_wdsm_data_every))
+    _wdsm_n_saved = [0]
+    if save_wdsm_every > 0:
+        wdsm_dir = (args.wdsm_data_dir or (work_root / "wdsm_samples"))
+        wdsm_dir = Path(wdsm_dir).expanduser().resolve()
+        wdsm_dir.mkdir(parents=True, exist_ok=True)
+
+        _wdsm_pending: dict = {"cv": None, "mc_step": None}
+
+        def _wdsm_capture_cv(mc_step: int, entry: dict) -> None:
+            cv_raw = entry.get("cv_value")
+            if cv_raw is not None:
+                _wdsm_pending["cv"] = cv_raw
+                _wdsm_pending["mc_step"] = mc_step
+
+        def _wdsm_save_frame(mc_step: int, traj: Trajectory) -> None:
+            if _wdsm_pending["mc_step"] != mc_step or _wdsm_pending["cv"] is None:
+                return
+            snap = traj[-1]
+            if not isinstance(snap, BoltzSnapshot) or snap.tensor_coords is None:
+                return
+            frame = snapshot_frame_numpy_copy(snap)
+            if not np.any(np.isfinite(frame)):
+                return
+            cv_arr = np.atleast_1d(np.asarray(_wdsm_pending["cv"], dtype=np.float64))
+            logw_val = float(bias.evaluate(cv_arr)) / bias.kbt
+            out_npz = wdsm_dir / f"wdsm_step_{mc_step:08d}.npz"
+            tmp_stem = wdsm_dir / f"_tmp_wdsm_{mc_step:08d}"
+            np.savez_compressed(
+                str(tmp_stem),
+                coords=frame.astype(np.float32),
+                cv=cv_arr,
+                logw=np.float64(logw_val),
+                mc_step=np.int64(mc_step),
+            )
+            os.replace(str(tmp_stem) + ".npz", out_npz)
+            _wdsm_n_saved[0] += 1
+
+        periodic_step.append((_wdsm_capture_cv, save_wdsm_every))
+        periodic_extra.append((_wdsm_save_frame, save_wdsm_every))
+        print(
+            f"[TPS-OPES] WDSM data collection: saving every {save_wdsm_every} steps to {wdsm_dir}",
+            file=sys.stderr, flush=True,
+        )
+
     final_traj, tps_step_log = run_tps_path_sampling(
         engine, init_traj, args.shoot_rounds, shoot_log,
         progress_every=args.progress_every,
@@ -1580,6 +1641,11 @@ def main() -> None:
         f"{bias.counter} depositions, zed={bias.zed:.4g}",
         flush=True,
     )
+    if save_wdsm_every > 0:
+        print(
+            f"[TPS-OPES] WDSM: saved {_wdsm_n_saved[0]} terminal-frame samples to {wdsm_dir}",
+            flush=True,
+        )
 
     cv_data = {
         "cv_type": args.bias_cv,

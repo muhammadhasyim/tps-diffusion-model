@@ -37,7 +37,7 @@ def replay_trajectory_loss(
     r = r.to(device=device, dtype=torch.float32)
 
     for st in trajectory:
-        x_noisy_in = st.x_noisy.to(device=device, dtype=torch.float32)
+        x_noisy_in = st.x_noisy.to(device=device, dtype=torch.float32).clone().requires_grad_(True)
         denoised_old = st.denoised_old.to(device=device, dtype=torch.float32)
 
         # Replay denoiser at fixed ``x_noisy`` (do not resample SE(3) aug — rollout aug differs each call).
