@@ -56,6 +56,32 @@ _CASE_YAMLS = {
 }
 
 
+def _resolve_campaign_out_root(raw: Path) -> Path:
+    """Resolve ``--out`` for relative paths (same rules as ``01_assemble_datasets``)."""
+    expanded = raw.expanduser()
+    if expanded.is_absolute():
+        return expanded.resolve()
+    cwd_root = (Path.cwd() / expanded).resolve()
+    repo_root = (_REPO_ROOT / expanded).resolve()
+    names = list(_CASE_YAMLS.keys())
+
+    def _looks_like_campaign_root(p: Path) -> bool:
+        if not p.is_dir():
+            return False
+        for name in names:
+            if (p / name / "training_dataset.npz").is_file():
+                return True
+            if (p / name / "openmm_opes_md").is_dir():
+                return True
+        return False
+
+    if _looks_like_campaign_root(cwd_root):
+        return cwd_root
+    if _looks_like_campaign_root(repo_root):
+        return repo_root
+    return cwd_root
+
+
 def _train(
     *,
     yaml_path: Path,
@@ -152,7 +178,8 @@ def main() -> None:
     args = parser.parse_args()
 
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
-    out_root = args.out.expanduser().resolve()
+    out_root = _resolve_campaign_out_root(args.out)
+    print(f"[02] Campaign output root: {out_root}", flush=True)
     selected_cases = {int(c.strip()) for c in args.cases.split(",")}
     loss_types = [lt.strip() for lt in args.loss_types.split(",")]
     case_names = list(_CASE_YAMLS.keys())

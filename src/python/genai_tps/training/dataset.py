@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 from genai_tps.training.diagnostics import effective_sample_size
@@ -63,6 +64,88 @@ class ReweightedStructureDataset(Dataset):
             f"N_eff={ds.n_eff:.1f} ({ds.n_eff / len(ds) * 100:.1f}%)"
         )
         return ds
+
+
+def pad_reweighted_dataset_to_boltz_atom_mask(
+    ds: ReweightedStructureDataset,
+    boltz_atom_pad_mask: torch.Tensor,
+    *,
+    atol: float = 1e-5,
+) -> ReweightedStructureDataset:
+    """Pad ``coords`` / ``atom_mask`` to Boltz-2's atom tensor width and verify masks.
+
+    OpenMM / Stage-1 NPZs store only physical atoms (M_phys). Boltz featurization
+    pads to ``M_model`` (e.g. next multiple of 32). Trailing slots use zero coords
+    and mask 0, matching ``boltz.data.pad.pad_dim(..., value=0)``.
+
+    Parameters
+    ----------
+    ds:
+        Dataset loaded from NPZ (physical atom count ``M_phys``).
+    boltz_atom_pad_mask:
+        ``feats[\"atom_pad_mask\"]`` from the Boltz inference batch, shape ``(1, M_model)``
+        or ``(M_model,)``; 1 = real atom slot, 0 = padding.
+
+    Returns
+    -------
+    ReweightedStructureDataset
+        New dataset with ``coords.shape[1] == M_model``. If already ``M_model``,
+        returns a copy only when the mask check passes.
+
+    Raises
+    ------
+    ValueError
+        If ``M_phys > M_model``, or if the NPZ mask does not match Boltz's pad mask
+        on real-atom indices after padding.
+    """
+    ref = boltz_atom_pad_mask.detach().float().cpu()
+    if ref.dim() > 1:
+        ref = ref[0]
+    ref_np = ref.numpy().astype(np.float32, copy=False)
+    m_model = int(ref_np.shape[0])
+    m_data = int(ds.coords.shape[1])
+
+    if m_data > m_model:
+        raise ValueError(
+            f"Dataset has {m_data} atoms but Boltz model width is {m_model}; "
+            "cannot truncate. Check atom ordering / YAML."
+        )
+
+    if m_data == m_model:
+        if not np.allclose(ds.atom_mask[0], ref_np, atol=atol):
+            raise ValueError(
+                "Training atom_mask does not match Boltz feats['atom_pad_mask'] "
+                f"(max abs diff {float(np.max(np.abs(ds.atom_mask[0] - ref_np)))}). "
+                "Atom ordering or mask definition may be inconsistent."
+            )
+        return ds
+
+    pad = m_model - m_data
+    new_coords = np.pad(
+        np.asarray(ds.coords, dtype=np.float32),
+        ((0, 0), (0, pad), (0, 0)),
+        mode="constant",
+        constant_values=0.0,
+    )
+    new_mask = np.pad(
+        np.asarray(ds.atom_mask, dtype=np.float32),
+        ((0, 0), (0, pad)),
+        mode="constant",
+        constant_values=0.0,
+    )
+    out = ReweightedStructureDataset(new_coords, ds.logw, new_mask)
+    if not np.allclose(out.atom_mask[0], ref_np, atol=atol):
+        raise ValueError(
+            "After padding, atom_mask still does not match Boltz feats['atom_pad_mask'] "
+            f"(max abs diff {float(np.max(np.abs(out.atom_mask[0] - ref_np)))}). "
+            "Ensure Stage-1 assembly used the same topology / atom order as this YAML."
+        )
+    print(
+        f"[ReweightedStructureDataset] Padded atoms {m_data} -> {m_model} "
+        f"(+{pad} padding slots) to match Boltz-2 tensor width.",
+        flush=True,
+    )
+    return out
 
 
 def split_wdsm_npz_train_val(

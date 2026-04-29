@@ -102,6 +102,28 @@ def _rigid_align_truth_to_pred(
     return aligned.detach()
 
 
+def _boltz_style_center_and_augment(
+    x0: torch.Tensor,
+    atom_mask: torch.Tensor,
+    model: Any,
+) -> torch.Tensor:
+    """Mask-weighted COM removal then optional SO(3) + translation (Boltz Algorithm 19).
+
+    Matches ``boltz.model.modules.utils.center_random_augmentation`` when
+    ``centering=True`` and ``augmentation=model.training`` (training uses
+    random rotation and ``s_trans=1`` Gaussian translation on the batch).
+    """
+    x0_c, _ = _center(x0, atom_mask)
+    if getattr(model, "training", False):
+        b = x0.shape[0]
+        device = x0.device
+        r_aug = _random_rotation(b, device)
+        x0_aug = torch.bmm(x0_c, r_aug.transpose(1, 2))
+        x0_aug = x0_aug + torch.randn(b, 1, 3, device=device, dtype=x0.dtype)
+        return x0_aug
+    return x0_c
+
+
 def weighted_dsm_loss(
     model: Any,
     x0: torch.Tensor,
@@ -129,20 +151,30 @@ def weighted_dsm_loss(
     network_condition_kwargs:
         Optional kwargs passed through to the score network (s_trunk, s_inputs,
         feats, diffusion_conditioning, etc.). Omit for mock/test models.
+
+    Notes
+    -----
+    Before noise, coordinates follow Boltz-2 ``AtomDiffusion.forward``:
+    mask-weighted COM removal, then random SO(3) and small translation when
+    ``model.training`` (``center_random_augmentation`` with ``atom_pad_mask``).
+    Noise is isotropic on all slots; padded atoms stay at zero contribution via
+    ``atom_mask`` in the MSE denominator (Boltz convention).
     """
     B, M, _ = x0.shape
     device = x0.device
 
+    x0_aug = _boltz_style_center_and_augment(x0, atom_mask, model)
+
     sigma = sample_noise_sigma(B, noise_params, device=device)
     padded_sigma = sigma.view(B, 1, 1)
 
-    eps = torch.randn_like(x0)
-    x_noisy = x0 + padded_sigma * eps
+    eps = torch.randn_like(x0_aug)
+    x_noisy = x0_aug + padded_sigma * eps
 
     nck = network_condition_kwargs if network_condition_kwargs is not None else {}
     x_denoised = model.preconditioned_network_forward(x_noisy, sigma, network_condition_kwargs=nck)
 
-    per_atom_mse = ((x_denoised - x0) ** 2).sum(dim=-1)  # (B, M)
+    per_atom_mse = ((x_denoised - x0_aug) ** 2).sum(dim=-1)  # (B, M)
     n_atoms = atom_mask.sum(dim=-1).clamp(min=1.0)  # (B,)
     per_sample_mse = (per_atom_mse * atom_mask).sum(dim=-1) / (3.0 * n_atoms)  # (B,)
 
@@ -174,17 +206,19 @@ def regularized_weighted_dsm_loss(
     B, M, _ = x0.shape
     device = x0.device
 
+    x0_aug = _boltz_style_center_and_augment(x0, atom_mask, model)
+
     sigma = sample_noise_sigma(B, noise_params, device=device)
     padded_sigma = sigma.view(B, 1, 1)
 
-    eps = torch.randn_like(x0)
-    x_noisy = x0 + padded_sigma * eps
+    eps = torch.randn_like(x0_aug)
+    x_noisy = x0_aug + padded_sigma * eps
 
     nck = network_condition_kwargs if network_condition_kwargs is not None else {}
     x_denoised = model.preconditioned_network_forward(x_noisy, sigma, network_condition_kwargs=nck)
 
     # --- DSM loss ---
-    per_atom_mse = ((x_denoised - x0) ** 2).sum(dim=-1)
+    per_atom_mse = ((x_denoised - x0_aug) ** 2).sum(dim=-1)
     n_atoms = atom_mask.sum(dim=-1).clamp(min=1.0)
     per_sample_mse = (per_atom_mse * atom_mask).sum(dim=-1) / (3.0 * n_atoms)
     loss_w = edm_loss_weight(sigma, noise_params)
@@ -361,6 +395,15 @@ def true_quotient_dsm_loss(
     The inertia tensor K is computed at the **noisy** point x_noisy (centered),
     which is the correct evaluation point for the horizontal projection in the
     diffusion loss (see Sec. 3.3 of arXiv:2604.21809).
+
+    **Noise and Boltz padding (M_phys < M_model).** The paper assumes N physical
+    atoms on the COM-free manifold without explicit padding slots. Boltz-2
+    tensors include trailing pad atoms (zero coords, ``atom_pad_mask`` = 0).
+    We multiply Gaussian noise by ``atom_mask`` so padded slots stay at zero.
+    ``horizontal_projection`` / ``_inertia_tensor`` already mask out padding,
+    so angular momentum and P_x are unchanged vs. applying full noise then
+    zeroing pad rows in the loss; masking noise is numerically cleaner and
+    keeps padded coordinates identically zero.
     """
     B, M, _ = x0.shape
     device = x0.device
@@ -370,7 +413,7 @@ def true_quotient_dsm_loss(
     if model.training:
         R_aug = _random_rotation(B, device)
         x0_aug = torch.bmm(x0_c, R_aug.transpose(1, 2))
-        x0_aug = x0_aug + torch.randn(B, 1, 3, device=device)  # s_trans=1.0
+        x0_aug = x0_aug + torch.randn(B, 1, 3, device=device, dtype=x0.dtype)  # s_trans=1.0
     else:
         x0_aug = x0_c
 

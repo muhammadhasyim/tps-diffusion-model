@@ -107,19 +107,7 @@ def main() -> None:
           f"({stats['n_eff_fraction']*100:.1f}%), "
           f"max_weight_frac={stats['max_weight_fraction']:.4f}", flush=True)
 
-    loader = DataLoader(ds, batch_size=args.batch_size, shuffle=True, drop_last=False)
-
-    # Optional validation set
-    val_loader = None
-    if args.val_data is not None:
-        val_path = Path(args.val_data).expanduser().resolve()
-        if val_path.is_file():
-            val_ds = ReweightedStructureDataset.from_npz(val_path)
-            val_stats = weight_statistics(val_ds.logw)
-            print(f"[WDSM] Val set: {len(val_ds)} samples, N_eff={val_stats['n_eff']:.1f}", flush=True)
-            val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, drop_last=False)
-
-    # Build Boltz session
+    # Build Boltz session before DataLoaders so we know padded atom width (M_model).
     bundle = build_boltz_inference_session(
         yaml_path=yaml_path,
         cache=cache,
@@ -130,6 +118,25 @@ def main() -> None:
         kernels=args.kernels,
         quotient_space_sampling=args.loss_type == "true-quotient",
     )
+
+    from genai_tps.training.dataset import pad_reweighted_dataset_to_boltz_atom_mask
+
+    pad_ref = bundle.core.atom_mask
+    ds = pad_reweighted_dataset_to_boltz_atom_mask(ds, pad_ref)
+
+    # Optional validation set (same Boltz pad mask as training)
+    val_loader = None
+    if args.val_data is not None:
+        val_path = Path(args.val_data).expanduser().resolve()
+        if val_path.is_file():
+            val_ds = ReweightedStructureDataset.from_npz(val_path)
+            val_ds = pad_reweighted_dataset_to_boltz_atom_mask(val_ds, pad_ref)
+            val_stats = weight_statistics(val_ds.logw)
+            print(f"[WDSM] Val set: {len(val_ds)} samples, N_eff={val_stats['n_eff']:.1f}", flush=True)
+            val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, drop_last=False)
+
+    loader = DataLoader(ds, batch_size=args.batch_size, shuffle=True, drop_last=False)
+
     run_weighted_dsm_training(
         args,
         cfg=cfg,

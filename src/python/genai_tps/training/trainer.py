@@ -117,7 +117,8 @@ def run_weighted_dsm_training(
     if data_n_atoms != model_n_atoms:
         print(
             f"ERROR: Dataset has {data_n_atoms} atoms but model expects {model_n_atoms}. "
-            "Ensure the dataset includes padding atoms.",
+            "Call pad_reweighted_dataset_to_boltz_atom_mask() after build_boltz_inference_session "
+            "(see scripts/train_weighted_dsm.py), or ensure NPZ coords width matches Boltz.",
             file=sys.stderr,
         )
         sys.exit(1)

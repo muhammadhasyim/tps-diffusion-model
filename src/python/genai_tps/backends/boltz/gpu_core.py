@@ -510,7 +510,11 @@ class BoltzSamplerCore:
             )
 
         if self.quotient_space_sampling:
-            # Quotient-space ODE sampler (arXiv:2604.21809, Eq. 13):
+            # Quotient-space ODE sampler (arXiv:2604.21809, Sec. 3.3 "ODE sampler"):
+            #   dx/dt = P_{x_t}( v_theta(x_t, t) ),  v_theta ~ (x_t - D_theta) / sigma (EDM).
+            # Mean-curvature h(x) appears only in the paper's SDE lift, not the ODE.
+            # If we add stochastic sampling here, combine projected noise P_x dw with
+            # mean_curvature_vector() from genai_tps.training.quotient_projection.
             # Project the velocity (denoised_over_sigma) through P_x to
             # remove rotational vertical components in the centered shape
             # frame. Boltz's random translation is retained as auxiliary noise
