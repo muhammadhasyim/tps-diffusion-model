@@ -66,7 +66,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
-# Runs-N-Poses plotting constants (from papers/runs-n-poses/plotting.py)
+# Runs-N-Poses plotting constants (aligned with upstream plinder-org/runs-n-poses plotting.py)
 _RMSD_THRESHOLD = 2.0          # Å
 _LDDT_PLI_THRESHOLD = 0.8
 _SIMILARITY_BINS = [0, 20, 40, 60, 80, 100]

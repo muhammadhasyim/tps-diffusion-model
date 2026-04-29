@@ -10,6 +10,19 @@ This repository includes a **vendored copy** of [OpenPathSampling](https://githu
 
 Copyright and permission notices from the MIT license apply to that subtree. The genai-tps project may modify vendored files for integration; track upstream releases when updating the vendor tree.
 
+## Runs-N-Poses (vendored batch similarity script)
+
+A **vendored copy** of the PLINDER full-batch driver `similarity_scoring.py` from [plinder-org/runs-n-poses](https://github.com/plinder-org/runs-n-poses) lives under `third_party/runs_n_poses/`.
+
+- **Upstream:** https://github.com/plinder-org/runs-n-poses  
+- **Pinned commit** (at vendor time): `197fafc60a5cef3a9e7f8a4b0dac7c965eed3839`  
+- **License:** Apache License 2.0 — see `third_party/runs_n_poses/LICENSE` (includes Schwede Lab copyright notice from upstream).  
+- **Vendor notes:** `third_party/runs_n_poses/README.vendor.md`
+
+The batch script is invoked by `scripts/run_skrinjar_full_similarity_batch.py` with `cwd` set to that directory; it remains dependent on PLINDER, Foldseek intermediates, and `new_pdb_ids.txt` as documented in `docs/runs_n_poses_reproduction.md`.
+
+**Incremental** Škrinjar-style scoring for TPS lives in `genai_tps.evaluation.skrinjar_similarity` and is **adapted** (geometric pocket proxy, no Foldseek **(u, t)** on the training ligand in that path); it is not byte-identical to the vendored batch file. Document any intentional edits to `third_party/runs_n_poses/similarity_scoring.py` in `README.vendor.md` and in this file.
+
 ## RLDiff (reference submodule and derived training code)
 
 The repository may include **[RLDiff](https://github.com/oxpig/RLDiff)** as a **git submodule** under `RLDiff/` (MIT License, University of Oxford). The paper *Teaching Diffusion Models Physics: Reinforcement Learning for Physically Valid Diffusion-Based Docking* (bioRxiv, DOI [10.64898/2026.03.25.714128](https://doi.org/10.64898/2026.03.25.714128)) describes that framework.

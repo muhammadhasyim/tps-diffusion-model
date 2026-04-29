@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Thin wrapper around upstream ``papers/runs-n-poses/similarity_scoring.py``.
+"""Thin wrapper around vendored ``third_party/runs_n_poses/similarity_scoring.py``.
 
-The upstream script expects to be run **from the runs-n-poses repository root**
-with PLINDER data, Foldseek parquets under ``scoring/``, and ``new_pdb_ids.txt``
-already prepared (see ``input_preparation.ipynb`` and
-``docs/runs_n_poses_reproduction.md``).
+The upstream-derived script expects to be run **with cwd set to the vendor root**
+(``third_party/runs_n_poses`` by default) with PLINDER data, Foldseek parquets
+under ``scoring/``, and ``new_pdb_ids.txt`` already prepared (see upstream
+``input_preparation.ipynb`` and ``docs/runs_n_poses_reproduction.md``).
 
 It validates common environment variables, logs interpreter and key package
 versions, then invokes ``similarity_scoring.py`` with the same ``argv`` tail.
@@ -13,7 +13,7 @@ Example::
 
     export OST_COMPOUNDS_CHEMLIB=/path/to/compounds.chemlib
     # PLINDER must be configured (see plinder ``get_config()``).
-    cd papers/runs-n-poses && # ensure scoring/ layout exists
+    cd third_party/runs_n_poses && # ensure scoring/ layout exists
     python ../../scripts/run_skrinjar_full_similarity_batch.py 8cq9
 """
 
@@ -33,7 +33,7 @@ def _repo_root() -> Path:
 
 
 def _default_runs_n_poses_root() -> Path:
-    return _repo_root() / "papers" / "runs-n-poses"
+    return _repo_root() / "third_party" / "runs_n_poses"
 
 
 def _log(msg: str) -> None:
@@ -74,7 +74,10 @@ def main() -> int:
         "--runs-n-poses-root",
         type=Path,
         default=None,
-        help=f"Path to runs-n-poses clone (default: {_default_runs_n_poses_root()})",
+        help=(
+            "Directory containing similarity_scoring.py and optional new_pdb_ids.txt "
+            f"(default: {_default_runs_n_poses_root()})"
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -91,7 +94,11 @@ def main() -> int:
     root = (args.runs_n_poses_root or _default_runs_n_poses_root()).expanduser().resolve()
     script = root / "similarity_scoring.py"
     if not script.is_file():
-        _log(f"ERROR: missing {script} (init submodule: git submodule update --init papers/runs-n-poses)")
+        _log(
+            f"ERROR: missing {script} — expected vendored batch script under "
+            f"{_default_runs_n_poses_root()}. See third_party/runs_n_poses/README.vendor.md "
+            "and https://github.com/plinder-org/runs-n-poses to restore from upstream."
+        )
         return 1
 
     ost = os.environ.get("OST_COMPOUNDS_CHEMLIB")
@@ -110,7 +117,7 @@ def main() -> int:
 
     if not (root / "new_pdb_ids.txt").is_file():
         _log(
-            "WARNING: new_pdb_ids.txt not found in runs-n-poses root — "
+            "WARNING: new_pdb_ids.txt not found in vendor root — "
             "SimilarityScorer will fail at import time."
         )
 
@@ -136,9 +143,12 @@ def main() -> int:
         "argv": [str(script), pdb_id, *tail],
     }
     manifest_path = root / "scoring" / "batch_run_manifest.json"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    _log(f"Wrote manifest {manifest_path}")
+    if not args.dry_run:
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        _log(f"Wrote manifest {manifest_path}")
+    else:
+        _log(f"Skipping manifest write (--dry-run); would use {manifest_path}")
 
     cmd = [sys.executable, str(script), pdb_id, *tail]
     _log(f"cwd={root}")

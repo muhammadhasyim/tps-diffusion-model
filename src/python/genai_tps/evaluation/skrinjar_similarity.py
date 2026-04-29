@@ -1,6 +1,6 @@
 """Incremental Škrinjar-style training similarity (Foldseek + RDKit shape/SuCOS + pocket qcov).
 
-This mirrors the **chemistry stack** in ``papers/runs-n-poses/similarity_scoring.py`` where
+This mirrors the **chemistry stack** in ``third_party/runs_n_poses/similarity_scoring.py`` where
 possible: Crippen pre-alignment, :func:`rdShapeAlign.AlignMol`, and SuCOS-like
 pharmacophore + shape protrusion. **Foldseek** is optional for GPU structural
 prefiltering; ligand scoring remains **CPU**-bound.
@@ -115,7 +115,7 @@ def align_molecules(
     except Exception as exc:  # noqa: BLE001 — Boost.ArgumentError or missing shape backend
         _LOG.warning(
             "rdShapeAlign.AlignMol failed (%s: %s); using Crippen-only alignment — "
-            "scores may diverge from papers/runs-n-poses similarity_scoring.py",
+            "scores may diverge from third_party/runs_n_poses/similarity_scoring.py",
             type(exc).__name__,
             exc,
         )

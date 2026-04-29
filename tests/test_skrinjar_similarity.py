@@ -323,9 +323,9 @@ def test_download_zenodo_manifest_only(tmp_path: Path) -> None:
 def test_batch_wrapper_dry_run() -> None:
     root = Path(__file__).resolve().parents[1]
     script = root / "scripts" / "run_skrinjar_full_similarity_batch.py"
-    rnp = root / "papers" / "runs-n-poses" / "similarity_scoring.py"
+    rnp = root / "third_party" / "runs_n_poses" / "similarity_scoring.py"
     if not rnp.is_file():
-        pytest.skip("runs-n-poses submodule not checked out")
+        pytest.skip("vendored third_party/runs_n_poses/similarity_scoring.py missing")
     r = subprocess.run(
         [sys.executable, str(script), "--dry-run", "8cq9"],
         check=False,

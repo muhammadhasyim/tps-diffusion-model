@@ -1,11 +1,11 @@
 # Reproducing Škrinjar et al. (Runs N’ Poses) training similarity
 
-This document ties the **[plinder-org/runs-n-poses](https://github.com/plinder-org/runs-n-poses)** submodule and Zenodo assets to full-batch similarity scoring and to **incremental** scoring for TPS trajectories in this repo.
+This document ties the **[plinder-org/runs-n-poses](https://github.com/plinder-org/runs-n-poses)** upstream benchmark (vendored batch script under [`third_party/runs_n_poses/`](../third_party/runs_n_poses/)) and Zenodo assets to full-batch similarity scoring and to **incremental** scoring for TPS trajectories in this repo.
 
 ## References
 
 - Preprint: [bioRxiv 2025.02.03.636309](https://doi.org/10.1101/2025.02.03.636309)
-- Benchmark repo (submodule): [`papers/runs-n-poses/`](../papers/runs-n-poses/)
+- Vendored batch driver: [`third_party/runs_n_poses/`](../third_party/runs_n_poses/) (see [`README.vendor.md`](../third_party/runs_n_poses/README.vendor.md) for upstream pin)
 - Zenodo **version** pinned in this repo’s downloader: [10.5281/zenodo.18366081](https://doi.org/10.5281/zenodo.18366081) ([record 18366081](https://zenodo.org/records/18366081), v6).
 - Zenodo concept DOI: [10.5281/zenodo.14794785](https://doi.org/10.5281/zenodo.14794785) (all versions; use the version DOI above for reproducible file URLs).
 
@@ -19,7 +19,7 @@ Large files live under **`data/runs_n_poses/`**, which is **gitignored** except 
 | `extracted/ground_truth/` | Optional unpack of `ground_truth.tar.gz` via [`scripts/extract_zenodo_runs_n_poses.py`](../scripts/extract_zenodo_runs_n_poses.py) |
 | `training_ligands_flat/` | Optional: flatten or symlink `*.sdf` here for `--skrinjar-training-ligands-dir` (incremental scorer uses non-recursive `glob("*.sdf")`) |
 - Similarity definition (paper / PLINDER benchmark): `SuCOS-pocket` = SuCOS after RDKit `rdShapeAlign.AlignMol`, multiplied by **pocket_qcov** from the PLINDER pipeline (Methods §7.4).
-- **This repo’s incremental CV** (`training_sucos_pocket_qcov` in `genai_tps.evaluation.skrinjar_similarity`) uses a **geometric pocket Cα proxy** and **does not** apply Foldseek’s rigid transform to the training ligand the way `papers/runs-n-poses/similarity_scoring.py` does for holo pairs — expect differences vs Zenodo `all_similarity_scores.parquet` even when RDKit matches upstream.
+- **This repo’s incremental CV** (`training_sucos_pocket_qcov` in `genai_tps.evaluation.skrinjar_similarity`) uses a **geometric pocket Cα proxy** and **does not** apply Foldseek’s rigid transform to the training ligand the way `third_party/runs_n_poses/similarity_scoring.py` does for holo pairs — expect differences vs Zenodo `all_similarity_scores.parquet` even when RDKit matches upstream.
 
 ## Disk and RAM (order of magnitude)
 
@@ -160,10 +160,12 @@ After PLINDER + Foldseek intermediates exist (see upstream `similarity_scoring.p
 ```bash
 export OST_COMPOUNDS_CHEMLIB=/path/to/compounds.chemlib
 export FOLDSEEK_BIN=foldseek   # optional if on PATH
-python scripts/run_skrinjar_full_similarity_batch.py --pdb-id 8cq9 --work-dir papers/runs-n-poses/scoring
+# Place Foldseek parquets and PLINDER intermediates under third_party/runs_n_poses/scoring/
+# and new_pdb_ids.txt in third_party/runs_n_poses/ (see upstream notebooks).
+python scripts/run_skrinjar_full_similarity_batch.py 8cq9
 ```
 
-The batch script validates environment and delegates to **`papers/runs-n-poses/similarity_scoring.py`**. It does **not** replace PLINDER ingestion or Foldseek precomputation.
+The batch script validates environment, sets process `cwd` to **`third_party/runs_n_poses/`** by default, and runs **`similarity_scoring.py`** there. It does **not** replace PLINDER ingestion or Foldseek precomputation. Use `--runs-n-poses-root` to point at another directory with the same layout.
 
 ## 7. Incremental scoring for TPS (`genai_tps.evaluation.skrinjar_similarity`)
 

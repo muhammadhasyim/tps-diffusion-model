@@ -88,6 +88,9 @@ Thumbs.db
 data/runs_n_poses/*
 !data/runs_n_poses/README.md
 
+# Vendored Runs-N-Poses batch driver: local Foldseek / PLINDER outputs (see docs/runs_n_poses_reproduction.md)
+third_party/runs_n_poses/scoring/
+
 # ── Local model weights (layout in git via .gitkeep; blobs stay untracked — no LFS)
 # See weights/README.md
 weights/boltz/*

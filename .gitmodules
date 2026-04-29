@@ -10,6 +10,3 @@
 [submodule "papers/PriceofFreedom"]
 	path = papers/PriceofFreedom
 	url = https://github.com/atomicarchitects/PriceofFreedom.git
-[submodule "papers/runs-n-poses"]
-	path = papers/runs-n-poses
-	url = https://github.com/plinder-org/runs-n-poses.git
