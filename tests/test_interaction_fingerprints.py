@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+pytest.importorskip("prolif", reason="ProLIF dependency for interaction fingerprints")
+
 from genai_tps.evaluation.interaction_fingerprints import (
     compute_interaction_distances,
     interaction_ws_distances,

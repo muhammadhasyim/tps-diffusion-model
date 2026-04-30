@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -41,25 +40,18 @@ import numpy as np
 import torch
 from openpathsampling.engines.trajectory import Trajectory
 
-<<<<<<< Updated upstream:scripts/run_umbrella_tps.py
 from genai_tps.utils.compute_device import (
     cuda_device_index_for_openmm,
     maybe_set_torch_cuda_current_device,
     parse_torch_device,
 )
-
-from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
-from genai_tps.backends.boltz.bridge import snapshot_from_gpu
-=======
 from genai_tps.backends.boltz.session import boltz_results_run_dir, build_boltz_session
 from genai_tps.backends.boltz.tps_checkpoint import initial_trajectory, trajectory_checkpoint_callback
->>>>>>> Stashed changes:scripts/run_tilted_tps.py
 from genai_tps.backends.boltz.collective_variables import (
     radius_of_gyration,
     rmsd_to_reference,
 )
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
-from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.backends.boltz.snapshot import (
     BoltzSnapshot,
@@ -170,75 +162,6 @@ def _make_cv_function(
         raise ValueError(f"Unknown CV type: {cv_type!r}. Use 'rmsd', 'rg', or 'openmm'.")
 
 
-<<<<<<< Updated upstream:scripts/run_umbrella_tps.py
-def _write_tps_checkpoint_npz(traj: Trajectory, out_npz: Path, *, mc_step: int) -> bool:
-    """Save accepted path coordinates for post-processing."""
-    stack = []
-    for snap in traj:
-        if not isinstance(snap, BoltzSnapshot) or snap.tensor_coords is None:
-            continue
-        stack.append(snapshot_frame_numpy_copy(snap))
-    if not stack:
-        return False
-    arr = np.stack(stack, axis=0)
-    if not np.any(np.isfinite(arr)):
-        return False
-    out_npz.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        out_npz,
-        coords=arr,
-        frame_indices=np.arange(arr.shape[0], dtype=np.int32),
-        mc_step=np.int64(mc_step),
-    )
-    return True
-
-
-def _trajectory_checkpoint_callback(work_root: Path) -> Callable[[int, Trajectory], None]:
-    def cb(mc_step: int, traj: Trajectory) -> None:
-        ck = work_root / "trajectory_checkpoints"
-        ck.mkdir(parents=True, exist_ok=True)
-        tagged = ck / f"tps_mc_step_{mc_step:08d}.npz"
-        wrote = _write_tps_checkpoint_npz(traj, tagged, mc_step=mc_step)
-        if wrote:
-            latest = ck / "latest.npz"
-            shutil.copyfile(tagged, latest)
-            snap = traj[-1]
-            if isinstance(snap, BoltzSnapshot) and snap.tensor_coords is not None:
-                lf = snapshot_frame_numpy_copy(snap)
-                if np.any(np.isfinite(lf)):
-                    last_only = ck / "last_frame_only.npz"
-                    np.savez_compressed(
-                        last_only,
-                        coords=lf.reshape(1, *lf.shape),
-                        mc_step=np.int64(mc_step),
-                    )
-            print(
-                f"[TPS-UMBRELLA] checkpoint MC step {mc_step} -> {tagged.name}",
-                file=sys.stderr, flush=True,
-            )
-    return cb
-
-
-def _initial_trajectory(core: BoltzSamplerCore, n_steps: int | None = None) -> Trajectory:
-    x = core.sample_initial_noise()
-    n = n_steps if n_steps is not None else core.num_sampling_steps
-    snaps = []
-    sig0 = float(core.schedule[0].sigma_tm)
-    snaps.append(snapshot_from_gpu(x, 0, None, None, None, sig0, center_mean_before_step=None))
-    for step in range(n):
-        x, eps, rr, tr, meta = core.single_forward_step(x, step)
-        snaps.append(
-            snapshot_from_gpu(
-                x, step + 1, eps, rr, tr,
-                float(meta["sigma_t"]),
-                center_mean_before_step=meta.get("center_mean"),
-            )
-        )
-    return Trajectory(snaps)
-
-
-=======
->>>>>>> Stashed changes:scripts/run_tilted_tps.py
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Harmonic-umbrella enhanced TPS on Boltz-2 co-folding",
@@ -350,11 +273,9 @@ def main() -> None:
         print(f"Boltz is required: pip install -e ./boltz\n{e}", file=sys.stderr)
         sys.exit(1)
 
-<<<<<<< Updated upstream:scripts/run_umbrella_tps.py
     cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     cache.mkdir(parents=True, exist_ok=True)
     mol_dir = cache / "mols"
-    download_boltz2(cache)
 
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)
@@ -366,11 +287,6 @@ def main() -> None:
         if args.openmm_device_index is not None
         else cuda_device_index_for_openmm(device)
     )
-=======
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
-    mol_dir = cache / "mols"
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
->>>>>>> Stashed changes:scripts/run_tilted_tps.py
     work_root = args.out.expanduser().resolve()
     work_root.mkdir(parents=True, exist_ok=True)
     boltz_run_dir = boltz_results_run_dir(work_root, yaml_path.stem)
@@ -442,7 +358,7 @@ def main() -> None:
     if save_traj_every > 0:
         periodic_extra.append(
             (
-                trajectory_checkpoint_callback(work_root, bracket_tag="[TPS-TILTED]"),
+                trajectory_checkpoint_callback(work_root, bracket_tag="[TPS-UMBRELLA]"),
                 save_traj_every,
             )
         )

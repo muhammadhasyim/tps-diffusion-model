@@ -85,11 +85,11 @@ python scripts/visualize_cofolding_trajectory.py \
 # PyMOL: open diffusion_traj.pdb, use state slider to scrub frames
 ```
 
-## RLDiff-style offline RL (Boltz-2)
+## PoseBusters-style geometry (evaluation)
 
-[`scripts/train_rl_boltz.py`](scripts/train_rl_boltz.py) implements an **offline** fine-tuning loop inspired by [RLDiff](https://github.com/oxpig/RLDiff) (DDPO-IS–style clipped surrogate and importance weights), adapted to **Boltz-2** `AtomDiffusion` stepping. Terminal rewards use **GPU-native** PoseBusters-style geometry checks in [`genai_tps/evaluation/posebusters.py`](src/python/genai_tps/evaluation/posebusters.py) (no dependency on the third-party `posebusters` package on the training path). Core helpers live under [`genai_tps/rl/`](src/python/genai_tps/rl/).
+Tensor-native ligand/pocket checks and optional upstream PoseBusters-on-frames live in [`genai_tps/evaluation/posebusters.py`](src/python/genai_tps/evaluation/posebusters.py) for TPS drivers and quality scripts.
 
-**Citation:** Broster *et al.*, *Teaching Diffusion Models Physics: Reinforcement Learning for Physically Valid Diffusion-Based Docking*, bioRxiv (2026), DOI [10.64898/2026.03.25.714128](https://doi.org/10.64898/2026.03.25.714128). See **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)** for the RLDiff MIT license and attribution of derived surrogate code.
+**Citation (RLDiff-inspired work, historical):** Broster *et al.*, *Teaching Diffusion Models Physics: Reinforcement Learning for Physically Valid Diffusion-Based Docking*, bioRxiv (2026), DOI [10.64898/2026.03.25.714128](https://doi.org/10.64898/2026.03.25.714128). See **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)** for RLDiff MIT license text retained for attribution.
 
 ## Relationship to OpenPathSampling
 

@@ -67,17 +67,12 @@ import numpy as np
 import torch
 from openpathsampling.engines.trajectory import Trajectory
 
-<<<<<<< Updated upstream
 from genai_tps.utils.compute_device import (
     maybe_set_torch_cuda_current_device,
     parse_torch_device,
 )
-
-from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
-=======
 from genai_tps.backends.boltz.session import boltz_results_run_dir, build_boltz_session
 from genai_tps.backends.boltz.tps_checkpoint import initial_trajectory, trajectory_checkpoint_callback
->>>>>>> Stashed changes
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
@@ -85,7 +80,6 @@ from genai_tps.backends.boltz.snapshot import BoltzSnapshot
 from genai_tps.backends.boltz.snapshot import boltz_snapshot_descriptor
 from genai_tps.backends.boltz.snapshot import snapshot_frame_numpy_copy
 from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
-from genai_tps.evaluation.tps_runner import initial_trajectory
 
 
 def _repo_root() -> Path:
@@ -489,22 +483,15 @@ def main() -> None:
         )
         sys.exit(1)
 
-<<<<<<< Updated upstream
     cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     cache.mkdir(parents=True, exist_ok=True)
     mol_dir = cache / "mols"
-    download_boltz2(cache)
 
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)
         maybe_set_torch_cuda_current_device(device)
     else:
         device = torch.device("cpu")
-=======
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
-    mol_dir = cache / "mols"
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
->>>>>>> Stashed changes
     if device.type == "cpu":
         print("Warning: running on CPU will be very slow.", file=sys.stderr)
 

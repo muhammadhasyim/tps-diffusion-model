@@ -18,11 +18,7 @@ import pytest
 
 # All genai_tps submodules to verify
 _MODULES = [
-<<<<<<< Updated upstream
-    # Boltz backend
-=======
     "genai_tps.backends.boltz.boltz2_trunk",
->>>>>>> Stashed changes
     "genai_tps.backends.boltz.collective_variables",
     "genai_tps.backends.boltz.constants",
     "genai_tps.backends.boltz.engine",
@@ -33,38 +29,25 @@ _MODULES = [
     "genai_tps.backends.boltz.states",
     "genai_tps.backends.boltz.tps_checkpoint",
     "genai_tps.backends.boltz.tps_sampling",
-<<<<<<< Updated upstream
-    # Simulation
+    "genai_tps.backends.boltz.utils",
     "genai_tps.simulation.openmm_cv",
     "genai_tps.simulation.openmm_boltz_bridge",
     "genai_tps.simulation.bias.opes",
     "genai_tps.simulation.bias.umbrella",
     "genai_tps.simulation.mbar_analysis",
-    # I/O
     "genai_tps.io.boltz_npz_export",
-    # Evaluation
     "genai_tps.evaluation.posebusters",
     "genai_tps.evaluation.skrinjar_similarity",
     "genai_tps.evaluation.terminal_ensemble_prody",
     "genai_tps.evaluation.distribution_metrics",
     "genai_tps.evaluation.ligand_torsions",
-    "genai_tps.evaluation.interaction_fingerprints",
     "genai_tps.evaluation.ensemble_atlas",
-    # Training
     "genai_tps.training.quotient_projection",
     "genai_tps.training.loss",
     "genai_tps.training.noise_schedule",
     "genai_tps.training.config",
     "genai_tps.training.dataset",
     "genai_tps.training.diagnostics",
-=======
-    "genai_tps.backends.boltz.utils",
-    "genai_tps.enhanced_sampling.openmm_cv",
-    "genai_tps.enhanced_sampling.opes_bias",
-    "genai_tps.enhanced_sampling.exponential_tilting",
-    "genai_tps.enhanced_sampling.mbar_analysis",
-    "genai_tps.analysis.boltz_npz_export",
->>>>>>> Stashed changes
 ]
 
 

@@ -41,18 +41,13 @@ import numpy as np
 import torch
 from openpathsampling.engines.trajectory import Trajectory
 
-<<<<<<< Updated upstream
 from genai_tps.utils.compute_device import (
     cuda_device_index_for_openmm,
     maybe_set_torch_cuda_current_device,
     parse_torch_device,
 )
-
-from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
-=======
 from genai_tps.backends.boltz.session import boltz_results_run_dir, build_boltz_session
 from genai_tps.backends.boltz.tps_checkpoint import initial_trajectory, trajectory_checkpoint_callback
->>>>>>> Stashed changes
 from genai_tps.backends.boltz.collective_variables import (
     PoseCVIndexer,
     ca_contact_count,
@@ -88,12 +83,7 @@ from genai_tps.evaluation.posebusters import (
     validate_posebusters_bias_cv_names,
     validate_posebusters_gpu_bias_cv_names,
 )
-from genai_tps.evaluation.tps_runner import (
-    atomic_write_json,
-    initial_trajectory,
-    opes_state_checkpoint_callback,
-    trajectory_checkpoint_callback,
-)
+from genai_tps.evaluation.tps_runner import atomic_write_json, opes_state_checkpoint_callback
 
 # All supported single-CV names for --bias-cv
 _SINGLE_CV_NAMES = [
@@ -506,35 +496,6 @@ def _make_multi_cv_function(
     return _vector_cv, ndim
 
 
-<<<<<<< Updated upstream
-=======
-def _opes_state_checkpoint_callback(
-    bias: OPESBias,
-    work_root: Path,
-    every: int,
-    bias_cv: str,
-    bias_cv_names: list[str],
-) -> Callable[[int, Trajectory], None]:
-    """Periodic OPES state checkpoints for restart and analysis."""
-    def cb(mc_step: int, _traj: Trajectory) -> None:
-        if every <= 0 or mc_step % every != 0:
-            return
-        state_dir = work_root / "opes_states"
-        state_dir.mkdir(parents=True, exist_ok=True)
-        tagged = state_dir / f"opes_state_{mc_step:08d}.json"
-        bias.save_state(
-            tagged, bias_cv=bias_cv, bias_cv_names=bias_cv_names,
-        )
-        latest = state_dir / "opes_state_latest.json"
-        shutil.copyfile(tagged, latest)
-        print(
-            f"[TPS-OPES] OPES state checkpoint MC step {mc_step} "
-            f"({bias.n_kernels} kernels, {bias.counter} depositions)",
-            file=sys.stderr, flush=True,
-        )
-    return cb
-
->>>>>>> Stashed changes
 def _build_diagnostic_cv_functions(
     names_csv: str | None,
 ) -> dict[str, "Callable[[Trajectory], float]"] | None:
@@ -970,11 +931,9 @@ def main() -> None:
         print(f"Boltz is required: pip install -e ./boltz\n{e}", file=sys.stderr)
         sys.exit(1)
 
-<<<<<<< Updated upstream
     cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     cache.mkdir(parents=True, exist_ok=True)
     mol_dir = cache / "mols"
-    download_boltz2(cache)
 
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)
@@ -988,96 +947,8 @@ def main() -> None:
     )
     work_root = args.out.expanduser().resolve()
     work_root.mkdir(parents=True, exist_ok=True)
-    boltz_run_dir = work_root / f"boltz_results_{yaml_path.stem}"
-    boltz_run_dir.mkdir(parents=True, exist_ok=True)
-
-    data_list = check_inputs(yaml_path)
-    process_inputs(
-        data=data_list, out_dir=boltz_run_dir,
-        ccd_path=cache / "ccd.pkl", mol_dir=mol_dir,
-        msa_server_url="https://api.colabfold.com",
-        msa_pairing_strategy="greedy",
-        use_msa_server=bool(args.use_msa_server),
-        boltz2=True, preprocessing_threads=1,
-    )
-
-    manifest = Manifest.load(boltz_run_dir / "processed" / "manifest.json")
-    if not manifest.records:
-        print("No records in manifest after preprocessing.", file=sys.stderr)
-        sys.exit(1)
-
-    processed_dir = boltz_run_dir / "processed"
-    dm = Boltz2InferenceDataModule(
-        manifest=manifest,
-        target_dir=processed_dir / "structures",
-        msa_dir=processed_dir / "msa",
-        mol_dir=mol_dir, num_workers=0,
-        constraints_dir=processed_dir / "constraints" if (processed_dir / "constraints").exists() else None,
-        template_dir=processed_dir / "templates" if (processed_dir / "templates").exists() else None,
-        extra_mols_dir=processed_dir / "mols" if (processed_dir / "mols").exists() else None,
-    )
-    loader = dm.predict_dataloader()
-    batch = next(iter(loader))
-    batch = dm.transfer_batch_to_device(batch, device, dataloader_idx=0)
-
-    diffusion_params = Boltz2DiffusionParams()
-    pairformer_args = PairformerArgsV2()
-    msa_args = MSAModuleArgs(subsample_msa=True, num_subsampled_msa=1024, use_paired_feature=True)
-    steering = BoltzSteeringParams()
-    steering.fk_steering = False
-    steering.physical_guidance_update = False
-    steering.contact_guidance_update = False
-
-    ckpt = cache / "boltz2_conf.ckpt"
-    predict_args = {
-        "recycling_steps": args.recycling_steps,
-        "sampling_steps": args.diffusion_steps,
-        "diffusion_samples": 1,
-        "max_parallel_samples": None,
-        "write_confidence_summary": True,
-        "write_full_pae": False,
-        "write_full_pde": False,
-    }
-
-    model = Boltz2.load_from_checkpoint(
-        str(ckpt), strict=True, predict_args=predict_args,
-        map_location="cpu", diffusion_process_args=asdict(diffusion_params),
-        ema=False, use_kernels=args.kernels,
-        pairformer_args=asdict(pairformer_args),
-        msa_args=asdict(msa_args),
-        steering_args=asdict(steering),
-    )
-    if args.finetuned_checkpoint is not None:
-        finetuned_checkpoint = args.finetuned_checkpoint.expanduser().resolve()
-        if not finetuned_checkpoint.is_file():
-            print(f"Fine-tuned checkpoint not found: {finetuned_checkpoint}", file=sys.stderr)
-            sys.exit(1)
-        state = torch.load(str(finetuned_checkpoint), map_location="cpu")
-        model.load_state_dict(state)
-        print(f"[TPS-OPES] Loaded fine-tuned checkpoint: {finetuned_checkpoint}", flush=True)
-    model.to(device)
-    model.eval()
-
-    atom_mask, network_kwargs = boltz2_trunk_to_network_kwargs(
-        model, batch, recycling_steps=args.recycling_steps,
-    )
-    for k, v in list(network_kwargs.items()):
-        if hasattr(v, "to"):
-            network_kwargs[k] = v.to(device)
-    if isinstance(network_kwargs.get("feats"), dict):
-        network_kwargs["feats"] = {
-            fk: fv.to(device) if hasattr(fv, "to") else fv
-            for fk, fv in network_kwargs["feats"].items()
-        }
-
-    diffusion = model.structure_module
-=======
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    work_root = args.out.expanduser().resolve()
-    work_root.mkdir(parents=True, exist_ok=True)
     boltz_run_dir = boltz_results_run_dir(work_root, yaml_path.stem)
->>>>>>> Stashed changes
+
     _dtype_map = {"float32": torch.float32, "bfloat16": torch.bfloat16}
     inference_dtype = _dtype_map.get(args.inference_dtype) if args.inference_dtype else None
     try:
@@ -1100,6 +971,15 @@ def main() -> None:
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         sys.exit(1)
+
+    if args.finetuned_checkpoint is not None:
+        finetuned_checkpoint = args.finetuned_checkpoint.expanduser().resolve()
+        if not finetuned_checkpoint.is_file():
+            print(f"Fine-tuned checkpoint not found: {finetuned_checkpoint}", file=sys.stderr)
+            sys.exit(1)
+        state = torch.load(str(finetuned_checkpoint), map_location="cpu")
+        model.load_state_dict(state)
+        print(f"[TPS-OPES] Loaded fine-tuned checkpoint: {finetuned_checkpoint}", flush=True)
 
     n_atoms = int(core.atom_mask.shape[1])
 
@@ -1505,13 +1385,9 @@ def main() -> None:
     save_traj_every = max(0, int(args.save_trajectory_every))
     periodic_extra: list[tuple[Callable[[int, Trajectory], None], int]] = []
     if save_traj_every > 0:
-<<<<<<< Updated upstream
-        periodic_extra.append((trajectory_checkpoint_callback(work_root), save_traj_every))
-=======
         periodic_extra.append(
             (trajectory_checkpoint_callback(work_root, bracket_tag="[TPS-OPES]"), save_traj_every)
         )
->>>>>>> Stashed changes
 
     save_opes_every = max(0, int(args.save_opes_state_every))
     if save_opes_every > 0:

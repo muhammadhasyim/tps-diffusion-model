@@ -4,8 +4,7 @@ Includes ligand placement from Boltz NPZ coordinates plus CCD ``.pkl`` RDKit
 templates (``try_ligand_pose_from_boltz_ccd``), used when building systems from
 :func:`scripts.compute_cv_rmsd.build_md_simulation_from_pdb`.
 
-Used by :mod:`genai_tps.simulation.openmm_md_runner` without depending on the
-optional ``genai_tps.rl`` package.
+Used by :mod:`genai_tps.simulation.openmm_md_runner` without optional RL-only dependencies.
 """
 
 from __future__ import annotations

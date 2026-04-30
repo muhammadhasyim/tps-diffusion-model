@@ -27,7 +27,7 @@ The batch script is invoked by `scripts/run_skrinjar_full_similarity_batch.py` w
 
 The repository may include **[RLDiff](https://github.com/oxpig/RLDiff)** as a **git submodule** under `RLDiff/` (MIT License, University of Oxford). The paper *Teaching Diffusion Models Physics: Reinforcement Learning for Physically Valid Diffusion-Based Docking* (bioRxiv, DOI [10.64898/2026.03.25.714128](https://doi.org/10.64898/2026.03.25.714128)) describes that framework.
 
-A small portion of the offline **PPO-style clipped surrogate** in `src/python/genai_tps/rl/ppo_surrogate.py` is **derived from** RLDiff’s `utils/train_utils.py` (`compute_loss` and reward-normalization patterns), adapted for Boltz-2. The MIT license and copyright notice from `RLDiff/LICENSE` apply to those derived parts. The submodule is provided for attribution and comparison; runtime training uses `genai_tps.rl` and does not import DiffDock or the upstream `posebusters` package on the hot path.
+Earlier experiments adapted **PPO-style clipped surrogate** patterns from RLDiff’s `utils/train_utils.py` (`compute_loss` and reward-normalization ideas) for Boltz-2. The MIT license and copyright notice from `RLDiff/LICENSE` apply to any code derived from that upstream. The optional `RLDiff/` submodule remains for attribution and comparison; the main package path sampling stack does not import DiffDock on the hot path.
 
 ## PLUMED 2 (git submodule, fork with PRINT patch)
 
