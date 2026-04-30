@@ -55,6 +55,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.subprocess_support import child_env_with_repo_src_python
 
 _CASE_YAMLS = {
@@ -197,7 +198,7 @@ def main() -> None:
     if args.batch_size < 1:
         parser.error("--batch-size must be >= 1")
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     out_root = _resolve_campaign_out_root(args.out)
     print(f"[02] Campaign output root: {out_root}", flush=True)
     selected_cases = {int(c.strip()) for c in args.cases.split(",")}

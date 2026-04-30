@@ -76,6 +76,7 @@ from genai_tps.utils.compute_device import (
 from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.backends.boltz.snapshot import BoltzSnapshot
 from genai_tps.backends.boltz.snapshot import boltz_snapshot_descriptor
 from genai_tps.backends.boltz.snapshot import snapshot_frame_numpy_copy
@@ -552,7 +553,7 @@ def main() -> None:
         )
         sys.exit(1)
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     cache.mkdir(parents=True, exist_ok=True)
     mol_dir = cache / "mols"
     download_boltz2(cache)

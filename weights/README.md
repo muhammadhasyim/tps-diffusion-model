@@ -13,6 +13,9 @@ Place large checkpoints here on each machine. Filenames are ignored by `.gitigno
 export BOLTZ_CACHE="$(pwd)/weights/boltz"
 ```
 
+If `BOLTZ_CACHE` is unset, project scripts default to `$SCRATCH/.boltz` when `SCRATCH`
+is defined (typical HPC), otherwise `~/.boltz`.
+
 Or pass `--cache /path/to/.../weights/boltz` to scripts that support it.
 
 No Git LFS: keep weights local or sync them yourself (tarball, shared disk, artifact store).

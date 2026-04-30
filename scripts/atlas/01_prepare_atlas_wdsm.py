@@ -22,6 +22,7 @@ from genai_tps.utils.compute_device import (  # noqa: E402
 )
 
 from genai_tps.backends.boltz.inference import build_boltz_inference_session  # noqa: E402
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir  # noqa: E402
 from genai_tps.data.atlas import cache_zip_path, read_ids_file  # noqa: E402
 from genai_tps.data.atlas_convert import (  # noqa: E402
     concatenate_wdsm_arrays,
@@ -75,7 +76,7 @@ def main() -> None:
 
     atlas_ids = read_ids_file(args.ids_file, limit=args.limit)
     yaml_map = _load_yaml_map(args.yaml_map)
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     if str(args.device).strip().lower() == "cpu" or not torch.cuda.is_available():
         device = torch.device("cpu")
     else:

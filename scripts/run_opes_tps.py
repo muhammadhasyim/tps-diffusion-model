@@ -69,6 +69,7 @@ from genai_tps.backends.boltz.collective_variables import (
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.simulation.openmm_cv import OpenMMEnergy, OpenMMLocalMinRMSD
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.backends.boltz.snapshot import (
     BoltzSnapshot,
     boltz_snapshot_descriptor,
@@ -947,7 +948,7 @@ def main() -> None:
         print(f"Boltz is required: pip install -e ./boltz\n{e}", file=sys.stderr)
         sys.exit(1)
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     cache.mkdir(parents=True, exist_ok=True)
     mol_dir = cache / "mols"
     download_boltz2(cache)

@@ -13,6 +13,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.subprocess_support import child_env_with_repo_src_python
 
 
@@ -132,7 +133,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     runs = _resolve_runs(args)
     train_script = _REPO_ROOT / "scripts" / "train_weighted_dsm.py"
     loss_types = [loss_type.strip() for loss_type in args.loss_types.split(",") if loss_type.strip()]

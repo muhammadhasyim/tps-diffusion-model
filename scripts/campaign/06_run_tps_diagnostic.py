@@ -60,6 +60,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.subprocess_support import child_env_with_repo_src_python
 
 _CASE_YAMLS = {
@@ -218,7 +219,7 @@ def main() -> None:
                         help="Skip if opes_state_final.json already exists for that run.")
     args = parser.parse_args()
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     out_root = args.out.expanduser().resolve()
     selected_cases = {int(c.strip()) for c in args.cases.split(",")}
     variants = [v.strip() for v in args.variants.split(",")]

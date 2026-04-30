@@ -37,6 +37,7 @@ from genai_tps.utils.compute_device import (  # noqa: E402
 )
 
 from genai_tps.backends.boltz.inference import build_boltz_inference_session
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.training.trainer import run_weighted_dsm_training
 
 
@@ -104,7 +105,7 @@ def main() -> None:
         print(f"Data NPZ not found: {data_path}", file=sys.stderr)
         sys.exit(1)
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)
         maybe_set_torch_cuda_current_device(device)

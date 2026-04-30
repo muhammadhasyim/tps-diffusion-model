@@ -9,6 +9,7 @@ generic "I cannot understand line" parse error.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -22,16 +23,39 @@ __all__ = [
 
 def plumed_kernel_path() -> Path | None:
     """Return ``libplumedKernel.so`` (or dylib) if found, else ``None``."""
-    env = os.environ.get("PLUMED_KERNEL")
     candidates: list[Path] = []
-    if env:
-        candidates.append(Path(env).expanduser())
+    if env_kernel := os.environ.get("PLUMED_KERNEL"):
+        candidates.append(Path(env_kernel).expanduser())
+
+    # ``conda run -n <env>`` can leave sys.prefix / CONDA_PREFIX pointing at the
+    # stack base while ``plumed`` on PATH resolves to <env>/bin/plumed.  Derive
+    # the env root from the active ``plumed`` executable when present.
+    plumed_exe = shutil.which("plumed")
+    if plumed_exe:
+        env_root = Path(plumed_exe).resolve().parent.parent
+        candidates.append(env_root / "lib" / "libplumedKernel.so")
+        if sys.platform == "darwin":
+            candidates.append(env_root / "lib" / "libplumedKernel.dylib")
+
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        cp = Path(conda_prefix).expanduser()
+        candidates.append(cp / "lib" / "libplumedKernel.so")
+        if sys.platform == "darwin":
+            candidates.append(cp / "lib" / "libplumedKernel.dylib")
+
     candidates.append(Path(sys.prefix) / "lib" / "libplumedKernel.so")
     if sys.platform == "darwin":
         candidates.append(Path(sys.prefix) / "lib" / "libplumedKernel.dylib")
+
+    seen: set[Path] = set()
     for p in candidates:
-        if p.is_file():
-            return p.resolve()
+        rp = p.resolve()
+        if rp in seen:
+            continue
+        seen.add(rp)
+        if rp.is_file():
+            return rp
     return None
 
 

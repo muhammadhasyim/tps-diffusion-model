@@ -28,6 +28,7 @@ from genai_tps.training.multi_protein_dataset import (  # noqa: E402
     read_frame_map,
 )
 from genai_tps.training.multi_protein_trainer import run_multi_protein_wdsm_training  # noqa: E402
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir  # noqa: E402
 
 
 def load_boltz2_for_multi_protein_training(
@@ -135,7 +136,7 @@ def main() -> None:
 
     from boltz.data.types import Manifest  # noqa: PLC0415
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     mol_dir = args.mol_dir.expanduser() if args.mol_dir else cache / "mols"
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)

@@ -642,7 +642,7 @@ def _register_ligand_params(
             )
 
     if molecules:
-        gaff = GAFFTemplateGenerator(molecules=molecules)
+        gaff = GAFFTemplateGenerator(molecules=molecules, forcefield="gaff-2.11")
         ff.registerTemplateGenerator(gaff.generator)
 
 

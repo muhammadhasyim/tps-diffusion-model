@@ -75,6 +75,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.simulation.openmm_md_runner import _parse_opes_nlist_parameters
 from genai_tps.subprocess_support import child_env_with_repo_src_python
 from genai_tps.utils.compute_device import (
@@ -229,7 +230,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("outputs/campaign"),
                         help="Root campaign output directory.")
     parser.add_argument("--cache", type=Path, default=None,
-                        help="Boltz model cache directory (default: ~/.boltz).")
+                        help="Boltz model cache directory (default: $BOLTZ_CACHE, "
+                        "else $SCRATCH/.boltz, else ~/.boltz).")
     parser.add_argument(
         "--device",
         type=str,
@@ -351,7 +353,7 @@ def main() -> None:
 
         assert_plumed_opes_metad_available()
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     out_root = args.out.expanduser().resolve()
     out_root.mkdir(parents=True, exist_ok=True)
 

@@ -250,6 +250,7 @@ def main() -> None:
 
     try:
         from genai_tps.io.boltz_npz_export import load_topo
+        from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
         from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
         from genai_tps.simulation import OPESBias
         from genai_tps.rl.config import BoltzRLConfig, FESTeacherConfig
@@ -261,7 +262,7 @@ def main() -> None:
         print(f"Import error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)
         maybe_set_torch_cuda_current_device(device)

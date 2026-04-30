@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -42,6 +43,33 @@ def test_assert_plumed_opes_metad_available_raises_when_opes_off(
 
     with pytest.raises(RuntimeError, match="module opes off"):
         assert_plumed_opes_metad_available()
+
+
+def test_plumed_kernel_path_prefers_executable_env_root_over_sys_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mimics ``conda run`` where ``sys.prefix`` may not match PATH's ``plumed``."""
+    from genai_tps.simulation.plumed_kernel import plumed_kernel_path
+
+    fake_env = tmp_path / "conda_like_env"
+    (fake_env / "bin").mkdir(parents=True)
+    plumed = fake_env / "bin" / "plumed"
+    plumed.write_text("#!/bin/sh\nexec true\n", encoding="utf-8")
+    plumed.chmod(0o755)
+
+    kern = fake_env / "lib" / "libplumedKernel.so"
+    kern.parent.mkdir(parents=True)
+    kern.touch()
+
+    monkeypatch.delenv("PLUMED_KERNEL", raising=False)
+    fake_prefix = tmp_path / "wrong_prefix"
+    fake_prefix.mkdir()
+    monkeypatch.setattr(sys, "prefix", str(fake_prefix))
+    path_head = str(fake_env / "bin") + os.pathsep + os.environ.get("PATH", "")
+    monkeypatch.setenv("PATH", path_head)
+
+    got = plumed_kernel_path()
+    assert got == kern.resolve()
 
 
 def test_assert_plumed_opes_metad_available_passes_when_opes_on(

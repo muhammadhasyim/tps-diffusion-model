@@ -41,6 +41,7 @@ from genai_tps.backends.boltz.inference import (
     build_boltz_inference_session,
     quotient_space_sampling_for_checkpoint,
 )
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.backends.boltz.collective_variables import compute_cvs
 from evaluation_dashboard import generate_wdsm_evaluation_dashboard as generate_dashboard
 from genai_tps.evaluation.tps_runner import generate_structures
@@ -64,7 +65,7 @@ def main():
     args = parser.parse_args()
 
     yaml_path = args.yaml or (_REPO_ROOT / "inputs" / "tps_diagnostic" / "case1_mek1_fzc_novel.yaml")
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)
         maybe_set_torch_cuda_current_device(device)

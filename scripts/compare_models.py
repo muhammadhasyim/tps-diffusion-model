@@ -41,6 +41,7 @@ from genai_tps.utils.compute_device import (
 
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.inference import build_boltz_inference_session
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.backends.boltz.collective_variables import compute_simple_cvs
 from evaluation_dashboard import generate_four_way_dashboard, load_training_cvs
 from genai_tps.evaluation.tps_runner import generate_structures
@@ -65,7 +66,7 @@ def main():
     args = parser.parse_args()
 
     yaml_path = args.yaml or (_REPO_ROOT / "inputs" / "tps_diagnostic" / "case1_mek1_fzc_novel.yaml")
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)
         maybe_set_torch_cuda_current_device(device)

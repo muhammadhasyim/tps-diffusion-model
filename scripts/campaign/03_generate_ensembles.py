@@ -60,6 +60,8 @@ from genai_tps.utils.compute_device import (
     parse_torch_device,
 )
 
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
+
 _CASE_YAMLS = {
     "case1_mek1_fzc_novel":    "inputs/tps_diagnostic/case1_mek1_fzc_novel.yaml",
     "case2_cdk2_atp_wildtype": "inputs/tps_diagnostic/case2_cdk2_atp_wildtype.yaml",
@@ -179,7 +181,7 @@ def main() -> None:
                         help="Skip if generated_structures.npz already exists.")
     args = parser.parse_args()
 
-    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     out_root = args.out.expanduser().resolve()
     if torch.cuda.is_available():
         device = parse_torch_device(args.device)

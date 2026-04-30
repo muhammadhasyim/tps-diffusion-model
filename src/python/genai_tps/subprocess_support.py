@@ -31,4 +31,30 @@ def child_env_with_repo_src_python(
     src = str(repository_root() / "src" / "python")
     prev = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = src + os.pathsep + prev if prev else src
+    # OpenFF assigns AM1-BCC via AmberTools binaries (antechamber, sqm).  Editors
+    # subprocesses inherit a minimal PATH — ensure this interpreter's env bin
+    # (conda prefix) is searched first when present.
+    import sys
+
+    bindir = Path(sys.prefix) / "bin"
+    try:
+        if bindir.is_dir():
+            pf = bindir.resolve()
+            path = env.get("PATH", "")
+            parts = path.split(os.pathsep) if path else []
+            pfs = str(pf)
+            if pfs not in parts:
+                env["PATH"] = pfs + (os.pathsep + path if path else "")
+    except OSError:
+        pass
+    # openmm-plumed resolves the kernel via ``PLUMED_KERNEL`` when this is unset;
+    # ``conda run`` can leave prefixes wrong while ``which plumed`` still points at
+    # the active env — :func:`genai_tps.simulation.plumed_kernel.plumed_kernel_path`
+    # mirrors that resolution.
+    if not env.get("PLUMED_KERNEL"):
+        from genai_tps.simulation.plumed_kernel import plumed_kernel_path
+
+        kern = plumed_kernel_path()
+        if kern is not None:
+            env["PLUMED_KERNEL"] = str(kern)
     return env
