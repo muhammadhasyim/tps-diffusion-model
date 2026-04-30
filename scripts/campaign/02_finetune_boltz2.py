@@ -55,6 +55,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.subprocess_support import child_env_with_repo_src_python
+
 _CASE_YAMLS = {
     "case1_mek1_fzc_novel":      "inputs/tps_diagnostic/case1_mek1_fzc_novel.yaml",
     "case2_cdk2_atp_wildtype":   "inputs/tps_diagnostic/case2_cdk2_atp_wildtype.yaml",
@@ -142,7 +144,7 @@ def _train(
         cmd += ["--resume-from", str(resume_from)]
 
     print(f"  [02] Running: {' '.join(cmd[:6])} ...", flush=True)
-    result = subprocess.run(cmd, check=False)
+    result = subprocess.run(cmd, check=False, env=child_env_with_repo_src_python())
     if result.returncode != 0:
         raise RuntimeError(
             f"train_weighted_dsm.py exited with code {result.returncode}. "

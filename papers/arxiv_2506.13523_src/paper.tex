@@ -1,0 +1,756 @@
+%%%%%%%% ICML 2025 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%%
+
+\documentclass{article}
+
+% Recommended, but optional, packages for figures and better typesetting:
+\usepackage{microtype}
+\usepackage{graphicx}
+% \usepackage{subfigure}
+\usepackage{booktabs} % for professional tables
+
+% Our packages
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{amsthm}
+\usepackage{braket}
+\usepackage{subfig}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{titletoc}
+\usepackage{enumitem}
+% \usepackage{cleveref}
+\usepackage{url}
+\def\UrlBreaks{\do\/\do-}
+
+% hyperref makes hyperlinks in the resulting PDF.
+% If your build breaks (sometimes temporarily if a hyperlink spans a page)
+% please comment out the following usepackage line and replace
+% \usepackage{icml2025} with \usepackage[nohyperref]{icml2025} above.
+\usepackage{hyperref}
+
+
+% Attempt to make hyperref and algorithmic work together better:
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% Use the following line for the initial blind version submitted for review:
+\usepackage[accepted]{icml2025}
+\definecolor{highlight}{HTML}{0A6847}
+\definecolor{warning}{HTML}{CC3300}
+\newcommand*\Let[2]{\State #1 $\gets$ #2}
+
+% If accepted, instead use the following line for the camera-ready submission:
+% \usepackage[accepted]{icml2025}
+
+% For theorems and such
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+
+% if you use cleveref..
+% \usepackage[capitalize,noabbrev]{cleveref}
+
+
+
+\input{math_commands}
+\input{macros}
+
+\renewcommand{\O}{\mathcal{O}}
+\newcommand{\algorithmautorefname}{Algorithm}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% THEOREMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% \theoremstyle{plain}
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% \newtheoremstyle{defstyle}
+%     {3pt}                % Space above
+%     {3pt}                % Space below
+%     {\normalfont}        % Body font
+%     {}                   % Indent amount
+%     {\bfseries}         % Theorem head font
+%     {:}                 % Punctuation after theorem head (dash instead of period)
+%     {.5em}              % Space after theorem head
+%     {\thmname{#1}\thmnumber{ #2}: \textbf{#3}}  % Format with dash
+% \theoremstyle{defstyle}
+% \newtheorem{definition}{Definition}
+
+% Autoref formatting
+\def\sectionautorefname{Section}
+% \newcommand{\definitionautorefname}{Definition}
+% \def\definitionautorefname{Definition}
+\def\algorithmAutorefname{Algorithm}
+
+\let\subsectionautorefname\sectionautorefname
+\let\subsubsectionautorefname\sectionautorefname
+
+% Todonotes is useful during development; simply uncomment the next line
+%    and comment out the line below the next line to turn off comments
+%\usepackage[disable,textsize=tiny]{todonotes}
+\usepackage[textsize=tiny]{todonotes}
+
+% The \icmltitle you define below is probably too long as a header.
+% Therefore, a short form for the running title is supplied here:
+\icmltitlerunning{The Price of Freedom}
+
+\begin{document}
+
+\twocolumn[
+\icmltitle{The Price of Freedom: Exploring Expressivity and Runtime Tradeoffs in Equivariant Tensor Products}
+
+% It is OKAY to include author information, even for blind
+% submissions: the style file will automatically remove it for you
+% unless you've provided the [accepted] option to the icml2025
+% package.
+
+% List of affiliations: The first argument should be a (short)
+% identifier you will use later to specify author affiliations
+% Academic affiliations should list Department, University, City, Region, Country
+% Industry affiliations should list Company, City, Region, Country
+
+% You can specify symbols, otherwise they are numbered in order.
+% Ideally, you should not use this facility. Affiliations will be numbered
+% in order of appearance and this is the preferred way.
+\icmlsetsymbol{equal}{*}
+
+\begin{icmlauthorlist}
+\icmlauthor{YuQing Xie}{eecs}
+\icmlauthor{Ameya Daigavane}{eecs}
+\icmlauthor{Mit Kotak}{cse}
+\icmlauthor{Tess Smidt}{eecs}
+\end{icmlauthorlist}
+
+\icmlaffiliation{eecs}{Department of EECS, Massachusetts Institute of Technology, Cambridge MA 02139, USA}
+\icmlaffiliation{cse}{Department of CSE, Massachusetts Institute of Technology, Cambridge MA 02139, USA}
+
+
+\icmlcorrespondingauthor{YuQing Xie}{xyuqing@mit.edu}
+\icmlcorrespondingauthor{Tess Smidt}{tsmidt@mit.edu}
+
+% You may provide any keywords that you
+% find helpful for describing your paper; these are used to populate
+% the "keywords" metadata in the PDF but will not be shown in the document
+\icmlkeywords{Machine Learning, ICML, Equivariance, Tensor Products, Group Theory}
+
+\vskip 0.3in
+]
+
+% this must go after the closing bracket ] following \twocolumn[ ...
+
+% This command actually creates the footnote in the first column
+% listing the affiliations and the copyright notice.
+% The command takes one argument, which is text to display at the start of the footnote.
+% The \icmlEqualContribution command is standard text for equal contribution.
+% Remove it (just {}) if you do not need this facility.
+
+% \printAffiliationsAndNotice{}  % leave blank if no need to mention equal contribution
+\printAffiliationsAndNotice{\icmlEqualContribution} % otherwise use the standard text.
+
+
+\begin{abstract}
+$E(3)$-equivariant neural networks have demonstrated success across a wide range of 3D modelling tasks. A fundamental operation in these networks is the tensor product, which interacts two geometric features in an equivariant manner to create new features. Due to the high computational complexity of the tensor product, significant effort has been invested to optimize the runtime of this operation. For example, Luo et al. (2024) recently proposed the Gaunt tensor product (GTP) which promises a significant speedup. In this work, we provide a careful, systematic analysis of a number of tensor product operations. In particular, we emphasize that different tensor products are not performing the same operation. The reported speedups typically come at the cost of expressivity. We introduce measures of expressivity and interactability to characterize these differences. In addition, we realized the original implementation of GTP can be greatly simplified by directly using a spherical grid at no cost in asymptotic runtime. This spherical grid approach is faster on our benchmarks and in actual training of the MACE interatomic potential by 30\%. Finally, we provide the first systematic microbenchmarks of the various tensor product operations. We find that the theoretical runtime guarantees can differ wildly from empirical performance, demonstrating the need for careful application-specific benchmarking. Our code is available at \url{https://github.com/atomicarchitects/PriceofFreedom}.
+\end{abstract}
+
+\section{Introduction}
+% make figure side by side
+
+Many complex physical systems possess inherent spatial symmetries, and incorporating these symmetries into models has been shown to significantly improve both learning efficiency and robustness \cite{nequip,Rackers2023-sb,Frey2023-gg,Owen2024-pn}. To address the specific symmetries present in 3D systems, considerable effort has been dedicated to the development of $E(3)$-equivariant neural networks (E(3)NNs) \citep{thomas2018tensorfieldnetworksrotation,weiler20183dsteerablecnnslearning,kondor2018nbodynetworkscovarianthierarchical,kondor2018clebschgordannetsfullyfourier}. E(3)NNs have delivered strong performance across a wide range of scientific applications, including molecular force fields \citep{nequip,allegro,mace}, catalyst discovery \citep{equiformer}, generative models \citep{edm}, charge density prediction \citep{fu2024recipe}, and protein structure prediction \citep{equifold,alphafold}.
+
+
+
+% Many complex physical systems possess inherent spatial symmetries. Effectively incorporating these symmetries into models enhances learning efficiency and robustness \cite{nequip,Rackers2023-sb,Frey2023-gg,Owen2024-pn}. Therefore, significant effort has been put into developing $E(3)$-equivariant neural networks (E(3)NNs), which are specifically designed to respect the symmetries of 3D systems 
+% % \cite{park2020accuratescalablemultielementgraph} % Tess is commenting out because it doesn't seem like a foundational paper but correct if I'm wrong -- also citation should point to Nature Comp. Mat. not arxiv
+% \citep{thomas2018tensorfieldnetworksrotation,weiler20183dsteerablecnnslearning,kondor2018nbodynetworkscovarianthierarchical,kondor2018clebschgordannetsfullyfourier}. These models have demonstrated strong performance across a broad range of scientific problems, including molecular force fields \citep{nequip,allegro,mace}, catalyst discovery \citep{equiformer}, generative models \citep{edm}, charge density prediction \citep{fu2024recipe}, and protein structure prediction \citep{equifold,alphafold}.
+
+
+
+% Many complex physical systems possess spatial symmetries. Incorporating symmetries when modelling complex systems enables efficient and robust learning. 
+% This phenomenon has been aptly demonstrated by $E(3)$-equivariant models which faithfully model the symmetries of 3D systems \citep{park2020accuratescalablemultielementgraph,thomas2018tensorfieldnetworksrotation,weiler20183dsteerablecnnslearning,kondor2018nbodynetworkscovarianthierarchical,kondor2018clebschgordannetsfullyfourier}. This has resulted in strong performance across a wide range of scientific problems -- for example, in molecular force fields \citep{nequip,allegro,mace}, catalyst discovery \citep{equiformer}, generative models \citep{edm}, charge density prediction \citep{fu2024recipe}, and protein structure prediction \citep{equifold,alphafold}.
+
+
+The group $E(3)$ consists of all rotations, translations and reflections in 3 dimensions. A function $f: X \to Y$ is $E(3)$-equivariant if it satisfies:
+\begin{align}
+    \label{eqn:equiv}
+    f(g \cdot x) = g \cdot f(x) \quad \forall \ g \in E(3), x \in X
+\end{align}
+where the group action $\cdot$ may differ on the input space $X$ and output space $Y$. 
+
+$E(3)$-equivariant neural networks work with features that transform as irreducible representations of $O(3)$, termed `irreps', as described in \autoref{sec:irreps}. How these  irreps transform under 3D rotations 
+(elements of $SO(3)$) is defined by a positive integer $L$, which can intuitively be thought of as an angular frequency. As described in \autoref{sec:tp}, tensor products are used to construct equivariant bilinearities, a key component of $E(3)$ networks.
+
+The only true tensor product is the Clebsch-Gordan tensor product (CGTP) which uses the well-studied Clebsch-Gordan \citep{varshalovich1988quantum} coefficients. However, it has a time complexity\footnote{Note that \citet{escn} claims a runtime of $\O(L^6)$ for this tensor product. In \autoref{sec:runtimes}, we show that this runtime can be reduced to $\O(L^5)$.} of $\O(L^5)$ as we show in \autoref{sec:runtimes}, which can quickly become expensive for larger $L$. This scaling limits the direct application of $E(3)$-equivariant neural networks to larger systems. Indeed, a number of works suggest that incorporating higher $L$ features can be crucial to improving model performance \citep{cenhigh,frank2022so3krates,aykentgotennet}. Hence, there is significant interest in optimizing the tensor product.
+
+One optimization was identified by \citet{escn} in the special case where one input is a projection of a single vector onto spherical harmonics, an operation commonly used in 3D graph convolutions. Under suitable rotation, these irreps become sparse, allowing for a runtime of $\O(L^3)$. However, the extreme sparsity is not generally true for arbitrary irrep values.
+
+
+% {\bf Convolution-specific Tensor Product Optimization}
+% Real spherical harmonics in the conventional basis are particularly sparse when evaluated along the $z$-axis, only $m=0$ components are non-zero (see Figure \ref{fig:sh_opt}(B)). Refs. \cite{Zitnick2022-vo, Passaro2023-pv} use this fact to simplify the tensor product of input features with spherical harmonics evaluated along a single direction, by performing the operation in a rotated frame that aligns the relative vector $\vec{r}_{ij}$ to along $z$, taking advantage of the sparsity of the $Y_{l}(\vec{r}_{ij})$, and then rotating back to the original frame. This turns the otherwise $\mathcal{O}(L_{\text{max}}^3)$ operation into an operation that scales as $\mathcal{O}(L_{\text{max}}^3)$. The improvement in scaling comes at the cost of two rotation matrices to align and unalign the relative vector. This trade-off may not always be applicable since the cost of computing and applying these rotation matrices depend on the input features. This optimization is used in EquiformerV2 \cite{Liao2024-tn} to scale to higher degree representations.
+
+
+% \begin{figure}[h] % 'h' here ensures the figure is placed roughly here in the text
+%     \centering % This centers the figure
+%     \includegraphics[width=0.8\textwidth]{figures/SH__gaunt.jpg} % Adjust the path and width as needed
+%     \caption{
+%     (A) Spherical harmonics are basis functions that transform as specific irreps of $O(3)$. (B) Gaunt Tensor Products accelerate tensor products using projections on the sphere, however this eliminates certain paths such as antisymmetric outputs.} % Caption for the figure
+%     \label{fig:sh_opt} % Label for referencing the figure in text
+% \end{figure}
+
+For arbitrary irrep values, \citet{gaunt} proposed the Gaunt Tensor Product (GTP) which they show has a complexity $\O(L^3)$. Further, \citet{unke2024e3x} introduced another $\O(L^3)$ operation which we call matrix tensor product (MTP). While this represents exciting progress, it raises an important question: \emph{What is fundamentally different between these new tensor products and the general CGTP with $\O(L^5)$ complexity?}
+
+
+In this paper, we provide a framework for systematically analyzing these new operations. Importantly, we clarify that most new proposed `tensor products' are \emph{not tensor products} in the mathematical sense, and propose to call them \emph{tensor product operations} (TPOs) instead.
+We organize this paper by first motivating TPOs in \autoref{sec:tp}. We then define a measure of expressivity and interactability for TPOs. In \autoref{sec:TP_ops}, we introduce a number of TPOs, and we summarize the asymptotic runtimes and expressivities of various TPO implementations in \autoref{sec:asymptotics}. Finally, in \autoref{sec:benchmarking} we benchmark the various tensor products showing that asymptotics do not always correspond with practical performance.
+
+We summarize our core contributions as follows:
+\begin{itemize}[leftmargin=1em,itemsep=0em,topsep=0em]
+    \item A measure for expressivity and interactability of TPOs.
+    \item A simpler implementation of GTP using projection onto the sphere $S^2$, which has the same asymptotics but is faster in practice.
+    \item A comprehensive analysis of asymptotic runtimes and expressivity of different classes of TPOs.
+    \item Rigorous benchmarks of various TPO implementations.
+\end{itemize}
+
+We assume familiarity with group representations of $SO(3)$. For a brief introduction to representations (reps) and irreducible representations (irreps) of $SO(3)$, we refer the reader to \autoref{sec:irreps}. 
+
+% In \autoref{sec:tp}, we provide define a measure of expressivity and interactability. In \autoref{sec:TP_ops}
+
+% In this paper, we show that these reductions in complexity come from merging independent interactions (what we will call paths) contained within the general tensor product. This leads to two other questions:
+% \begin{itemize}
+%     \item How do these changes affect the expressivity of tensor product operations?
+%     \item How should we compare runtimes when models use different formulations of tensor products?
+% \end{itemize}
+% In \autoref{sec:asymptotics}, we give a measure of expressivity of the different tensor products and demonstrate that by normalizing against expressivity, the original GTP algorithm, MTP, and the sparse version of CGTP all have the same asymptotic runtime. Therefore, the speed ups come at the \emph{price of freedom in expressivity}.
+
+% Based on rigorous benchmarking, GTP seems to scale better than MTP. Further, we identify that there exists asymptotically faster spherical harmonic transform algorithms \citep{healy2003ffts} which allows the asymptotic runtime of GTP to be faster than the others even when normalized for expressivity. However, GTP is the only tensor product which suffers from an inability to perform antisymmetric operations. In fact we demonstrate this prevents identification of chiral tetris pieces in \autoref{sec:tetris}. This motivates us to propose a new tensor product which leverages the ideas of GTP to retain the speed yet allows antisymmetry.
+
+% Or first say, we identify... we modify...
+% We focus on the Gaunt Tensor Product (GTP) to motivate a modification, that mitigates some of the limitations of expressivity we identify while maintaining favorable complexity. An open question remains, what types of tensor products should be used when?
+
+% FIX THE STRUCTURE HERE BASED ON ABOVE
+
+% Maybe motivate asymptotics of GTP better, fix antisymmetry of GTP with VSTP.
+
+% In particular, we identify two limitations of the Gaunt Tensor Product:
+% \begin{itemize}
+% % Alternative, which interactions GTP is incapable of expressing
+%     \item We show how the GTP is less expressive than CGTP. In particular, when normalizing for this difference, GTP and CGTP have the same asymptotic runtime.
+%     \item GTP cannot represent \emph{antisymmetric} interactions, which can be important in many physical systems. Please see \autoref{sec:tetris} for an example.
+% \end{itemize}
+
+% In this work, we address these limitations. First, instead of using a 2D Fourier basis as implemented in \citet{gaunt}, we can directly project onto the sphere $S^2$. This implementation is simpler to implement and has the same asymptotic runtime. In fact, using a special recurrence relation for the associated Legendre polynomials, we can leverage the algorithm of \citet{healy2003ffts} to enable an asymptotically faster implementation of GTP with $\O(L^2 \log^2 L)$ time. This shows the core idea of GTP can lead to significant improvements when scaling to very large $L$.
+
+% Therefore in \autoref{sec:VSTP} we propose vector signal tensor products (VSTP). Rather than using scalar signals and scalar products, VSTP uses vector signals and cross product interactions. We prove that the selection rules for VSTP only eliminate the trivial scalar $0\otimes0$ interaction. In addition, we show that VSTP has the same asymptotic runtime as GTP. Further, we describe in \autoref{sec:ISTP} how our approach generalizes to arbitrary irrep signal types to form an entire class of tensor products we call irrep signal tensor products (ISTPs).
+
+% Finally, we implement and benchmark the various tensor products to see their performance in practice. Interestingly, we see that despite a more operations needed for GTP and VSTP, they are better able to use the GPU resulting in faster runtime. In fact, our implementation of CGTP leveraging sparsity runs the slowest despite having the least operations.
+% (@Mit, you probably can say this better)
+
+% In addition, (@Ameya, describe experiments with actual models)
+
+
+
+% existing tensor products in \autoref{sec:tp} and our new vector signal tensor product (VSTP) and irrep signal tensor products (ISTP) in \autoref{sec:VSTP_intro}. We then discuss how to measure the expressivity of different tensor products and summarize the results in \autoref{sec:asymptotics}. Finally in \autoref{sec:benchmarking} we benchmark the various tensor products showing that asymptotics do not always correspond with practical performance.
+
+% Note that irrep types of $SO(3)$ are characterized by a single nonnegative integer typically denoted with $\ell$.
+% In \autoref{sec:tp}, we discuss the asymptotics of various tensor products, including the FusedTensorProduct operation introduced by \citet{unke2024e3x}. In \autoref{sec:runtimes}, we show the true runtimes of these tensor products on actual CPU and GPU hardware. 
+
+
+
+
+% This can also be viewed as a linear mapping from the tensor product space $V\otimes W\to Z$. Since we are trying to construct equivariant networks, if there are actions of group $G$ on spaces $V,W,Z$, we would like our bilinear map to be equivariant. Further, because irreps are so useful for constructing linear layers, we want the input and output reps of our bilinear maps to explicitly be written as direct sums of irreps. Note that requiring the output to explicitly be written as a sum of irreps is precisely what makes tensor products expensive. In the context of this paper, a tensor product operation refers to a fixed equivariant bilinear map $V\times W\to Z$ where $V,W,Z$ have been explicitly decomposed into a direct sum of irreps.
+
+\section{Analyzing Tensor Product Operations}
+\label{sec:tp}
+
+%%%%% Tess structure stuff
+% Before we talk about tensor products, first let's motivate irreps and why they are used in equivariant neural networks. Any vector space that transforms predictably under a group can be uniquely decomposed into irreps. Irreps are the smallest independent vector spaces under group transformation and irreps must be acted on ``as a group'' to preserve equivariance.
+% Using vector spaces built from concatenating irreps (a direct sum of irreps) makes it easier to parameterize equivariant interactions e.g. as used in equivariant neural networks. For example, weight sharing in equivariant linear layers is restricted to only be non-zero between irreps of the same type (i.e. Schur's Lemma). To multiply these vector spaces, the most general operation is an outer product (which is dimension preserving). This outer product is equivariant, however it transforms in a very different way than irreps. However, without any loss of generality we can decompose this outer product back to a direct sum of irreps. Mapping back to irreps is especially helpful for composing layers. This outer product with decomposition is colloqiually called a tensor product. 
+% As mentioned above, the most expressive tensor product is dimension preserving, input of size $m$ and input of size $n$ produce an output of size $m \times n$. However, there are many subsets of this operation that still preserve equivariance. The smallest subset is called a ``path''. For example, we can outer product two 3D vectors to produce a $3 \times 3$ matrix. This matrix transforms predictably under rotation, but not in the same way as individual vectors. This matrix can be decomposed into three irreps, a scalar, a pseudovector, and a five dimensional L=2 object. The scalar is produced from the dot product of the vectors, the pseudovector from the cross-product, and the five dimensional L=2 object is produced from yet a different type of interaction. Notably, each of these distinct interactions is independently equivariant. In this paper, we will analyze different equivariant bilinearities in terms of paths of the maximally expressive tensor product.
+
+\subsection{Motivating Irreps}
+We begin by motivating why many equivariant architectures \citep{geiger2022e3nn,unke2024e3x} use irreps to represent features. In particular, it is much easier to enforce equivariance when our features are in terms of irreps because they facilitate parameterization of the most general equivariant linear maps.
+
+First, while there are an infinite number of ways to choose finite dimensional representations, we can always decompose them into a direct sum of irreps. Irreps are hence the fundamental building blocks of arbitrary representations and they are well studied for many groups. Further, assuming we are working over an algebraically closed field, linear layers between a pair of irreps must either be 0 if they are inequivalent or multiples of the identity if they are equivalent. This is known as Schur's lemma \citep{dresselhaus2007group}. Hence once we rewrite representations explicitly as a direct sum of irreps, parameterizing equivariant linear layers becomes trivial. This is why identifying features in terms of irreps is so prevalent in equivariant architectures.
+
+However, Schur's lemma explicitly prevents linear mixing of inequivalent irreps. Hence we need appropriate nonlinear interactions. The simplest possibility is to use multiplication, motivating the tensor product.
+
+
+
+\subsection{Tensor Products and Bilinearities}
+\label{sec:bilinearities}
+
+Here we provide a unified framing for understanding why tensor products are expensive and how other works attempt to remedy this problem. In particular we want to emphasize the connection to constructing bilinearities and that other `tensor products' are fundamentally different operations from the formal mathematical tensor product.
+
+Given two vector spaces $X, Y$, one can construct a tensor product space $X\otimes Y$ with an associated bilinear mapping $T:X\times Y\to X\otimes Y$. This bilinear mapping is often referred to as the tensor product. In practice, if we have a basis $x_1,\ldots,x_m$ and $y_1,\ldots,y_n$ of $X, Y$ respectively, then we usually use a basis $T(x_i, y_j)$ (often written as $x_i\otimes y_j$) for the tensor product space $X\otimes Y$.
+
+Now suppose we have a space $Z$. Then in practice, we typically parameterize a linear layer $\lin :X\otimes Y\to Z$. The composition $\lin \circ T:X\times Y\to Z$ is a bilinearity $X\times Y\to Z$. Note that this construction is \emph{universal}, as all possible bilinearities can be written as $\lin \circ T$ for some choice of linearity $\lin$.
+
+While tensor products allow interactions between different irreps and simple construction of all possible bilinearities, they are expensive. First, the dimension of $X\times Y$ is $\mathcal{O}(|X||Y|)$ where $|X|$ and $|Y|$ are the dimensions of $X$ and $Y$ respectively. This is in fact a lower bound on asymptotic runtime. Further, even if $X,Y$ are explicitly written in a basis which is a direct sum of irreps, the most natural basis of $X\otimes Y$ is generally not. Hence we must perform a change of basis of $X\otimes Y$ into one which explicitly is a direct of irreps. The change of basis matrix is known as the Clebsch-Gordan coefficients. Naively, it requires $\mathcal{O}(|X|^2|Y|^2)$ time to perform this change of basis. The tensor product whose output is explicitly written in an irrep basis is the Clebsch-Gordan tensor product.
+
+To optimize the tensor product, one can leverage the structure of the Clebsch-Gordan coefficients (such as sparsity) to reduce the $\mathcal{O}(|X|^2|Y|^2)$ cost. Still, such approaches can never beat the lower bound of $\mathcal{O}(|X||Y|)$. In typical analysis,\footnote{Usually, $X$ transforms as the direct sum of all irreps up to some $L$. As each irrep has dimension $2L + 1$, the dimension of $X$ is $|X| = \sum_{l = 0}^L 2l + 1 = (L + 1)^2 = \mathcal{O}(L^2)$.} $|X|, |Y|$ are $\mathcal{O}(L^2)$ making the lower bound as $\mathcal{O}(L^4)$. However, other `tensor products' claim asymptotic times lower than $\mathcal{O}(L^4)$ while still demonstrating good performance \citep{gaunt,unke2024e3x}. Fundamentally, what these operations do is replace $T:X\times Y\to X\otimes Y$ with some other bilinearity $T: X'\times Y'\to Z'$. While these bilinearities are often called `tensor products', they are \emph{not truly tensor products in the mathematical sense}. In this paper, we will refer to these bilinearities as tensor product operations (TPOs).
+\begin{definition}[Tensor product operations]
+    Let $X', Y', Z'$ be vector spaces equipped with actions of $G$. We refer to any equivariant bilinear map $T: X'\times Y'\to Z'$ as a tensor product operation.
+\end{definition}
+
+
+
+% First, irreps are a key component of many equivariant architectures . In particular, Schur's lemma states that equivariant linear maps between two irreps consist of either scaling if the irreps are the same, or be identically 0 if they are not \citep{dresselhaus2007group}. Hence if the input and outputs of a linear layer are written as a direct sum of irreps, Schur's lemma lets us directly obtain constraints needed for the layer to be equivariant. 
+
+\subsection{Expressivity and Construction of Bilinearities}
+\label{sec:expressivity_and_bilinearities}
+
+It turns out that the runtime savings of alternative TPOs can be understood as coming from a reduction in expressivity. Motivated by the use of tensor product operations to construct bilinearities, we use the \emph{dimension of constructible bilinearities} as a proxy for expressivity.
+
+To do so, we must first understand how to use TPOs to construct a bilinearity. Similar to tensor products, we use equivariant linear layers; however, now we can also add linear layers for the inputs\footnote{In the case of the CGTP, adding equivariant linear layers for the inputs is redundant, as the weights can be absorbed into $\lin_{\theta_Z}$. Hence, we only use an equivariant linear layer $\lin_{\theta_Z}$ for the outputs in \autoref{sec:bilinearities}.}. Hence, we define:
+\begin{align*}
+    \lin_{\theta_X}: \ X\to X' \quad
+    \lin_{\theta_Y}: \ Y\to Y' \quad
+    \lin_{\theta_Z}: \ Z'\to Z
+\end{align*}
+parameterized by $\theta=(\theta_X,\theta_Y,\theta_Z)\in\Theta$. Composing these operations, we obtain a bilinearity $B_{T,X,Y,Z,\theta}:X\times Y\to Z$ defined as:
+\begin{align}
+    \label{eqn:bilinearity}
+    B_{T,X,Y,Z,\theta}(\x,\y)=\lin_{\theta_Z}T(\lin_{\theta_X}\x,\lin_{\theta_Y}\y).
+\end{align}
+
+\begin{figure*}[!h]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/bilinearity.png}
+    \caption{Overall schematic of an equivariant bilinearity, where the two inputs $\x$ and $\y$ are passed through linear layers and combined using the tensor product operation $T$ to form $\z$. The output irreps $\z$ are passed through a final linear layer. In the case of the CGTP, this would consist of elementwise multiplication of $\x$ and $\y$ followed by contraction with the Clebsch-Gordan coefficients to form output irreps $\z$ . Each irrep of a particular type is denoted by its own color. Linear layers $\lin_{\theta_X}, \lin_{\theta_Y}, \lin_{\theta_Z}$ can only map between irreps of the same type (indicated by arrows of the corresponding color).
+    However, $T$ can create irreps of a different type (shown in yellow).}
+    \label{fig:bilinearity}
+\end{figure*}
+
+ We can now naturally define the expressivity of a given tensor product by how many equivariant bilinearities it can parametrize.
+\begin{definition}[Expressivity of TPOs]
+\label{def:expressivity}
+    Given a TPO $T:X'\times Y'\to Z'$, the space $\mathcal{B}_{T,X,Y,Z}=\{B_{T,X,Y,Z,\theta}:\forall \theta\in\Theta\}$ is the set of all bilinear maps we can construct by inserting equivariant linear layers in the inputs ($\lin_{\theta_X}, \lin_{\theta_Y}$) and outputs ($\lin_{\theta_Z}$) in \autoref{eqn:bilinearity}. We define the \textbf{expressivity} of $T$ with respect to $X,Y,Z$ as the \emph{dimension} of $\mathcal{B}_{T,X,Y,Z}$.
+\end{definition}
+
+In \autoref{sec:asymptotics}, we apply this expressivity measure to various tensor product operations.
+
+\subsection{Interactability and Selection Rules}
+\label{sec:interactability}
+
+A natural question to ask about the constructed bilinearities is which inputs can affect which outputs. Since equivariant linear layers can mix irreps of the same type together, answering this question for bilinearities between single irreps suffices. Using our definition of expressivity, we provide a natural definition for interactability.
+
+\begin{definition}[Interactability]
+\label{def:interactibility}
+    Let $T:X'\times Y'\to Z'$ be a TPO. Let $(\ell_1,\ell_2,\ell_3)$ be a triple of irrep types. Define vector spaces $V^{\ell_1},V^{\ell_2}$ and $V^{\ell_3}$ which transform under irrep types $\ell_1,\ell_2$ and $\ell_3$ respectively. We say $[\ell_1,\ell_2,\ell_3]$ is \textbf{interactable} if the expressivity of $T$ with respect to $V^{\ell_1},V^{\ell_2},V^{\ell_3}$ is nonzero.
+\end{definition}
+
+We can analyze interactability by directly analyzing the TPO $T$. Suppose the irreps within $X',Y',Z'$ are labeled by the tuples $(\ell_X,c_X), (\ell_Y,c_Y)$ and $(\ell_Z,c_Z)$, where $\ell$ indicates the irrep type and $c$ is an index over its multiplicity. A \textbf{selection rule} for $T$ is a condition on the labels $(\ell_X,c_X), (\ell_Y,c_Y), (\ell_Z,c_Z)$ which must be satisfied for 
+\begin{align*}
+    T|_{(\ell_X,c_X), (\ell_Y,c_Y), (\ell_Z,c_Z)}:X'^{(\ell_X,c_X)}\times Y'^{(\ell_Y,c_Y)}\to Z'^{(\ell_Z,c_Z)}
+\end{align*} to be nonzero. Importantly, note that satisfying a selection rule is a necessary but not sufficient condition for the restricted bilinearity to be nonzero.
+
+The reason selection rules are useful is that if there is no choice of $(c_X,c_Y,c_Z)$ such that $(\ell_X,c_X), (\ell_Y,c_Y)$ and $(\ell_Z,c_Z)$ satisfy the selection rules for a given $T$, then $(\ell_1,\ell_2,\ell_3)$ is not interactable under $T$. Hence, analyzing selection rules helps formally characterize which interactions are excluded by a specific TPO.
+
+\subsection{Generalizations to $\nu$-fold tensor products and non-irrep basis}
+\label{sec:cartesian_basis}
+We would like to also mention that there have been some recent works dealing with a Cartesian tensor basis \citep{shao2024high,zaverkinhigher}. Specifying a fully expressive equivariant linear layer is more difficult for such representations, however, the corresponding tensor product is usually simpler to compute. In particular, computing multiple $\nu$-fold tensor products in succession seems to be asymptotically more efficient in this basis \citep{zaverkinhigher}. However, most architectures only use $2$-fold tensor products for which Cartesian based approaches have poor asymptotic scaling \citep{zaverkinhigher}. Hence, our analysis focuses on the $2$-fold case with an irrep basis.
+
+In principle, our definitions of expressivity and interactability can generalize for $\nu$-fold tensor products as well. We simply replace the TPO which is a fixed bilinearity with a fixed $\nu$-linearity in Definitions~\ref{def:expressivity} and \ref{def:interactibility} and similarly consider attaching equivariant linear layers to the inputs and outputs of the $\nu$-linearity.
+
+For alternative choices of basis, we may incur additional costs in the construction of equivariant linear layers. In the case of irrep basis, this construction is cheap aaand so we focus on the asymptotic runtime of the TPO. However for other basis choices, this may not be true and one must take care in analyzing the cost of constructing equivariant linear layers for a fair comparison.
+
+\section{Tensor Product Operations}
+\label{sec:TP_ops}
+\subsection{Clebsch-Gordan Tensor Product}
+\label{sec:CGTP}
+The Clebsch-Gordan Tensor Product (CGTP) is the only TPO considered which is actually a tensor product. The change of basis of tensor product reps into irreps is well studied. The corresponding selection rules are well known \citep{varshalovich1988quantum}. For simplicity, we describe them assuming a single copy of each irrep in the inputs.
+
+\begin{proposition}[Selection rule for CGTP]
+    Suppose we have irrep labels $(\ell_1, 1)$,$(\ell_2, 1)$, and $(\ell_3,c_Z)$. We must have $\ell_a\leq\ell_b+\ell_c$ for all choices of distinct $a,b,c \in \{1, 2, 3\}$ and $c_Z=(\ell_1,\ell_2)$.
+\end{proposition}
+
+Importantly, interactions which can form a $\ell_3$ irrep are placed in separate channels, which means that there can be multiple $\ell_3$ irreps created as a result of the CGTP. We refer to any triple $[\ell_1,\ell_2,\ell_3]$ for which $(\ell_1, 1) ,(\ell_2, 1),(\ell_3,(\ell_1,\ell_2))$ satisfies the selection rule for CGTP as a valid \textbf{path}.
+
+\subsection{Gaunt Tensor Product}
+
+The Gaunt tensor product operation (GTP) as introduced by \citet{gaunt} is a bilinearity 
+\[(0\oplus\ldots\oplus L)\times (0\oplus\ldots\oplus L)\to (0\oplus\ldots\oplus 2L).\]
+It uses the intimate connection between spherical harmonics, $SO(3)$ irreps, and spherical signals, as defined more precisely in \autoref{sec:spherical_harmonics}. The idea is that any rep of form $(0, \ldots, L)$ can be interpreted as coefficients for the spherical harmonics, and hence, corresponds to a function on $S^2$.
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figures/GTP_diagram.JPG}
+    \caption{Schematic of GTP. We interpret input irreps as scalar SH coefficients to create spherical signals. We then take pointwise products of the two signals to create a new signal which we decompose back into scalar SH coefficients.}
+    \label{fig:GTP_diagram}
+\end{figure}
+
+In particular, given two $(0, 1, \ldots, L)$ reps  $\x$ and $\y$, let $f_\x = \tosphere(\x)$ and $f_\y = \tosphere(\y)$
+be the associated signals on $S^2$.
+Taking the pointwise product of $f_\x$ and $f_\y$ on $S^2$ gives us a new function $f_\x \cdot f_\y$, also  on $S^2$. Then, converting back to irreps gives us the Gaunt tensor product:
+\begin{align}
+    \label{eqn:gtp}
+    \x \gtp \y
+     &= \fromsphere(f_\x \cdot f_\y)
+\end{align}
+
+% Note that the outputs have only single copies of irreps. Hence GTP merges outputs of different paths such as $[\ell_1,\ell_2,\ell_2]$ and $[\ell_1',\ell_2',\ell_2]$ and \textbf{loses information}.
+% % Ameya:
+% % 0...L x 0...L -> (L/2):
+% % Fix l1 < L/2. Then, choose l2 >= L/2 - l1, and l2 <= L/2 + l1 -> O(l1) paths for each l1, and O(L) such l1.
+% In addition, note that GTP is a symmetric operation. Hence, antisymmetric paths cannot appear. For example, GTP cannot be used to compute cross products, because $\mathbf{u}\times\mathbf{v}=-\mathbf{v}\times\mathbf{u}$.
+
+Selection rules for GTP can be derived from the Gaunt coefficients \citep{gaunt1929iv}. Note that there is necessarily only a single copy of each irrep type, even in the output. 
+
+\begin{proposition}[Selection rules for GTP]
+    For irrep labels $(\ell_1, 1), (\ell_2, 1), (\ell_3, 1)$, the corresponding interaction is nonzero only if the following are satisfied:
+    \begin{itemize}
+        \item $\ell_a \leq \ell_b + \ell_c$ for any distinct $a,b,c \in \{1, 2, 3\}$.
+        \item $\ell_1+\ell_2+\ell_3$ is even.
+        \label{rule:GTP_antisymm}
+    \end{itemize}
+    \label{thm:GTP_selection}
+\end{proposition}
+
+Note in particular a cross product corresponds to the $[1,1,1]$ path which fails rule 2. This formalizes the intuition that GTP is a \emph{symmetric operation} and is unable to perform antisymmetric interactions. In \autoref{sec:tetris}, we show that GTP is incapable of solving a simple task of classifying chiral 3D structures. However, the impact of the loss of antisymmetric interactions on real datasets remains unexplored.
+
+% \subsubsection{Implementation}
+% We 
+
+% We see that there are three key operations in the Gaunt tensor product: $\tosphere$, the dot product on the sphere, and $\fromsphere$. Next, we discuss and analyze the implementation of \citet{gaunt}, highlighting the bottleneck in their approach. Simplifying their implementation leads to an asymptotic improvement in runtime.
+
+\subsection{Matrix Tensor Product}
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\linewidth]{figures/FTP_diagram.jpg}
+    \caption{Schematic of the process in taking a matrix tensor product. We embed input irreps into a tensor product rep. We then interact using matrix multiplication before decomposing the resulting tensor product rep back into a direct sum of irreps.}
+    \label{fig:FTP_diagram}
+\end{figure}
+
+We also analyze another interaction introduced in the new $\texttt{e3x}$ framework in the $\texttt{FusedTensor}$ class \citep{unke2024e3x,maennel2024complete}. The key idea is that a tensor product rep is a matrix, and we can interact two tensor product reps through matrix multiplication.
+
+Matrix tensor products (MTP) first takes each input and embeds the irreps in a single large enough tensor product rep using Clebsch-Gordan coefficients. After doing so, we can matrix multiply the tensor product reps. Finally, we can decompose the resulting tensor product rep back into irreps. Details are provided in \autoref{sec:FTP_runtime}.
+
+Similar to GTP, MTP only outputs one copy of each possible output irrep. Hence, the outputs of the same irrep type get weighted and summed together. However, in contrast to GTP, MTP is \emph{not a symmetric operation} (because matrix multiplication is not commutative), so we can have antisymmetric tensor product terms. The selection rules are inherited from CGTP.
+
+\begin{proposition}[Selection rule for MTP]
+    Suppose we have irrep labels $(\ell_1, 1)$,$(\ell_2, 1)$,$(\ell_3, 1)$. We must have $\ell_a\leq\ell_b+\ell_c$ for all distinct choices of $a,b,c \in \{1, 2, 3\}$.
+\end{proposition}
+
+% \subsection{Matrix Tensor Product}
+
+% \begin{figure}[!h]
+%     \centering
+%     \includegraphics[width=0.6\linewidth]{figures/FTP_diagram.jpg}
+%     \caption{Schematic of the process in taking a matrix tensor product. We embed input irreps into a tensor product rep. We then interact using matrix multiplication before decomposing the resulting tensor product rep back into a direct sum of irreps.}
+%     \label{fig:FTP_diagram}
+% \end{figure}
+
+% While this paper focuses on tensor products using spherical signals, we also mention another interaction introduced in the new $\texttt{e3x}$ framework in the $\texttt{FusedTensor}$ class \citep{unke2024e3x,maennel2024complete}. The main motivation for this interaction is that a tensor product rep is a matrix and we can interact 2 tensor product reps through matrix multiplication.
+
+% Hence, matrix tensor products (MTP) first takes each input and embeds the irreps in a single large enough tensor product rep using Clebsch-Gordan coefficients. After doing so, we can matrix multiply the tensor product reps. Finally, we can decompose the resulting tensor product rep back into irreps. Details are provided in \autoref{sec:FTP_runtime}.
+
+% Similar to GTP, MTP only outputs one copy of each possible output irrep. Hence, the output irreps of the same irreps get weighted and summed together and \textbf{MTP loses information} in the same way as GTP. However in contrast to GTP, MTP is not a symmetric operation so we can have antisymmetric tensor product terms.
+
+% \begin{proposition}[Selection rule for MTP]
+%     Suppose we have irrep labels $\ell_1$,$\ell_2$,$\ell_3$. We must have $\ell_a\leq\ell_b+\ell_c$ for all distinct choices of $a,b,c$ (equivalently $|\ell_1 - \ell_2| \leq \ell_3 \leq \ell_1 + \ell_2$).
+% \end{proposition}
+
+% \subsection{Convolution eSCN}
+% \label{sec:eSCN}
+
+
+\section{Summary of Asymptotic Runtimes}
+\label{sec:asymptotics}
+
+
+In \autoref{sec:runtimes}, we analyze the asymptotic runtimes, and in \autoref{sec:expressivity}, we analyze the expressivity of implementations of the various tensor product operations. The results are summarized in \autoref{tab:asymptotic_runtimes_IO}. For expressivity, we assume we are using the various tensor products to construct bilinearities from spaces $X, Y$ transforming as $(0\oplus\ldots\oplus L)$ to space $Z$ transforming as $(0\oplus\ldots\oplus 2L)$.
+% From the same selection rules as the CGTP, we will only have irreps up to $2L$. However, spherical signals only have one copy of each irrep. So $\x \gtp \y$ will be a $(0, 1, \ldots, 2L)$ rep. This already highlights one key difference already between the GTP and the CGTP: the multiplicities of each irrep in the GTP can be \textbf{at most one}. However, \autoref{eqn:cgtp} shows that the multiplicities of some irreps in the CGTP can be $\Theta(L^2)$. What happens is that output irreps of the same $\ell$ get weighted and summed. Hence, compared to the CGTP,  \textbf{GTP loses information}. Even adding additional per-irrep learned weights does not help the expressivity of the GTP, as we prove in \autoref{sec:simulate_TP_Gaunt}.
+
+We would like to highlight the following findings on specific implementations. Details are found in Appendix~\ref{sec:runtimes}.
+\begin{itemize}
+    \item The often cited $\O(L^6)$ runtime for CGTP does not leverage all the sparsity in the coefficients \citep{escn}. Using all sparsity, we can obtain $\O(L^5)$ runtime as noted by \cite{cobbefficient}.
+    
+    \item We provide and analyze a \textbf{novel implementation} of GTP which represents spherical signals using a grid on the sphere as opposed to the original 2D Fourier basis \citep{gaunt}. Our implementation has the \textbf{same asymptotics} and is 30\% \textbf{faster in practice}. Futher, our spherical grid implementation unlocks the use of $S^2$ fast Fourier transforms (S2FFT) \citep{healy2003ffts} algorithms which leads to an asymptotically faster version of GTP.
+\end{itemize}
+
+
+% In particular, the often cited $\O(L^6)$ runtime for CGTP assumes an implementation which does not leverage all the sparsity in the coefficients. Further, the original implementation of GTP uses 2D Fourier coefficients and we show we can instead directly use a spherical grid for a simpler implementation. Finally, the conversion to and from spherical signals turns out to be the bottleneck in any of the ISTPs. It turns out there exist algorithms using recursion relations which speeds up these conversion steps leading to even faster asymptotic runtimes \cite{healy2003ffts}.
+
+% This distinction is exactly where the speedup from the Gaunt tensor product arises: the outputs of both operations are not directly comparable with each other. To address this discrepancy, we consider 3 different settings to analyse the theoretical and empirical runtimes of different tensor products:
+% \begin{itemize}
+%     \item 
+%     \textbf{Single Input, Single Output (SISO)}:
+%     $$ L \otimes L \rightarrow L$$ 
+%     \item \textbf{Single Input, Multiple Output (SIMO)}:
+%     $$L \otimes L \rightarrow (0, 1, \ldots, 2L)$$
+%     \item \textbf{Multiple Input, Multiple Output (MIMO)}: $$(0, 1, \ldots, L) \otimes (0, 1, \ldots, L)\rightarrow (0, 1, \ldots, 2L)$$
+% \end{itemize}
+% where we assume $\ell_1 = \O(L), \ell_2 = \O(L)$.
+% We show that the choice of `most efficient' tensor product depends on the setting. \autoref{tab:asymptotic_runtimes} summarizes the first of our contributions: a tight analysis of the runtimes of different tensor products. We defer details to \autoref{sec:runtimes}. 
+
+\begin{table}[h]
+\caption{Asymptotic runtimes and expressivity of various TPO implementations. Note that when normalized for expressivity, most TPOs have the same asymptotics as sparse CGTP. The only true speed up comes from a fast spherical transform algorithm by \citet{healy2003ffts}.}
+\label{tab:asymptotic_runtimes_IO}
+    \centering    
+    \scalebox{0.75}{\begin{tabular}{cccc}
+        \toprule
+        TPO & Expressivity & Runtime & Runtime / Expressivity\\
+         \midrule
+        CGTP (Naive) & $\O(L^3)$ & $\O(L^6)$ & $\O(L^3)$\\
+        CGTP (Sparse) & $\O(L^3)$ & $\O(L^5)$ & $\O(L^2)$\\
+        GTP (Fourier) & $\O(L)$ & $\O(L^3)$ & $\O(L^2)$\\
+        GTP (Grid) & $\O(L)$ & $\O(L^3)$ & $\O(L^2)$\\
+        GTP (S2FFT) & $\O(L)$ & $\O(L^2 \log^2 L)$ & $\O(L\log^2 L)$\\
+        MTP (Naive) & $\O(L)$ & $\O(L^4)$ & $\O(L^3)$\\
+        MTP (Sparse) & $\O(L)$ & $\O(L^3)$ & $\O(L^2)$\\
+        \bottomrule
+    \end{tabular}}
+\end{table}
+
+% \begin{table}[h]
+% \caption{Asymptotic runtimes and expressivity of various tensor product implementations. Note that when normalized for expressivity, most tensor products have the same asymptotics as sparse CGTP. The only true speed up comes from a fast spherical transform algorithm by \citet{healy2003ffts}.}
+% \vspace{0.3cm}
+% \label{tab:asymptotic_runtimes_IO}
+%     \centering    
+%     \scalebox{0.75}{\begin{tabular}{ccccc}
+%         \toprule
+%         Tensor Product & \# Inputs & \# Outputs & Runtime & Runtime / Expressivity\\
+%          \midrule
+%         Clebsch-Gordan (Naive) & $\O(L)$ & $\O(L^3)$ & $\O(L^6)$ & $\O(L^3)$\\
+%         Clebsch-Gordan (Sparse) & $\O(L)$ & $\O(L^3)$ & $\O(L^5)$ & $\O(L^2)$\\
+%         Gaunt (Fourier) & $\O(L)$ & $\O(L)$ & $\O(L^3)$ & $\O(L^2)$\\
+%         Gaunt (Grid) & $\O(L)$ & $\O(L)$ & $\O(L^3)$ & $\O(L^2)$\\
+%         Gaunt (S2FFT) & $\O(L)$ & $\O(L)$ & $\O(L^2 \log^2 L)$ & $\O(L\log^2 L)$\\
+%         Matrix (Naive) & $\O(L)$ & $\O(L)$ & $\O(L^4)$ & $\O(L^3)$\\
+%         Matrix (Sparse) & $\O(L)$ & $\O(L)$ & $\O(L^3)$ & $\O(L^2)$\\
+%         Vector Signal (Grid) & $\O(L)$ & $\O(L)$ & $\O(L^3)$ & $\O(L^2)$\\
+%         Vector Signal (S2FFT) & $\O(L)$ & $\O(L)$ & $\O(L^2 \log^2 L)$ & $\O(L\log^2 L)$\\
+%         ISTP (Naive Grid) $(s_1,s_2,s_3)$ & $\O((s_1+s_2)L)$ & $\O(s_3L)$ & $\O(\tilde{s}^2L^2+\tilde{s}L^3)$ & $\O(\tilde{s}L+L^2)$\\
+%         ISTP (S2FFT) $(s_1,s_2,s_3)$ & $\O((s_1+s_2)L)$ & $\O(s_3L)$ & $\O(\tilde{s}^2L^2+\tilde{s}L^2\log^2 L)$ & $\O(\tilde{s}L+L\log^2 L)$\\
+%         \bottomrule
+%     \end{tabular}}
+% \end{table}
+
+From this table, we can see that asymptotic speedups in the faster TPOs comes from a loss of expressivity. In particular, when normalizing for our expressivity measure, the only true asymptotic speedup comes from implementations leveraging the fast algorithm for spherical harmonic transforms.
+
+
+\section{Microbenchmarking Tensor Product Implementations}
+\label{sec:benchmarking}
+
+For the machine-learning practitioner, the fundamental question of which tensor product to choose for their network is often heavily dependent on the resulting wall-clock time of their training runs. In this section, we show that the practical runtimes of different tensor products is more \emph{nuanced} than the theoretical guarantees of \autoref{tab:asymptotic_runtimes_IO}. We focus on the tensor products since these operations are usually the bottleneck in equivariant neural networks.
+We perform careful microbenchmarking on CPU (some details about the hardware here) and on GPU (specifically, the NVIDIA RTX A5500 and A100), and report hardware-agnostic FLOPs, hardware-dependent GPU utilization, and overall wall-clock time for each tensor product. 
+
+To the best of our knowledge, this is the most rigorous benchmarking of such tensor product operations performed till date.
+
+
+
+\subsection{Summary of Findings}
+
+We find that the Clebsch-Gordan Tensor Products incur low GPU utilization and higher wall-clock time when compared to the Gaunt Tensor Product and Matrix Tensor Product. However, if we normalize for expressivity  (\autoref{sec:expressivity}), the wall-clock times for the 
+Clebsch-Gordan Tensor Products are much lower. 
+
+% Our benchmarking highlighted that the JAX-compiled implementation of the Clebsch-Gordan Tensor Product does not map well onto GPU memory hierarchy
+% . Thus, we designed a lower-level implementation in a Triton kernel that allows greater control over GPU memory allocation. From ..., we see that this implementation leads to \emph{significant gains} over our JAX implementations, and represents an exciting avenue for future research into efficient implementations of equivariant tensor products. We have open-sourced this Triton kernel for the community to build off of.
+
+
+Overall, our benchmarks highlight the need for carefully balancing expressivity, asymptotics, FLOPs and GPU utilization while designing and implementing tensor products.
+
+\subsection{Methodology}
+While wall-clock times of tensor products correlate well with downstream inference/training times, they depend on specific code implementations (eg. compiled vs uncompiled code, the use of custom kernels) or GPU compute capability (number of tensor cores, memory bandwidth). This makes it hard to extend benchmarking claims beyond the specific execution environment. While using FLOPS can help get around these limitations \citep{equivariancescale}, they may not necessarily correspond to the actual compute needed for using equivariant operations given their poor GPU utilization. The difference in GPU utilization makes it particularly challenging to do a fair comparison between different tensor products.
+
+% So then how do we do a fair comparison while taking into account different levels of GPU utilization ?
+
+To test the analysis in \autoref{tab:asymptotic_runtimes_IO}, we implemented all of the tensor products in \texttt{e3nn-jax} built on top of the JAX \citep{jax2018github} framework. The just-in-time compilation of JAX (via \texttt{jax.jit}) automatically fuses multiple operations to reduce memory transfer and kernel launch overhead. We also include an unweighted implementation of the matrix tensor product from \texttt{e3x} and a more GPU-friendly implementation of Clebsch-Gordan (Sparse) \autoref{alg:CGTP_sparse} in our benchmarking suite. Through this we ensure that all tensor product implementations benefit equally from the various pattern-based fusion strategies implemented within JAX's XLA compiler \citep{xla,fusionxlaanalysis}.
+
+However, these fusion strategies and heuristics are still largely centered around dense linear algebra workloads over multi-dimensional arrays. This makes it harder to see out-of-the-box performance gains for operations that don't fit this paradigm \citep{mlsysrut}. Thus, to analyze how efficiently a given tensor product is being executed on the GPU, 
+% along with wall-times and FLOPS
+we also report average GPU utilization.
+
+
+\textbf{Benchmark Settings:}
+We define our benchmarking metrics by counting instructions executed within each kernel run, DRAM read and write memory accesses and throughput. All metrics were collected through NVIDIA's Nsight Compute toolkit. This approach has been successfully used in FourCastNet \citep{fourcastnet} and takes inspiration from the Empirical Roofline Toolkit \citep{yang2020hierarchicalrooflineanalysiscollect}.
+
+All of the experiments were performed on an NVIDIA A5500 with 24 GB of off-chip GPU memory. Our inputs are randomly generated and batch size refers to number of samples used at once.  Benchmarks on other hardware (A100, CPU) can be found in \autoref{sec:additional_benchmarks}. Additional details about hardware counters can be found in \autoref{sec:benchmark_details}.
+
+\subsection{Results}
+\textbf{Asymptotics $\neq$ FLOPs}. The first trend we report is the discrepancy between asymptotics in \autoref{tab:asymptotic_runtimes_IO} and compute FLOPs. While the GTPs have lower asymptotic complexity, they end up having comparable (or even higher) FLOPs than the CGTPs. This is due to different constant scaling factors causing TPOs with similar asymptotics to scale differently with $L_{\max}$. 
+
+
+
+\begin{figure*}[!htb]
+\centering
+\begin{tabular}{ccc}
+\includegraphics[width=0.3\textwidth]{figures/ICLR_experiments/total_all_gflops_MIMO_10000.pdf} &
+ \includegraphics[width=0.3\textwidth]{figures/ICLR_experiments/walltime_gpu_MIMO_10000.pdf} & 
+\includegraphics[width=0.3\textwidth]{figures/ICLR_experiments/mean_all_gflops_MIMO_10000.pdf} \\
+\multicolumn{3}{c}{\includegraphics[width=0.35\textwidth] {figures/ICLR_experiments/pof_legend.png}}
+\end{tabular}
+\begin{tabular}{cc}
+\includegraphics[height=0.17\textheight]{figures/ICLR_experiments/total_normalized_all_gflops_MIMO_10000.pdf} &
+\includegraphics[height=0.17\textheight]{figures/ICLR_experiments/walltime_normalized_gpu_MIMO_10000.pdf}
+\end{tabular}
+\caption{Top: Analysis of tensor products compute scaling on a RTX A5500 GPU:  Total GFLOPs (Left), Total walltime (Middle), and Average throughput in GFLOPs/s (Right). Bottom:
+Analysis of tensor products compute scaling per path on RTX A5500 GPU: (Left) Total Walltime / Expressivity, (Right) Total GFLOPs / Expressivity. Batch refers to the number of tensor products performed in parallel.}
+\label{experiments:walltime}
+\end{figure*}
+
+
+% \begin{figure*}[!htb]
+% \centering
+
+% \caption{Analysis of tensor products compute scaling per path on RTX A5500 GPU: (Left) Total Walltime / Expressivity, (Right) Total GFLOPs / Expressivity. Batch refers to the number of tensor products performed in parallel}
+% \label{experiments:normalizedwalltime}
+% \end{figure*}
+
+
+\textbf{FLOPs $\neq$ Wall-clock time}. Next, we report discrepancy between FLOPs and wall-clock times. While GTP has higher FLOPs than the CGTPs, their wall-clock time is lower due to their high GPU utilization. For Gaunt (Fourier), our code does not leverage sparsity when transforming to a 2D Fourier basis, potentially causing the slowdown. We tried implementing a version that leveraged the sparsity through \texttt{jax.experimental.sparse} but it was slower than the version we report suggesting that its not yet well optimized. We also report low GPU utilization for Clebsch-Gordan Tensor Product despite having a more GPU-friendly implementation \autoref{alg:CGTP_sparse}. 
+% Investigating this issue further led us to write a Triton implementation that also leverages the sparsity. Since the implementation is lower level than JAX, we did not include it in the benchmarking plots but more details can be found in \autoref{alg:CGTP_sparse_triton}
+
+\textbf{GPU utilization $\neq$ Wall-clock time}. Incase of MTP, we show that high GPU utilization does not always necessarily lead to the lowest wall-clock time due to the high compute FLOPs.
+
+\textbf{Wall-clock time $\neq$ Expressivity}. After normalizing against expressivity defined in \autoref{sec:asymptotics}, we find that the Clebsch-Gordan tensor products were the fastest both in terms of wall-clock time and FLOPs.
+
+\subsection{Limitations and Open Questions}
+Here, we have effectively only benchmarked the `forward pass' of the tensor product operation in an equivariant neural network. In practice, depending on the dataset and the task, it may turn out the `optimal' tensor product here may not result in significant performance gains. For example, the lack of expressivity in some of these tensor products may be captured in other operations of the neural network, or may not be important to the task at hand. 
+
+Since Nsight Compute does multiple replays on a single kernel in order to gather performance metrics, it can take days to profile all the kernels being executed in a single model inference call. This is the biggest bottleneck when profiling model runs.
+
+By reporting the GPU utilization and FLOPs of these tensor products, we hope to highlight the performance gains relative to the device peak that are still left on the table. Recent works \citep{cuEquivariance, openEquivariance, firoz2025optimizingdatadistributionkernel, tan2025highperformancetraininginferencedeep} show this is a promising direction.
+% Our Triton implementation of CGTP-sparse \autoref{alg:CGTP_sparse_triton} is hopefully a good first step in this direction.
+
+
+% A link to our anonymized code for benchmarking can be found here \footnote{\url{https://anonymous.4open.science/r/priceoffreedom-4C7D/}}.
+
+
+
+
+% \textbf{Total GFLOPs.} We complement the walltime reporting with  
+
+
+
+% \textbf{Total Normalized Walltime.}
+
+
+% \textbf{Peak Throughput.}
+
+
+% \begin{itemize}
+%     \item The faster wall-times for GTP (Naive Grid, Original Grid) can be attributed to high throughput and bandwidth. On the other hand, CGTP (Sparse) is bottlenecked by low throughput and bandwidth utilization. 
+
+%     \item CGTP (Sparse) is slower than CGTP (Naive) despite having lower computational complexity. This is due to irregular memory access patterns leading to poor spatial and temporal locality.
+    
+%     \item Unlike matrix multiplication, the throughput efficiency \citep{nvidia_matrix_multiplication} for the CGTP (Sparse, Original) product operations does not improve with increasing $L_\text{max}$.
+%     % Our current benchmarks do not do any batching, possibly leading to low GPU utilization. In the future, we plan to extend the benchmarks to account for batch dimensions.
+% \end{itemize}
+
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Force and Energy Prediction on Organic Molecules}
+\label{sec:force-energy-prediction}
+
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=0.3\textwidth]{figures/MACE/3bpa-rmse_e.png}
+    \includegraphics[width=0.3\textwidth]{figures/MACE/rmd17-rmse_e.png}
+    \caption{Training the MACE interatomic force field with the original GTP \citep{gaunt} and our faster implementation GTP (Grid) for the same number of GPU hours on the 3BPA and revised MD17 datasets.} 
+    \label{fig:mace-results}
+\end{figure}
+
+\citet{gaunt} demonstrates the speedups obtained by GTP in a real-world application by replacing the symmetrized tensor product in the MACE \citep{mace} model (a popular machine learning interatomic potential) with GTP. We redo their experiments on the 3BPA \citep{3bpa} and revised MD17 \citep{rmd17} datasets with our S2Grid implementation of GTP. Our implementation is a \emph{drop-in replacement} for the original GTP implementation using Fourier transforms. While significantly simpler due to the use of pre-existing primitives in e3nn, we find that our GTP implementation using S2Grid is also $\approx 30\%$ faster in practice, as shown in \autoref{fig:mace-results}.
+
+% Further, we experimented with the VGTP, and found minor improvement on the 3BPA dataset. We also find minor improvements on aspirin from revised MD-17 dataset.
+
+% To include the scalar interactions missing in the VGTP, we include the GTP interaction. In particular, we project irreps to a combination of a scalar field and a vector field on $S^2$. The scalar fields are combined via the GTP (ie, pointwise multiplication), while the vector field are combined via the VGTP (ie, pointwise cross product).
+
+% Further, while the GTP is restricted to a single copy of each irrep, the VGTP + GTP combination above operates on upto $4$ copies of each irrep. Thus, we mix multiple channels of irreps via a linear layer before projecting.
+% We experiment with mixing $4$ and $8$ channels on both datasets.
+
+% \subsection{Predicting Water Hamiltonians}
+% \label{sec:water-hamiltonians}
+
+% Using an $E(3)$-equivariant MLP, we predict the Hamiltonian matrix elements using the basis of atom-centered orbitals in water molecules as a function of the 3D geometry.
+
+% In particular, our basis set is defined by $1s, 2s, 2p$ orbitals on each hydrogen H, and $1s, 2s, 2p, 3s, 3p, 3d$ orbitals on the oxygen atom O. We are predicting the Hamiltonian matrix element:
+% \begin{align*}
+%     H_{ij} = 
+%     \braket{
+%     \Psi_{Hi} |
+%     \hat{H} |
+%     \Psi_{Oj}
+%     } 
+% \end{align*}
+% between orbital $\Psi_{Hi}$ on H and orbital $\Psi_{Oj}$ on O.
+
+% The reference data was computed using ...
+
+\subsection{Classifying 3D Tetris Pieces}
+\label{sec:tetris}
+
+We consider a simple task of classifying 8 different 3D Tetris-like pieces, shown in \autoref{fig:tetris-pieces}. Note that the first two pieces are non-superimposable mirror reflections of each other; they are \emph{chiral}. Given a randomly oriented 3D structure, the network needs to predict which of the 8 tetris pieces it corresponds to.
+
+We use a simple message-passing neural network, described in \autoref{sec:tetris-message-passing}, using either the Gaunt and Clebsch-Gordan tensor products. Our network architecture is almost identical to that of NequIP  \citep{nequip}.
+
+\begin{figure}[!h]
+    \centering
+    \subfloat[\label{fig:tetris-pieces}]{\includegraphics[width=0.3\textwidth]{figures/tetris-pieces.pdf}}\qquad\qquad
+    \subfloat[\label{fig:tetris-results-sub}]{\includegraphics[width=0.35\textwidth]{figures/tetris-results.pdf}}
+    
+    \caption{(a) The 8 different 3D Tetris pieces, with the first two pieces being mirror images of each other. (b) Training curves of networks trained with different tensor products on the 3D Tetris task. The maximum $L$ is varied from $1$ to $4$. All of the CGTP networks attain $100\%$ accuracy while none of the GTP networks do.} 
+    \label{fig:tetris-results}
+\end{figure}
+
+As shown in \autoref{fig:tetris-results}, the  network is very easily able to solve this task with CGTP, but the same network parametrized with GTP is unable to distinguish between the two chiral pieces. Adding more channels or incorporating the pseudo-spherical harmonics (which have the opposite parity of the spherical harmonics under reflection) did not help. The fundamental failure is the inability to create the $1e$ term via $1o \otimes 1o \to 1e$ because this is the cross product, an antisymmetric operation. Indeed, there is no way to create a pseudoscalar using the GTP in this setting.
+
+% \section{Discussion}
+
+
+
+\section{Conclusion}
+
+This work was inspired by the observation that specific antisymmetric paths were missing in GTP and that paths which result in the same output irrep type are merged together. While there is much focus on improving how runtimes scale with $L$, there has been little work analyzing how expressivity is affected. Hence we provided the first systematic analysis of the distinctions between different $O(3)$ equivariant TPOs that exist in the literature.
+
+On the theoretical side, we clarify that many new TPOs are not formally tensor products. We then introduced a measure of expressivity and interactability based on how TPOs are used in practice. We applied this to CGTP, GTP, and MTP analyzing their asymptotic runtimes, expressivities, and interactability. Interactability lets us formalize the intuition that GTP is unable to represent antisymmetric interactions. In addition, we see asymptotic speedups in runtime typically come from losses in expressivity.
+
+For implementations, we highlight our novel and simpler implementation of GTP which directly uses a spherical grid. This implementation has the same asymptotic cost as the original GTP and perfroms 20\% faster in practice. Further, we identify that leveraging fast spherical harmonic transforms can allow faster asymptotic runtimes. Finally, we clarify that the commonly cited $\O(L^6)$ runtime for CGTP does not use all sparsity in the Clebsch-Gordan coefficients and we can in fact achieve $\O(L^5)$ runtime \citep{cobbefficient}.
+
+We then provide the first microbenchmarks of implementations of CGTP, GTP, and MTP. We observe asymptotic gains do not always correspond to performance gains in practice. In fact, CGTP leveraging sparsity has the slowest walltime despite having the fewest FLOPs. As expected, we observe better walltime performance for GTP compared with CGTP. In addition, our grid implementation of GTP performs better than the original 2D Fourier implementation. However, normalizing for our expressivity measure, we see that standard CGTP has the best performance, highlighting these new TPOs do not truly speed up tensor products but rather remove degrees of freedom.
+
+Finally, we replicated the experiments originally performed in \citet{gaunt}. We directly replaced their GTP implementation with our grid implementation and observe a 30\% speed increase. Additionally, we demonstrate the lack of antisymmetric operations means classifying 3D tetris pieces using solely GTP is impossible.
+
+We conclude that while it is important to improve runtimes, it is equally important to properly analyze where the savings come from and the impact of these new operations both in theory and in practice. We believe there are many opportunities for creative design of new TPOs. We hope this work can provide a foundation for analyzing these operations.
+
+% We focus on the Gaunt Tensor Product because it is able to computationally efficiently handle higher $L$ features, but at the cost of specific expressivity.
+% We introduce VSTPs to solve the antisymmetry problem of GTP. We then analyze the expressivity of various tensor product operations and show most of the improved asymptotic runtime performance comes at the price of expressivity. We further  As expected, the absolute walltimes of GTP, MTP, and VSTP are faster than CGTP past some $L_{\max}$, but when normalized for expressivity CGTP is the fastest. However, more empirical work is needed to understand how much the loss of expressivity affects actual performance of E(3)NNs. If we need the extra expressivity then clearly CGTP is the better choice, but if not, we may benefit from the absolute speed up of the other tensor products. Our work highlights the need to carefully analyze the tradeoffs between expressivity and walltime when deciding which tensor product operation to use in practice.
+
+% Despite better asymptotics, we find our sparse implementation of the Clebsch-Gordan tensor product to perform worse due to low throughput and bandwidth utilization, caused by irregular memory access patterns. Our results highlight the importance of careful implementations that map well to existing CPU/GPU primitives. In the future, we plan to work on improving our implementations to maximize CPU/GPU utilization. Further, more empirical work is needed to understand the impact of the loss of expressivity in actual models.
+
+\section*{Acknowledgments}
+
+YuQing Xie, Ameya Daigavane, and Mit Kotak were supported by the NSF Graduate Research Fellowship program under Grant No. DGE-1745302. Tess Smidt was supported by DOE ICDI grant DE-SC0022215. Mit Kotak and Tess Smidt would like to additionally acknowledge support from the National Science Foundation under Cooperative Agreement PHY-2019786 (The NSF AI Institute for Artificial Intelligence and Fundamental Interactions).
+
+
+
+\section*{Impact Statement}
+This paper presents work whose goal is to advance the field of 
+Machine Learning. There are many potential societal consequences 
+of our work, none which we feel must be specifically highlighted here.
+
+\newpage
+
+
+\bibliography{bibliography}
+\bibliographystyle{icml2025}
+
+
+\appendix
+\onecolumn
+\include{appendix}
+
+
+\end{document}

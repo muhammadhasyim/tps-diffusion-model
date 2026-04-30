@@ -1,0 +1,38 @@
+\section{Simulating the Fully-Connected Clebsch-Gordan Tensor Product with Gaunt Tensor Products}
+\label{sec:simulate_TP_Gaunt}
+
+One way to increase the expressivity of GTP is to first reweight the inputs $\x,\y$. That is, we first create
+\begin{align}
+    \x'^{(\ell)}=a_{\ell}\xl{}\\
+    \y'^{(\ell)}=b_{\ell}\yl{}.
+\end{align}
+where $a_\ell$ and $b_\ell$ are learnable weights. We then perform GTP after this reweighting and extract some output irrep(s) $\ell_3$. That is we get
+\begin{align}
+    (\x'\gtp \y')^{(\ell_3)}.
+\end{align}
+
+The analogous operation is fully connected CGTP. There may be multiple pairs of irreps which give a $\ell_3$ output. We can always weight and sum these to get
+\begin{align}
+    \sum_{\ell,\ell'}w_{\ell,\ell'}( {\xl{}} \cgtp \y^{(\ell')})^{(\ell_3)}
+\end{align}
+where $w_{\ell,\ell'}$ are learnable weights.
+
+However, even if we only care about symmetric tensor products, the weighted GTP operation is strictly less expressive than fully connected CGTP.
+
+More concretely, suppose we have nontrivial $\ell=2$ and $\ell=4$ data in our inputs. From CGTP and the selection rules we see that 
+\begin{align}
+    (\x^{(2)}\cgtp\y^{(2)})^{(2)}\qquad
+    (\x^{(2)}\cgtp\y^{(4)})^{(2)}\\
+    (\x^{(4)}\cgtp\y^{(2)})^{(2)}\qquad
+    (\x^{(4)}\cgtp\y^{(4)})^{(2)}
+\end{align}
+are all nonzero. In particular, it is possible to create a $\ell=2$ output of 
+\[(\x^{(2)}\cgtp\y^{(2)})^{(2)}+(\x^{(4)}\cgtp\y^{(4)})^{(2)}\]
+with a fully connected CGTP. However, GTP instead gives a single $\ell=2$ output of form
+\begin{align}
+    c^2_{2,2}(\x'^{(2)}\cgtp\y'^{(2)})^{(2)}
+    +c^2_{2,4}(\x'^{(2)}\cgtp\y'^{(4)})^{(2)}
+    +c^2_{4,2}(\x'^{(4)}\cgtp\y'^{(2)})^{(2)}
+    +c^2_{4,4}(\x'^{(4)}\cgtp\y'^{(4)})^{(2)}
+\end{align}
+where the $c$'s are nonzero coefficients. Note that in order to have nonzero $(\x^{(2)}\cgtp\y^{(2)})^{(2)}$ and $(\x^{(4)}\cgtp\y^{(4)})^{(2)}$ contributions, $a_2,b_2,a_4,b_4$ must all be nonzero. However, that means we must have nonzero $(\x^{(2)}\cgtp\y^{(4)})^{(2)}$ and $(\x^{(4)}\cgtp\y^{(2)})^{(2)}$ contributions. Therefore weighted GTP is not expressive enough to output  $(\x^{(2)}\cgtp\y^{(2)})^{(2)}+(\x^{(4)}\cgtp\y^{(4)})^{(2)}$, as it will necessarily mix additional terms.

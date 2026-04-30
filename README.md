@@ -16,7 +16,7 @@ pip install -e ./boltz
 pip install -e "./boltz[cuda]"
 ```
 
-Or conda: `conda env create -f environment.yml` then `conda activate genai-tps` (that file includes **OpenMM** + **openmmforcefields** + **OpenFF Toolkit**, **ProDy**, **PyMOL**, **pymbar** stack, plus editable `boltz` and `genai-tps` with `[boltz,dev,sampling]`).
+Or conda: `conda env create -f environment.yml` then `conda activate genai-tps` (that file includes **OpenMM** + **openmmforcefields** + **OpenFF Toolkit**, **ProDy**, **PyMOL**, **pymbar** stack, plus editable `boltz` and `genai-tps` with `[boltz,dev,sampling]`). Follow the header steps in `environment.yml` for PyTorch and optional PLUMED-from-submodule; you do **not** need to set `PYTHONPATH` manually—editable install plus `genai_tps.subprocess_support` handle driver subprocesses.
 
 **Optional pip extras** (see `pyproject.toml`): `[viz]` (PyMOL), `[analysis]` (ProDy), `[sampling]` (OpenMM + pymbar + GAFF/OpenFF pins), `[cli]` (Typer + Hydra). For a **single pip line** without conda: `pip install -e ./boltz` and `pip install -e ".[boltz,dev,full]"` (`full` bundles PyMOL, ProDy, and the full OpenMM/ligand/MBAR set).
 

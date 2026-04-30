@@ -1,0 +1,19 @@
+\section{Expressivity}
+\label{sec:expressivity}
+
+Here, we analyze the expressivity, as defined in Definition \ref{def:expressivity}, of the various tensor products. In this case, we assume we use a tensor product to construct bilinear maps 
+\[B:(0\oplus\ldots\oplus L)\times (0\oplus\ldots\oplus L)\to (0\oplus\ldots\oplus 2L)\]
+by inserting equivariant linear layers before and after the tensor product. This choice of input and output irreps for our bilinearity is inspired by what is commonly found in practice. It is often the case that we have the same number of copies of each irrep type for our features. Since multiplicity of a rep only affects expressivity by a scaling factor, we focus on the case where there is a single copy of each irrep type up to some cutoff $L$.
+
+By Schur's lemma, we can only linear maps between irreps of the same type and these maps must be identity. Hence, the total number of inputs and output irreps to our tensor product gives the degrees of freedom for paramterizing the linear layers from $0\oplus\ldots\oplus L$ and to $0\oplus\ldots\oplus 2L$. There is an additional 2-fold redundancy in overall scaling so $\texttt{\#Input irreps}+\texttt{\#Ouput irreps}-2$ gives an upper bound on expressivity.
+
+\subsection{Clebsch-Gordan tensor product}
+
+In the case of CGTP, we assume input which is a single copy of each irrep up to order $L$ for $\O(L)$ irreps in the input. In general, tensor products of single pairs of irreps gives $\O(L)$ output irreps. There are $\O(L^2)$ pairs for a total of $\O(L^3)$ output irreps.
+
+\subsection{Gaunt tensor product}
+
+In the case of GTP, we note that coefficients of spherical harmonics corresponds to single copies of each irrep. Hence, we have $\O(L)$ input irreps. Similarly, in the output there is only one copy of each irrep we obtain from the spherical harmonic coefficients. By selection rules, the highest order harmonic we could obtain is of order $2L$. Hence the number of output irreps is also $\O(L)$.
+
+\subsection{Matrix tensor product}
+In the case of FTP, we encode single copies of irreps into a tensor product rep $(L/2)\otimes (L/2)$. Hence there are $\O(L)$ inputs. We then perform matrix multiplication which results into a $(L/2)\otimes(L/2)$ tensor product rep. But this decomposes into $0\oplus\ldots\oplus L$ giving $\O(L)$ output irreps.

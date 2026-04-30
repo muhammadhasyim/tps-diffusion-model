@@ -7,7 +7,32 @@
 #   conda env create -f environment.yml
 #   conda activate genai-tps
 #
-# Step 2 — Install PyTorch with the right CUDA wheel for YOUR driver:
+# Step 1b — Update an EXISTING env to match new conda pins (does NOT re-run pip;
+# avoids ``conda env update`` torch breakage documented below):
+#
+#   conda activate genai-tps
+#   conda install -c conda-forge -y \
+#     "openmm>=8.4,<8.5" "openmm-plumed=2.1=*_3" "plumed>=2.9,<2.10" \
+#     make autoconf automake libtool pkg-config cxx-compiler fftw zlib gsl
+#
+# Step 2 — PLUMED with OPES: build ONLY from git submodule ``./plumed2/`` (not from conda):
+#
+#   Conda installs ``plumed`` + ``openmm-plumed`` so the solver and ``pin_compatible``
+#   metadata stay satisfied; conda-forge's ``plumed`` binary does NOT include the
+#   ``opes`` module.  There is no conda-only line that compiles OPES during env create.
+#   Step 2 runs ``./configure && make install`` in ``plumed2/`` into ``$CONDA_PREFIX``,
+#   replacing ``libplumedKernel.so`` with your OPES-enabled build.
+#
+#   Pin the submodule to the same 2.9.x line as the ``plumed>=2.9,<2.10`` pin below.
+#
+#     git submodule update --init plumed2
+#     git -C plumed2 checkout v2.9.2
+#     bash scripts/build_plumed_opes.sh
+#
+#   Then ``conda deactivate && conda activate genai-tps`` so ``PLUMED_KERNEL`` is set
+#   (activate.d hook installed by the script).  Skip on CI if you do not run PLUMED OPES-MD.
+#
+# Step 3 — Install PyTorch with the right CUDA wheel for YOUR driver:
 #
 #   Run `nvidia-smi` and check the "CUDA Version" line (top-right corner).
 #   Then run ONE of the following:
@@ -21,9 +46,16 @@
 #     CPU-only machine (no GPU):
 #       bash scripts/install_torch_cuda.sh cpu
 #
-# Step 3 — Re-activate so the LD_LIBRARY_PATH hook fires:
+# Step 4 — Re-activate so conda hooks fire (torch LD_LIBRARY_PATH + PLUMED_KERNEL):
 #
 #   conda deactivate && conda activate genai-tps
+#
+# ── PYTHONPATH ───────────────────────────────────────────────────────────────
+# Do not ``export PYTHONPATH`` to import ``genai_tps``.  The pip block below installs
+# the package editable into this env.  Campaign / atlas drivers that subprocess
+# other ``scripts/*.py`` entries pass ``<repo>/src/python`` on the child environment
+# automatically (``genai_tps.subprocess_support``), so nested tools work from a
+# clean shell after ``conda activate`` alone.
 #
 # ── Why not put torch in this file? ──────────────────────────────────────────
 # PyTorch CUDA wheels are driver-specific.  Baking one wheel index into the
@@ -56,11 +88,29 @@ dependencies:
   #   ValueError: numpy.dtype size changed, Expected 96 from C header, got 88
   # Listing numpy here forces conda to pick only numpy-2.x-compatible openmm.
   - numpy>=2.0,<2.3
-  - openmm>=8.5
+  # OpenMM 8.4.x + plumed 2.9.x: keep this triple compatible (solver can otherwise
+  # pick a broken openmm-plumed build).  Match working installs, e.g.:
+  #   conda install -c conda-forge "openmm>=8.4,<8.5" "openmm-plumed=2.1=*_3" "plumed>=2.9,<2.10"
+  # Build *_3 is the known-good openmm-plumed 2.1 revision on conda-forge for this stack.
+  - openmm>=8.4,<8.5
+  - "openmm-plumed=2.1=*_3"
+  # Conda ``plumed``: satisfies openmm-plumed; kernel lacks OPES until Step 2 overlay.
+  - plumed>=2.9,<2.10
+  # Toolchain + libs to compile ``./plumed2`` in Step 2 (not a conda-from-source PLUMED).
+  - make
+  - autoconf
+  - automake
+  - libtool
+  - pkg-config
+  - cxx-compiler
+  - fftw
+  - zlib
+  - gsl
   - pdbfixer>=1.9
   # NOTE: cuda-version is intentionally NOT pinned here.
-  # All conda-forge openmm>=8.5 builds require cuda-nvrtc>=12.9, so pinning
-  # cuda-version=12.2 makes the solver fail.
+  # Recent conda-forge openmm / openmm-plumed builds expect a cuda-version
+  # virtual package (often 12.9+); pinning an older cuda-version can make the
+  # solver fail.  Match the stack to your NVIDIA driver (see nvidia-smi).
   #
   # ── NVRTC override for driver 535 / CUDA 12.2 machines ───────────────────────
   # OpenMM generates CUDA kernels at runtime via NVRTC (not pre-compiled SASS
@@ -81,6 +131,9 @@ dependencies:
   # ── OpenMM quick check (after: conda activate genai-tps) ─────────────────────
   # Import (use -c; `python "import openmm"` wrongly treats that as a filename):
   #   python -c "import openmm; print(openmm.__version__); print(openmm.Platform.getPluginLoadFailures())"
+  # PLUMED plugin (real OPES-MD); OPES requires Step 2 overlay (module opes on):
+  #   grep '^module opes' "$CONDA_PREFIX/lib/plumed/src/config/config.txt"
+  #   python -c "from openmmplumed import PlumedForce; print(PlumedForce)"
   # Non-empty getPluginLoadFailures() often lists HIP plugins missing libhiprtc
   # on NVIDIA-only machines — safe to ignore if CUDA/OpenCL/CPU work.
   # Driver / GPU cap:

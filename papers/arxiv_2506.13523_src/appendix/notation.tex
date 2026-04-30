@@ -1,0 +1,45 @@
+\section{Notation}
+\label{sec:notation}
+Here, we present the notation we use throughout this paper and the typical variable names.
+\begin{table}[h!]
+    \centering
+    \caption{Notation used throughout this paper}
+    \vspace{0.15in}
+    \begin{tabular}{rp{0.8\textwidth}}
+        $SO(n)$ & Group of rotations in $n$-dimensional space\\
+        $O(n)$ & Group of rotations and inversion in $n$-dimensional space\\
+        $S^2$ & The 2-sphere, surface defined by $x^2+y^2+z^2=1$\\
+        $Y^m_\ell$ & Spherical harmonic function of degree $\ell$ and order $m$\\
+        $\Y_\ell$ & The collection of spherical harmonic functions of degree $\ell$ for all orders $m$\\
+        $\oplus$ & Denotes a direct sum\\
+        $\otimes$ & Denotes a tensor product\\
+        $\times$ & Denotes a Cartesian product of spaces and also denotes cross products\\
+        $\O$ & Big O notation\\
+        $\tosphere$ & Function which takes in spherical harmonic coefficients consisting of single copies of irrep up to some cutoff $L$ and converts it into a spherical signal $f:S^2\to\R$\\
+        $\fromsphere$ & Function takes in a spherical signal $f:S^2\to\R$ and converts it to spherical harmonic coefficients consisting of single copies of irrep up to some cutoff $L$
+    \end{tabular}
+    \label{tab:notation}
+\end{table}
+
+\begin{table}[h!]
+    \centering
+    \caption{Commonly used meanings of symbols}
+    \vspace{0.15in}
+    \begin{tabular}{rp{0.8\textwidth}}
+        $G$ & Denotes a group\\
+        $\rho(g)$ & Representation of a group\\
+        $A$ & First input space of a constructed bilinearity\\
+        $B$ & Second input space of a constructed bilinearity\\
+        $C$ & Output space of a constructed bilinearity\\
+        $V$ & First input space of a tensor product operation (fixed equivariant bilinearity)\\
+        $W$ & Second input space of a tensor product operation (fixed equivariant bilinearity)\\
+        $V$ & Output space of a tensor product operation (fixed equivariant bilinearity)\\
+        $T$ & Tensor product operation (fixed equivariant bilinearity $V\times W\to Z$)\\
+        $\ell$ & Typically used to denote irrep type for $SO(3)$. For spherical signals, used instead to denote spherical harmonic degree which naturally indexes multiplicities of irrep types for VSTP/ISTPs\\
+        $c$ & Indexes multiplicities of an irrep type in given space (channel)\\
+        $j$ & Used instead of $\ell$ to denote irrep type for VSTP and general ISTPs\\
+        $s$ & Denotes irrep type of spherical signal (ie. our signal is a map $f:S^2\to\R^{2s+1}$)\\
+        
+    \end{tabular}
+    \label{tab:symbols}
+\end{table}

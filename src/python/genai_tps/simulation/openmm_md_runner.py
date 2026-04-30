@@ -91,9 +91,10 @@ def main() -> None:
         default="plumed",
         choices=["plumed", "observer"],
         help=(
-            "OPES implementation: 'plumed' applies real bias forces through "
-            "openmm-plumed; 'observer' preserves the legacy Python-side "
-            "reweighting-only bookkeeping."
+            "OPES implementation: 'plumed' applies OPES_METAD bias forces through "
+            "openmm-plumed (requires a PLUMED build with the 'opes' module — not "
+            "included in default conda-forge plumed). 'observer' runs unbiased MD "
+            "and updates Python OPESBias only (different physics than PLUMED OPES)."
         ),
     )
     parser.add_argument(
@@ -111,6 +112,11 @@ def main() -> None:
     parser.add_argument("--ligand-smiles", type=str, default=None, help="chain:SMILES (e.g. B:CC...)")
     parser.add_argument("--mol-dir", type=Path, default=None, help="Boltz CCD mol dir for SMILES lookup")
     args = parser.parse_args()
+
+    if args.opes_mode == "plumed":
+        from genai_tps.simulation.plumed_kernel import assert_plumed_opes_metad_available
+
+        assert_plumed_opes_metad_available()
 
     from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
     from genai_tps.io.boltz_npz_export import coords_frame_from_npz, load_topo, npz_to_pdb
@@ -285,12 +291,21 @@ def main() -> None:
         meta["plumed_script"] = str(script_path)
         meta["plumed_reference_pdb"] = str(ref_pdb)
 
+    md_boltz_pose: dict = {}
+    if args.mol_dir is not None:
+        md_boltz_pose = {
+            "boltz_structure": structure,
+            "boltz_coords_angstrom": ref_coords,
+            "boltz_mol_dir": args.mol_dir.expanduser().resolve(),
+            "ligand_pose_policy": "boltz_first",
+        }
     sim, meta = build_md(
         pdb_path,
         platform_name=args.platform,
         temperature_k=args.temperature,
         ligand_smiles=ligand_smiles,
         extra_forces=_add_plumed_force if args.opes_mode == "plumed" else None,
+        **md_boltz_pose,
     )
     print(f"[MD-OPES] Platform: {meta['platform_used']}", flush=True)
 

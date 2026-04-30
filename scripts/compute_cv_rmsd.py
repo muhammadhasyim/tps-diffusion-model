@@ -58,11 +58,21 @@ import sys
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import numpy as np
 
+from genai_tps.simulation.boltz_ligand_pose import (
+    ligand_topology_relabeled_chain,
+    try_ligand_pose_from_boltz_ccd,
+)
+
 logger = logging.getLogger(__name__)
+
+# Tests import this symbol from ``compute_cv_rmsd``; keep alias to package helper.
+_ligand_topology_relabeled_chain = ligand_topology_relabeled_chain
+
+LigandPosePolicy = Literal["boltz_first", "pdb_only", "strict"]
 
 # Boltz/OpenMM PDB: protein uses standard 3-letter codes; cofactors are HETATM
 # with CCD names (ATP, MG, …), not necessarily ``LIG``.  Anything outside this
@@ -385,27 +395,6 @@ def _extract_pdb_chain_block(pdb_path: Path, chain_id: str) -> str:
     return "\n".join(atom_lines + conect_lines) + "\n"
 
 
-def _ligand_topology_relabeled_chain(lig_topo: object, chain_id: str) -> object:
-    """Copy ligand ``Topology`` so the sole chain id matches YAML/PDB *chain_id*."""
-    import openmm.app as app
-
-    cid = chain_id.strip()
-    new_top = app.Topology()
-    nch = new_top.addChain(id=cid)
-    old_to_new: dict = {}
-    for old_ch in lig_topo.chains():
-        for old_res in old_ch.residues():
-            new_res = new_top.addResidue(old_res.name, nch)
-            for old_atom in old_res.atoms():
-                na = new_top.addAtom(old_atom.name, old_atom.element, new_res)
-                old_to_new[old_atom] = na
-    for bond in lig_topo.bonds():
-        a1, a2 = bond
-        if a1 in old_to_new and a2 in old_to_new:
-            new_top.addBond(old_to_new[a1], old_to_new[a2])
-    return new_top
-
-
 def _rmsd_heavy_aligned_angstrom(p_xyz: np.ndarray, q_xyz: np.ndarray) -> float:
     """Centroid-removed RMSD (Å) for two N×3 coordinate sets of equal length."""
     p = np.asarray(p_xyz, dtype=np.float64)
@@ -645,6 +634,7 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
     *,
     pdb_path: Path | None = None,
     mol_off: object | None = None,
+    allow_gas_phase_fallback: bool = True,
 ) -> tuple[list, bool]:
     """Build OpenMM position list for a GAFF ligand, preferring PDB heavy-atom coords.
 
@@ -671,6 +661,9 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
         When both are given and name-based matching is insufficient, RDKit graph
         alignment is attempted against the ligand ``HETATM``/``CONECT`` block for
         *chain_id* in *pdb_path*.
+    allow_gas_phase_fallback
+        If ``False``, raises ``RuntimeError`` when PDB name merge and RDKit graph
+        mapping both fail, instead of falling back to the OpenFF gas-phase pose.
 
     Returns
     -------
@@ -738,12 +731,13 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
             return rdk_pos, True
 
     if not used_pdb_merge and n_matched > 0:
-        warnings.warn(
+        merge_msg = (
             f"{chain_id}: only {n_matched}/{n_omm_heavy} heavy atoms matched PDB "
-            f"names (need >= {min_match}); using gas-phase conformer for all atoms.",
-            RuntimeWarning,
-            stacklevel=3,
+            f"names (need >= {min_match}); would use gas-phase conformer for all atoms."
         )
+        if not allow_gas_phase_fallback:
+            raise RuntimeError(merge_msg)
+        warnings.warn(merge_msg, RuntimeWarning, stacklevel=3)
         lig_pos = [
             openmm.Vec3(
                 float(conf_nm[i, 0]),
@@ -764,6 +758,8 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
                 f"{chain_id}: PDB has {len(pdb_by_name)} heavy-atom names but none "
                 "matched OpenFF/OpenMM ligand atom names; using gas-phase conformer."
             )
+        if not allow_gas_phase_fallback:
+            raise RuntimeError(merge_msg)
         warnings.warn(merge_msg, RuntimeWarning, stacklevel=3)
         lig_pos = [
             openmm.Vec3(
@@ -785,6 +781,11 @@ def build_md_simulation_from_pdb(
     temperature_k: float = 300.0,
     ligand_smiles: Optional[dict[str, str]] = None,
     extra_forces: Optional[Any] = None,
+    boltz_structure: Any = None,
+    boltz_coords_angstrom: np.ndarray | None = None,
+    boltz_mol_dir: Path | None = None,
+    ligand_pose_policy: LigandPosePolicy = "pdb_only",
+    ligand_pose_debug_sdf_dir: Path | None = None,
 ) -> tuple[object, dict]:
     """Build AMBER14 + implicit GBn2 Langevin :class:`openmm.app.Simulation` without minimising.
 
@@ -807,6 +808,15 @@ def build_md_simulation_from_pdb(
         created.  May be an iterable of forces or a callable
         ``f(system, topology, positions, meta)`` that either adds forces itself
         and returns ``None`` or returns an iterable of forces to add.
+    boltz_structure, boltz_coords_angstrom, boltz_mol_dir:
+        When all three are set, :func:`try_ligand_pose_from_boltz_ccd` can place
+        each ligand chain from Boltz NPZ coordinates and the CCD ``.pkl`` cache.
+    ligand_pose_policy:
+        ``boltz_first`` tries Boltz+CCD then PDB merge / RDKit-PDB (no gas-phase
+        fallback); ``strict`` uses only Boltz+CCD; ``pdb_only`` keeps the legacy
+        path including gas-phase fallback.
+    ligand_pose_debug_sdf_dir:
+        Optional directory for per-chain debug SDF files after Boltz placement.
 
     Returns
     -------
@@ -821,9 +831,17 @@ def build_md_simulation_from_pdb(
     from openmm import unit
 
     meta: dict = {}
+    meta["ligand_pose_policy"] = ligand_pose_policy
 
     platform, actual_platform = _get_platform(platform_name)
     meta["platform_used"] = actual_platform
+
+    boltz_ctx_ok = (
+        boltz_structure is not None
+        and boltz_coords_angstrom is not None
+        and boltz_mol_dir is not None
+    )
+    allow_gas_phase = ligand_pose_policy == "pdb_only"
 
     pdb_orig = openmm.app.PDBFile(str(pdb_path))
     orig_topology = pdb_orig.topology
@@ -986,15 +1004,50 @@ def build_md_simulation_from_pdb(
                     )
                     conf_ang = mol.conformers[0].magnitude
                     conf_nm = conf_ang / 10.0
-                    lig_pos, _pdb_pose = _ligand_openmm_positions_from_pdb_heavy_atoms(
-                        chain_id,
-                        orig_topology,
-                        orig_positions,
-                        lig_topo,
-                        conf_nm,
-                        pdb_path=pdb_path,
-                        mol_off=mol,
-                    )
+                    lig_pos: list | None = None
+                    if boltz_ctx_ok and ligand_pose_policy in (
+                        "boltz_first",
+                        "strict",
+                    ):
+                        try:
+                            bolted = try_ligand_pose_from_boltz_ccd(
+                                structure=boltz_structure,
+                                coords_angstrom=np.asarray(
+                                    boltz_coords_angstrom, dtype=np.float64
+                                ),
+                                mol_dir=Path(boltz_mol_dir),
+                                chain_id=chain_id,
+                                smiles=smiles,
+                                debug_sdf_dir=ligand_pose_debug_sdf_dir,
+                            )
+                            if bolted is not None:
+                                lig_pos, lig_topo = bolted
+                        except Exception as exc:
+                            if ligand_pose_policy == "strict":
+                                raise
+                            logger.warning(
+                                "Boltz+CCD ligand pose failed (chain=%s): %s — "
+                                "falling back to PDB merge / RDKit.",
+                                chain_id,
+                                exc,
+                            )
+                    if lig_pos is None:
+                        if ligand_pose_policy == "strict":
+                            raise RuntimeError(
+                                f"Chain '{chain_id}': ligand_pose_policy=strict requires "
+                                "Boltz+CCD placement; chain missing from NONPOLYMER "
+                                "topology or pose failed."
+                            )
+                        lig_pos, _pdb_pose = _ligand_openmm_positions_from_pdb_heavy_atoms(
+                            chain_id,
+                            orig_topology,
+                            orig_positions,
+                            lig_topo,
+                            conf_nm,
+                            pdb_path=pdb_path,
+                            mol_off=mol,
+                            allow_gas_phase_fallback=allow_gas_phase,
+                        )
                     modeller.add(lig_topo, lig_pos)
         else:
             try:

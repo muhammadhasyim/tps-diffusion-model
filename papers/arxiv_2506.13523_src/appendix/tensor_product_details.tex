@@ -1,0 +1,29 @@
+\section{Clebsch-Gordan Tensor Product Details}
+\label{sec:CGTP_details}
+The most natural map is $V\times W\to V\otimes W$ constructed by taking an outer product of the inputs. If the inputs are explicitly written as a direct sum of irreps, we can write the tensor product as
+\begin{align}
+\label{eqn:tensor_product_full}
+\x \otimes \y = \bigoplus_{\substack{\xl{1} \in \x \\ \yl{2} \in \y}}(\xl{1} \otimes \yl{2})
+\end{align}
+a new basis which is the sum of tensor product reps.
+
+The key idea of a Clebsch-Gordan tensor product is we can explicitly reduce the tensor product reps back into a direct sum of irreps with a change of basis. This change of basis is the definition of the Clebsch-Gordan coefficients, giving us
+\begin{align}
+\label{eqn:cgtp_sum}
+\xl{1}\otimes\yl{2} = & \bigoplus_{\ell_3} (\xl{1} \cgtp \yl{2})^{(\ell_3)}
+\end{align}
+where
+\begin{align}
+\label{eqn:cgtp}
+&(\xl{1} \cgtp \yl{2})^{(\ell_3)}_{m_3} \nonumber \\
+= &\sum_{m_1=-\ell_1}^{\ell_1}\sum_{m_2=-\ell_2}^{\ell_2} C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,m_2}\xl{1}_{m_1}\yl{2}_{m_2}.
+\end{align}
+
+Therefore the original tensor product can also be rewritten as a direct sum of irreps. This defines the Clebsch-Gordan tensor product (CGTP)
+\begin{align}
+\label{eqn:cgtp_full}
+\x \cgtp \y = \bigoplus_{\substack{\xl{1} \in \x \\ \yl{2} \in \y}}(\xl{1} \cgtp \yl{2}).
+\end{align}
+
+Note that full CGTP is really just a change of basis from a sum of tensor product reps to a sum of irreps. Hence, we \textbf{do not lose any information}.
+

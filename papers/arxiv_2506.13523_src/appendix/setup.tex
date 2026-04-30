@@ -1,0 +1,52 @@
+\section{Details of Benchmarking Setup}
+\label{sec:benchmark_details}
+
+
+\subsection{GPU}
+
+
+\textbf{Wall-Clock Time:} Total wall-clock time is reported as the sum of \texttt{gpu\_\_time\_duration.sum} metric for all the kernels executed for that function call. We confirmed that this closely matches the \texttt{jax} wall-clock time with some profiling overhead due to kernel replays. 
+
+\textbf{FLOPs:} We obtain the list of all FLOPS generating instructions that are executed within each kernel run on the GPU. We then count all instructions and multiply them by their specific weighing factors (the number of FLOPs in each instruction). The weighing factor for a multiplication or addition is 1 and the weight for a multiply-and-add (FMA) is 2. For Tensor Core instructions on an Ampere GPU, the peak performance is 1024 FMA/cycle/SM and since 1 FMA = 2 FLOPS, we get 2048 \citep{throughputcomment}. We check the consistency of this weighing factor by running a matrix-multiplication benchmark. Further details can be found in Empirical Roofline Toolkit \citep{deephierarchicalrooflineperformanceanalysis}.
+
+\textbf{Average Throughput (FLOPs/s):} We first calculate the Tensor Cores and CUDA Cores Throughput for every kernel by dividing the FLOPs for that kernel by the time taken to execute that kernel measured using \texttt{gpu\_\_time\_duration.sum}. We report the average throughput for a range of kernels launched for a given tensor product function call.
+
+
+\textbf{Average DRAM Bandwidth (GB/s):} For every kernel, we take the sum of \texttt{dram\_\_bytes\_read.sum} and \texttt{dram\_\_bytes\_write.sum} and divide it by the kernel execution time. We report the average bandwidth for a range of kernels launched for a given tensor product function call
+
+\textbf{GPU:} We gathered the GPU plots on an NVIDIA RTX A5500 with default JAX precision (F32), running the CUDA driver version 550.90.07 and CUDA toolkit version 12.5.  We used Nsight Compute 2024.2.0.0 build 34181891 and JAX version 0.4.30. JAX automatically switches to TF32 wherever appropriate.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ccc}
+\toprule
+Precision & Metrics & Weight Factor \\
+\midrule 
+& \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_dadd\_pred\_on.sum} & 1 \\
+FP64 & \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_dmul\_pred\_on.sum} & 1 \\
+& \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_dfma\_pred\_on.sum} & 2 \\
+\midrule
+& \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_fadd\_pred\_on.sum} & 1 \\
+FP32 & \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_fmul\_pred\_on.sum} & 1 \\
+& \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_ffma\_pred\_on.sum} & 2 \\
+\midrule
+& \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_hadd\_pred\_on.sum} & 1 \\
+FP16 & \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_hmul\_pred\_on.sum} & 1 \\
+& \texttt{sm\_\_sass\_thread\_inst\_executed\_op\_hfma\_pred\_on.sum} & 2 \\
+\midrule
+Tensor Core & \texttt{sm\_\_inst\_executed\_pipe\_tensor.sum} & 2048 \\
+\bottomrule
+\end{tabular}
+\caption{FLOPS weights for various Nsight Compute metrics.}
+\label{tab:gpu-flops}
+\end{table}
+
+\subsection{CPU}
+
+\textbf{Wall-Clock Time:} The elapsed time after compiling using \texttt{jax.jit}. To enable accurate measurements, we calculate the mean wall-clock time for 100 rounds after performing 10 warmup rounds.
+
+\textbf{FLOPs:} We use Linux's \texttt{perf} profiler to directly count the number of FLOPs through \texttt{fp\_ret\_sse\_avx\_ops.all} metric (specific to AMD).
+
+We had to skip throughput and bandwidth because we could not colleft hardware-counters for them using \texttt{perf}
+
+\textbf{CPU:} The CPU plots were gathered on an AMD EPYC 7313 16-core 3.7 GHz processor with default JAX precision.

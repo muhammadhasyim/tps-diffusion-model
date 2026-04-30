@@ -1,0 +1,54 @@
+\section{Irreducible Representations of $E(3)$}
+\label{sec:irreps}
+
+A representation $\rho$ of a group $G$ maps each group element $g$ to a bijective linear transformation $\rho(g) \in \mathrm{GL}(V)$, where $V$ is some vector space. 
+Representations must preserve the group multiplication property:
+\begin{align}
+\rho(g \cdot h) = \rho(g) \circ \rho(h) \quad \forall g, h \in G
+\end{align}
+Thus, the representation $\rho$ defines a group action on a vector space $V$. The dimension of the representation $\rho$ is simply defined as the dimension of the vector space $V$.
+
+There may be subspaces $W\subset V$ which are left invariant under actions of $\rho(g)$ for all $g\in G$. If this is the case, then restricting to $W$ also gives a representation $\rho|_W(g)\in\mathrm{GL}(W)$. If there is no nontrivial $W$, then we say the representation $\rho$ is an irreducible representation (irrep).
+
+To build $E(3)$-equivariant neural networks, the irreducible representations of $E(3)$ play a key role. Because $E(3)$ is not a compact group, the usual approach has been to consider irreducible representations of the group $SO(3)$ of 3D rotations, and compose them with the representation in which translations act as the identity:
+\begin{align}
+\rho(R, T) = \rho'(R)
+\end{align}
+This is why translations are often handled in $E(3)$-equivariant neural networks by centering the system or only using relative vectors.
+
+ The `scalar' representation $\rho_{\text{scalar}}$ representation of $SO(3)$ is defined as:
+\begin{align}
+\rho_{\text{scalar}}(R) = \mathrm{id} \quad \forall R \in SO(3)
+\end{align}
+and is of dimension $1$ over $V = \R$. Elements of $\R$ are unchanged by any rotation $R$. We call such elements `scalars' to indicate that they transform under the `scalar' representation of $SO(3)$. An example of a `scalar' element could be mass of an object, which does not change under rotation of coordinate frames.
+
+Let $T(R) \in \R^{3 \times 3}$ be the rotation matrix corresponding to a rotation $R \in SO(3)$.
+Then, the `vector' representation of $SO(3)$ is defined as:
+\begin{align}
+\rho_{\text{vector}}(R) = T(R)
+\quad \forall R \in SO(3)
+\end{align}
+and is of dimension $3$ over $V = \R^3$.
+The name arises from the way vectors in $\R^3$ transform under a rotation of the coordinate frame.
+We call such elements `vectors' to indicate that they transform under the `vector' representation of $SO(3)$. For example, the velocity and position of an object in a certain coordinate frame are `vectors'.
+ 
+Weyl's theorem for the Lie group $SO(3)$ states that all finite-dimensional representations of $SO(3)$ are equivalent to direct sums of irreducible representations. 
+The irreducible representations of $SO(3)$ are indexed by an integer $\ell \geq 0$, with dimension $2\ell + 1$.
+$\ell = 0$ corresponds to the `scalar' representation, while $\ell = 1$ corresponds to the `vector' representation above.
+We will often use $m$, where $-\ell \leq m \leq \ell$, to index of each of the $2\ell + 1$ components.
+
+We say that a quantity $\x \in \R^{2\ell + 1}$ is a $\ell$ irrep, if it transforms as the irreducible representation (`irrep') of $SO(3)$ indexed by $\ell$.
+If $\x_1$ is a $\ell_1$ irrep and $\x_2$ is an $\ell_2$ irrep, we say that $(\x_1, \x_2)$ is a direct sum of $\ell_1$ and $\ell_2$ irreps, which we call a $(\ell_1, \ell_2)$ `rep'. Weyl's theorem states that all reps are a direct sum of $\ell_i$ irreps, possibly with repeats over $\ell_i$:
+$
+\x = \oplus_{\ell_i} \xl{i}
+$. The multiplicity of an irrep in a rep is exactly the number of repeats.
+
+An important lemma for constructing equivariant linear layer is Schur's lemma \citep{dresselhaus2007group}.
+\begin{lemma}[Schur's Lemma]
+\label{lemma:Schur}
+    Suppose $V_1,V_2$ are irreps of a Lie group over any algebraically closed field (such as $SO(3)$). Let $\phi:V_1\to V_2$ be an equivariant linear map. 
+    Then $\phi$ is either $0$ or an isomorphism.
+    Further, if $V_1=V_2$ then $\phi$ is a multiple of identity.
+    Finally, for any two $\phi_1,\phi_2:V_1\to V_2$ we must have $\phi_1=\lambda\phi_2$.
+\end{lemma}
+This tells us that to construct equivariant linear layers between reps written as a direct sum of irreps, we can only have weights between input and output irreps of the same type and that those weights must be tied together so they give multiples of the identity transformation.

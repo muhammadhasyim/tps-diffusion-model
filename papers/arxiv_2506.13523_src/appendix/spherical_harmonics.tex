@@ -1,0 +1,67 @@
+\section{Spherical Harmonics}
+\label{sec:spherical_harmonics}
+The spherical harmonics are intimately connected to the representations of $SO(3)$ and play a key role in the Gaunt tensor product.
+
+We define the spherical coordinates $(r, \theta, \varphi)$ as:
+\begin{align}
+\begin{bmatrix}
+    x \\
+    y \\
+    z \\
+\end{bmatrix} = \begin{bmatrix}
+r \sin \theta \cos \varphi \\ r \sin \theta \sin \varphi \\ r \cos \theta 
+\end{bmatrix}
+\end{align}
+for $\theta \in [0, \pi), \varphi \in [0, 2\pi)$.
+
+The spherical harmonics $Y_{\ell, m}$ are a set of functions $S^2 \rightarrow \R$ indexed by $(\ell, m)$, where again $\ell \geq 0, -\ell \leq m \leq \ell$. Here, $S^2 = \{(r, \theta, \phi) \ | \ r = 1\}$ denotes the unit sphere. 
+
+Indeed, as suggested by the notation, the spherical harmonics are closely related to the irreducible representations of $SO(3)$.
+Let $Y_\ell$ be the concatenation of all $Y_{\ell, m}$ over all $m$ for a given $\ell$:
+\begin{align}
+    Y_\ell(\theta, \phi) = \begin{bmatrix}
+        Y_{\ell, -\ell}(\theta, \phi) \\
+        Y_{\ell, -\ell + 1}(\theta, \phi) \\
+        \ldots \\
+        Y_{\ell, \ell}(\theta, \phi) \\
+    \end{bmatrix}    
+\end{align}
+
+When we transform the inputs to $Y_\ell(\theta, \phi)$, the output transforms as a $\ell$ irrep.
+
+The spherical harmonics satisfy orthogonality conditions:
+\begin{align}
+    \label{eqn:sh_ortho}
+    \int_{S^2} Y_{\ell_1,m_1} \cdot Y_{\ell_2,m_2} \
+    dS^2 = \delta_{\ell_1\ell_2}
+    \delta_{m_1m_2}
+\end{align}
+where:
+\begin{align}
+    \label{eqn:s2_integral}
+    \int_{S^2}
+    f \cdot  g \
+    dS^2 &= \int_{\theta = 0}^{\pi}
+    \int_{\varphi = 0}^{2\pi}
+    f(\theta, \varphi) g(\theta,\varphi)
+    \sin \theta d\theta d \varphi
+\end{align}
+The orthogonality property allows us to treat the spherical harmonics as a basis for functions on $S^2$.
+We can linearly combine the spherical harmonics using irreps to approximate arbitrary functions on the sphere.
+Given a $(0, 1, \ldots, L)$ rep $\x = (\x^{(0)}, \x^{(1)}, \ldots, \x^{(L)})$, we can associate the function $f_\x: S^2 \rightarrow \R$ as:
+\begin{align}
+f_\x(\theta, \varphi) = \sum_{\ell = 0}^{L} 
+\sum_{m = -\ell}^{\ell}
+\x^{(\ell)}_{m}Y_{\ell,m}(\theta,\varphi)
+\end{align}
+The function $f_\x$ is uniquely determined by $\x$. In particular, by the orthogonality of the spherical harmonics (\autoref{eqn:sh_ortho}), we can recover the $\x^{(\ell)}_{m}$ component:
+\begin{align}
+\x^{(\ell)}_{m} &= \int_{S^2}
+f_\x \cdot  Y_{\ell,m} \
+dS^2
+\end{align}
+Thus, we can define the operations $\tosphere$ and $\fromsphere$:
+\begin{align}
+    \x \xrightarrow{\tosphere} f_\x
+    \xrightarrow{\fromsphere} \x
+\end{align}

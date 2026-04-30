@@ -1,0 +1,1461 @@
+\documentclass[]{fairmeta}
+% \documentclass{article}
+% \usepackage{iclr2026_conference,times}
+
+\usepackage{graphicx}
+\usepackage{bm}
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{stmaryrd}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{algorithm}
+\usepackage{algpseudocodex}
+% \usepackage[font=small]{caption}
+\usepackage{siunitx}
+\usepackage{booktabs}
+\usepackage{tabularray}
+\UseTblrLibrary{booktabs}
+\usepackage{makecell}
+\usepackage{multirow}
+\usepackage{wrapfig}
+
+% \usepackage{inconsolata}
+\usepackage[dvipsnames,table]{xcolor}
+\colorlet{themecolor}{metablue!90!black}
+\definecolor{highlight}{HTML}{3730a3}
+% \usepackage[colorlinks,linkcolor=themecolor,citecolor=themecolor,urlcolor=themecolor,pagebackref=true]{hyperref}
+\usepackage[capitalise,nameinlink]{cleveref}
+% \renewcommand*{\backrefalt}[4]{\mbox{(cited on \ifnum#1=1 page~\else pages~\fi #2)}}
+% \bibpunct{\color{metablue}(}{\color{metablue})}{;}{a}{,}{,}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\tsub}{\textsubscript}
+\newcommand{\spm}[1]{{\color{gray}\tiny$\pm$#1}}
+
+\usepackage{thmtools,thm-restate}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}{Proposition}[section]
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+\usepackage{titletoc}
+\newlist{reqenum}{enumerate}{3}
+\setlist[reqenum,1]{label=\textbf{\arabic*.},ref=\arabic*}
+\crefname{reqenumi}{Requirement}{Requirements}
+
+\usepackage[most]{tcolorbox}
+\newtcolorbox{highlightbox}[0]{colback=metabg,left=6pt,right=6pt,top=4pt,bottom=4pt,boxrule=0pt,opacityframe=0,arc=0pt,breakable}
+
+\titleformat*{\paragraph}{\sffamily\bfseries}
+
+\newcommand{\std}[1]{\textcolor{black}{\scriptsize{$\pm #1$}}}
+
+\title{Enhancing Diffusion-Based Sampling with \\ Molecular Collective Variables}
+
+
+\author[1,2,\ast,\dagger]{Juno Nam}
+\author[1,3,\dagger]{B\'alint M\'at\'e}
+\author[1,4,\dagger]{Artur P. Toshev}
+\author[1,5,\dagger]{Manasa Kaniselvan}
+\author[2]{Rafael G\'omez-Bombarelli}
+\author[1]{Ricky T. Q. Chen}
+\author[1]{Brandon Wood}
+\author[1,\ast]{Guan-Horng Liu}
+\author[1,\ast]{Benjamin Kurt Miller}
+
+\affiliation[1]{FAIR at Meta}
+\affiliation[2]{MIT}
+\affiliation[3]{University of Geneva}
+\affiliation[4]{TUM}
+\affiliation[5]{ETH Zurich}
+
+\contribution[\ast]{Core contributors}
+\contribution[\dagger]{Work done during internship at FAIR}
+
+\abstract{
+Diffusion-based samplers learn to sample complex, high-dimensional distributions using energies or log densities alone, without training data.
+Yet, they remain impractical for molecular sampling because they are often slower than molecular dynamics and miss thermodynamically relevant modes.
+Inspired by enhanced sampling, we encourage exploration by introducing a sequential bias along bespoke, information-rich, low-dimensional projections of atomic coordinates known as collective variables (CVs).
+We introduce a repulsive potential centered on the CVs from recent samples, which pushes future samples towards novel CV regions and effectively increases the temperature in the projected space.
+Our resulting method improves efficiency, mode discovery, enables the estimation of free energy differences, and retains independent sampling from the approximate Boltzmann distribution via reweighting by the bias.
+On standard peptide conformational sampling benchmarks, the method recovers diverse conformational states and accurate free energy profiles.
+We are the first to demonstrate reactive sampling using a diffusion-based sampler, capturing bond breaking and formation with universal interatomic potentials at near-first-principles accuracy.
+The approach resolves reactive energy landscapes at a fraction of the wall-clock time of standard sampling methods, advancing diffusion-based sampling towards practical use in molecular sciences.
+}
+
+\date{\today}
+\correspondence{Juno Nam (\email{junonam@mit.edu}), Benjamin Kurt Miller (\email{bkmi@meta.com})}
+\metadata[Code]{\url{https://github.com/facebookresearch/wt-asbs}}
+
+\begin{document}
+
+\maketitle
+ 
+\section{Introduction}
+
+A central goal of statistical mechanics simulations is to estimate macroscopic thermodynamic properties, such as the energy released in a chemical transformation.
+These simulations typically employ molecular dynamics (MD) or Markov chain Monte Carlo (MCMC), which propagate an atomic structure forward in time or along a chain using energies from quantum mechanical calculations or their approximations \citep{marx2000ab,frenkel2023understanding,jacobs2025practical}.
+Over long times, the distribution of states converges to the Boltzmann distribution $\nu(x) \propto \exp(-u(x))$, where the reduced energy $u$ encodes the chemical system, temperature, and other thermodynamic variables.
+Sampling from this distribution is deceptively difficult, despite having access to its explicit unnormalized form, due to the large number of possible atomic configurations and the high energy barriers separating them.
+Straightforward MD or MCMC often requires an impractically large number of sequential energy evaluations to capture conformational changes or chemical reactions.
+
+Machine learning (ML)-based samplers attempt to bypass dynamics by reformulating sampling as statistical inference on the Boltzmann distribution, using its log-likelihood to draw independent and identically distributed (i.i.d.\@) samples. Generally, models that approximate thermodynamic ensembles are known as \emph{Boltzmann Generators}. 
+The first work in this area applied normalizing flows \citep{noe2019boltzmann}, while recent approaches employ diffusion-based samplers that steer stochastic differential equations (SDEs) whose trajectories yield samples consistent with the target distribution \citep{zhang2021path,vargas2023denoising,havens2025adjoint}.\footnote{More information about neural and diffusion-based samplers can be found in \cref{sec:neural_samplers}.}
+Although training can amortize effort across multiple draws, these methods do not inherently reduce the number of energy evaluations required to obtain accurate equilibrium statistics compared to MD-based approaches \citep{he2025trick}.
+Directly applying diffusion samplers faces a well-known pitfall of mode collapse, where training and sampling concentrate on high-probability basins while underrepresenting rare but thermodynamically important states.
+This issue is not only about exploration but also about statistics, since reliable free energies and ensemble averages depend critically on assigning correct weights to rare configurations, which may be exponentially small.
+Thus, successful sampling must both reach low-occupancy modes and attribute the correct equilibrium weights to them.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/scheme.pdf}
+\caption{
+\textbf{Scheme for neural enhanced sampling.}
+(Left) Local sampling and pretraining near the reference configuration. (Middle) Energy-based sampler training with a CV-space bias that is updated online via well-tempered deposition. (Right) After convergence, the final bias yields the potential of mean force (PMF) along CVs; also, reweighting recovers the Boltzmann ensemble, including samples and free energy differences.
+}
+\label{fig:scheme}
+\end{figure}
+
+Inspired by enhanced sampling methods, we augment the diffusion-based sampler with a bias in collective variable (CV) space.
+CVs are low-dimensional functions of atomic coordinates that capture slow, chemically relevant motions and can be chosen from common system characteristics (e.g., bond lengths or torsional angles) or identified with ML \citep{sidky2020machine,bonati2023unified}.
+During the training of a diffusion-based sampler, the sampler iteratively proposes configurations and receives feedback from their energies.
+An additional online repulsive potential is maintained over the CVs: regions visited more often accumulate higher bias, which raises their effective energy, discouraging repeated visits.
+This flattens free energy barriers over training progress and mitigates collapse onto dominant modes.
+At inference, importance weights remove the effect of the bias, ensuring that ensemble estimates match the target Boltzmann distribution.
+The result is broader exploration, including rare modes, while preserving statistically correct estimates after reweighting.
+Furthermore, compared to MD-based enhanced sampling, the diffusion process mixes more efficiently within the biased distribution, enabling faster exploration.
+Our contributions are as follows:
+\begin{itemize}[leftmargin=*]
+    \item We propose the \emph{Well-Tempered Adjoint Schr\"odinger Bridge Sampler} (WT-ASBS), which augments the state-of-the-art diffusion-based sampler ASBS \citep{liu2025adjoint} with a biasing mechanism inspired by well-tempered metadynamics (WTMetaD, \citealp{barducci2008well}), achieving substantially improved exploration and accurate estimation of free energy differences.
+    \item We develop a protocol for applying WT-ASBS to molecular systems, demonstrating (i) accurate sampling of peptide conformations in Cartesian coordinates, where the baseline method fails; and (ii) the first diffusion-based sampling of reactive landscapes, achieving shorter wall-clock times than WTMetaD. This establishes a new practical role for diffusion-based samplers in chemistry.
+\end{itemize}
+
+\section{Background}
+
+\subsection{Molecular Sampling}
+\label{sec:molecular_sampling}
+
+\paragraph{Problem setup}
+In the configurational space $\mathcal{X} \subseteq \mathbb{R}^{n \times 3}$ for $n$ atoms with elemental identities $a \in \mathcal{E}^n$ with a set of element types $\mathcal{E}$, the potential energy function $E: \mathcal{X} \times \mathcal{E}^n \to \mathbb{R}$ defines the Boltzmann distribution at inverse temperature $\beta = 1/k_\text{B}T$ as $\nu(x; a) \propto \exp(-\beta E(x; a))$.
+In molecular simulations, the central challenge is to generate configurations representative of the underlying free energy landscape that describes the relative stability and likelihood of different molecular configurations.
+Three main downstream applications motivate this task: (i) obtaining a diverse and statistically meaningful set of configurations for structural analysis, (ii) accurately computing free energy differences between relevant states, and (iii) uncovering transition mechanisms that govern rare events that are nevertheless thermodynamically essential.
+For notational convenience, we omit elemental identities after this paragraph and write $E(x)$ and $\nu(x)$.
+
+One rarely aims to sample the entirety of $\mathcal{X}$ in practice because it includes \emph{all} configurations consistent with the chosen composition and potential energy function.
+Instead, sampling is naturally restricted to an accessible component $\mathcal{A} \subset \mathcal{X}$ that is kinetically connected to a reference conformer $x_\text{ref} \in \mathcal{X}$ on the timescales of interest at temperature $T$ by physics.
+In molecular conformational sampling, $\mathcal{A}$ implies configurations that preserve the bond topology of $x_\text{ref}$. If one included bond reorganizations occurring on longer timescales (hours to days), $\mathcal{A}$ would have to grow to include these states.
+This restriction ensures that the ensemble reflects the connected set of metastable states and transition pathways relevant to the molecular process of interest, while excluding kinetically inaccessible or chemically irrelevant configurations, such as incorrect molecular chirality.
+
+While basic sampling algorithms aim to produce i.i.d.\@ samples from $\nu(x)$, the exponential dependence of probabilities on $E(x)$ leads to significant undersampling of low-population modes even at moderate energy differences.
+This is especially important when high-energy transition configurations are being studied.
+Consequently, many effective schemes for molecular sampling generate weighted samples $\{(X_i, W_i)\}_{i=1}^N$ with $X_i \in \mathcal{A}$ and $W_i \ge 0$, obtained for example via biased simulations with reweighting.
+For any bounded observable $f: \mathcal{X} \to \mathbb{R}$, the self-normalized estimator
+\begin{equation}
+\hat{\nu}_n(f) = \frac{\sum_{i=1}^N W_i f(X_i)}{\sum_{i=1}^N W_i} \; \xrightarrow{N \to \infty} \; \mathbb{E}_\nu[f(X) \, | \, X \in \mathcal{A}]
+\label{eq:snis}
+\end{equation}
+recovers expectations under the Boltzmann ensemble restricted to $\mathcal{A}$.
+We now summarize the requirements and discuss the practical realization of these:
+\begin{highlightbox}
+\begin{reqenum}[leftmargin=*,itemsep=.2cm]
+\item \label{req:restriction} \textbf{Restricted Support:} Sampling is confined to the relevant metastable state and transitions. Configurations in $\mathcal{X} \setminus \mathcal{A}$ are not produced or receive zero weight.
+\item \label{req:consistency} \textbf{Consistency:} The reweighted ensemble converges to the Boltzmann ensemble on $\mathcal{A}$, i.e., convergence in \cref{eq:snis} holds for all bounded $f$.
+\item \label{req:efficiency} \textbf{Local Efficiency:} Within any chemically relevant region of $\mathcal{A}$, the procedure yields sufficient sample diversity to estimate observables and capture transition mechanisms.
+\end{reqenum}
+\end{highlightbox}
+
+\paragraph{\cref{req:restriction}: Restrained sampling}
+Membership in $\mathcal{A}$ is governed by the free energy barriers that separate modes, not by the stability (state free energies) of individual modes.
+When sampling is performed by emulating physical dynamics (e.g., MD), high barriers suppress transitions and trajectories remain within $\mathcal{A}$ by construction.
+For sampling procedures that do not generate time-correlated frames, one should enforce the restriction explicitly using restraint potentials that are flat on $\mathcal{A}$ while strongly penalizing $\mathcal{X} \setminus \mathcal{A}$.
+This confines exploration to the intended modes while allowing efficient coverage within them.
+Practical considerations are further discussed in \cref{sec:recipe}.
+
+\paragraph{\cref{req:consistency,req:efficiency}: Biasing on the CV space}
+High free energy barriers often align with a small set of slow coordinates, so unbiased exploration in $\mathcal{A}$ can waste effort on fast motions while undersampling rare but important transitions.
+CVs address this by mapping configurations to a low-dimensional space $\xi: \mathcal{X} \to \mathcal{S} \subset \mathbb{R}^m$ with $m \ll n$, that capture functionally relevant degrees of freedom.
+Examples include peptide backbone torsions ($\phi, \psi$) and the center-of-mass distance between a protein pocket and its ligand.
+By steering sampling with a bias that depends only on $s = \xi(x)$, we enhance explorations across modes while leaving orthogonal fluctuations unchanged.
+A bias $V(s)$ yields the unnormalized sampling density $\nu_V(x)$ and importance weights $w(x)$ as
+
+\begin{minipage}{.5\linewidth}
+\begin{equation}
+\nu_V(x) \propto \exp[-\beta E(x) - \beta V(\xi(x))],
+\label{eq:bias_density}
+\end{equation}
+\end{minipage}%
+\begin{minipage}{.5\linewidth}
+\begin{equation}
+w(x) \propto \frac{\nu(x)}{\nu_V(x)} \propto \exp[+\beta V(\xi(x))],
+\label{eq:is_weight}
+\end{equation}
+\end{minipage}
+
+so unbiased expectations are recovered by the estimator in \cref{eq:snis} with $X_i \sim \nu_V$ and $W_i = w(X_i)$, ensuring \cref{req:consistency}.
+
+Biasing-based enhanced sampling approaches often construct a bias that raises the effective sampling temperature along CV space, introduced by \citet{barducci2008well} as the \textit{well-tempered} target distribution.
+We first define the CV marginal $\bar{\nu}(s)$ and the potential of mean force (PMF) $F(s)$ from the unbiased CV marginal (defined up to a constant)\footnote{The term PMF for $F(s)$ is used interchangeably with the \textit{free energy profile/landscape} along the CV.} using the Dirac delta function $\delta$:
+
+\begin{minipage}{.5\linewidth}
+\begin{equation}
+\bar{\nu}_V(s) \propto \int_\mathcal{X} \nu_V(x) \delta[\xi(x)-s] \, \mathrm{d}x,
+\label{eq:cv_marginal}
+\end{equation}
+\end{minipage}%
+\begin{minipage}{.5\linewidth}
+\begin{equation}
+F(s) := -\frac{1}{\beta} \log \bar{\nu}(s).
+\label{eq:pmf}
+\end{equation}
+\end{minipage}
+
+Now, given a bias factor $\gamma > 1$ that acts as a scale factor for $T$, we define the well-tempered bias $V_\text{WT}(s)$ and the corresponding target distribution $\nu_\text{WT}(x)$ from \cref{eq:bias_density} as
+
+\begin{minipage}{.4\linewidth}
+\begin{equation}
+V_\text{WT}(s) = -(1 - \frac{1}{\gamma})F(s),
+\label{eq:wt_bias}
+\end{equation}
+\end{minipage}%
+\begin{minipage}{.6\linewidth}
+\begin{equation}
+\nu_\text{WT}(x) \propto \exp[-\beta E(x) + \beta (1 - \frac{1}{\gamma}) F(\xi(x))],
+\label{eq:wt_density_x}
+\end{equation}
+\end{minipage}
+
+From \cref{eq:cv_marginal,eq:pmf,eq:wt_density_x}, the well-tempered CV marginal is $\bar{\nu}_\text{WT}(s) \propto \exp[-\frac{\beta}{\gamma} F(s)] = [\bar{\nu}(s)]^{1/\gamma}$, which shows that the sampled CV behaves as if at a higher effective temperature $T_\text{eff} = \gamma T$ ($\beta_\text{eff} = \beta / \gamma$), while the orthogonal conditional remains unchanged: $\nu_\text{WT}(x \,|\,\xi(x)=s) = \nu(x\,|\,\xi(x)=s)$.
+This selective increase in sampling temperature along the CV satisfies \cref{req:efficiency}.
+To construct $V_\text{WT}$ on-the-fly during simulation, one can stack Gaussian kernels \citep{barducci2008well}, use a kernel density estimator \citep{invernizzi2020rethinking}, or obtain the bias variationally \citep{valsson2014variational,bonati2019neural}.
+These requirements also extends to a variety of molecular enhanced sampling algorithms, as discussed in \cref{sec:enhanced_sampling}.
+
+\paragraph{Mode exploration} \cref{req:consistency} is sometimes relaxed so that we generate samples uniformly across modes without weighting. This is a practically relevant setting that emphasizes capturing the diversity of metastable modes rather than reproducing their exact Boltzmann probabilities.
+Mode exploration is the usual objective of data-driven generative models for molecular conformations \citep{jing2022torsional}, protein structures \citep{watson2023novo}, and crystalline materials \citep{jiao2023crystal,miller2024flowmm}, which are trained to approximate the empirical distribution of representative structures extracted from exploratory simulations or experimental data without Boltzmann weights.
+
+\subsection{Diffusion-Based Neural Samplers}
+
+\paragraph{Neural samplers}
+Diffusion-based neural samplers learn a control vector field that steers a stochastic process to gradually transform noise into a target distribution, typically specified by an unnormalized density or energy function.
+% Samples are generated by propagating the controlled SDE, and training relies on feedback from the energy (log likelihood) or forces (Stein score) of the target distribution.
+Unlike iterative generative methods trained on data from implicitly defined distributions \citep{sohl2015deep,ho2020denoising,lipman2022flow,albergo2023stochastic}, neural samplers can generate samples by querying the energy alone.
+This ability is especially relevant for Boltzmann distributions \citep{zhang2021path,berner2022optimal,vargas2023denoising,havens2025adjoint}.
+More information about neural samplers is provided in \cref{sec:neural_samplers}.
+
+
+\paragraph{Adjoint Schr\"odinger Bridge Sampler (ASBS, \citealp{liu2025adjoint})}
+ASBS casts Boltzmann sampling as the Schr\"odinger Bridge (SB) problem between source $\mu(X_0)$ and Boltzmann target $\nu(X_1) \propto \exp(-\beta E(X_1))$ that seeks the optimal control $u_\theta$ w.r.t. the path Kullback-Leibler (KL) objective
+\begin{gather}
+\min_u D_\text{KL}(p^u \Vert p^\text{base} = p^{u=0}) = \mathbb{E}_{X \sim p^u} \left[\int_0^1 \frac{1}{2} \Vert u_\theta(X_t, t) \Vert^2 \, \mathrm{d}t\right], \label{eq:sb} \\
+\text{s.t.} \; \mathrm{d}X_t = \sigma_t u_\theta (X_t, t) \, \mathrm{d}t + \sigma_t \, \mathrm{d}W_t, \; X_0 \sim \mu(X_0), \; X_1 \sim \nu(X_1), \label{eq:sde}
+\end{gather}
+where $\sigma_t$ is the noise schedule, and $p^u$ denotes the law of the SDE in \cref{eq:sde}.\footnote{While the original ASBS formulation is based on SDEs with general drift $f(X_t, t) + \sigma_t u_\theta(X_t, t)$, here we only consider the driftless base process with $f = 0$.}
+ASBS avoids backpropagating through the SDE during optimization by introducing the parametrized corrector $h_\phi(X_1)$ that debiases the effect of endpoint coupling from base distribution to allow the SOC interpretation of \cref{eq:sb}, which can be converted to Adjoint Matching (AM) objective for the drift \citep{havens2025adjoint}.
+The corrector is then learned by optimizing the Corrector Matching (CM) objective:
+\begin{align}
+\text{(AM)} \quad u &= \argmin_u \mathbb{E}_{p_{t|0,1}^\text{base} p_{0,1}^{\bar{u}}} [\Vert u_\theta(X_t, t) + \sigma_t (\beta \nabla E(X_1) + h_\phi(X_1)) \Vert^2 ], \label{eq:am} \\
+\text{(CM)} \quad h &= \argmin_h \mathbb{E}_{p_{0,1}^{\bar{u}}} [ \Vert h_\phi(X_1) - \nabla_{X_1} \log p^\text{base}(X_1 | X_0) \Vert^2], \label{eq:cm}
+\end{align}
+where $\bar{u} := \text{\texttt{stopgrad}}(u)$.
+These paired objectives instantiate iterative proportional fitting (IPF, \citealp{kullback1968probability}) and converge to the SB solution.
+The expectations use closed-form base conditionals, so no target samples or importance weights are needed, which preserves scalability.
+Furthermore, the control model supports approximate data-based pretraining (see \cref{sec:implementation_details}).
+
+ASBS achieved strong performance on synthetic potentials and amortized conformer sampling (\textit{mode exploration} setting) compared to previous diffusion-based samplers.
+However, it missed less populated modes in alanine dipeptide sampling due to its mode-seeking behavior, motivating the introduction of an enhanced sampling mechanism in this work.
+
+\section{Methods}
+
+Now we augment ASBS with a well-tempered bias on a small set of CVs, updated online from i.i.d.\@ model samples during training, instantiating a \textit{neural enhanced sampler} that satisfies the requirements in \cref{sec:molecular_sampling}.
+We first present the WT-ASBS setup and mechanism together with a convergence guarantee.
+We then detail practical strategies with data-based pretraining, WT-ASBS training, and post-training reweighting to recover the Boltzmann ensemble (scheme in \cref{fig:scheme}).
+
+\subsection{Well-Tempered Adjoint Schr\"odinger Bridge Sampler}
+
+\tcbset{colframe=black}
+\begin{algorithm}[!ht]
+\small
+\caption{\textcolor{highlight}{Well-Tempered} Adjoint Schr\"odinger Bridge Sampler (\textcolor{highlight}{WT}-ASBS)}
+\label{alg:wt_asbs}
+\begin{algorithmic}[1]
+\Require prior $\mu$, potential energy $E(x)$, CV $\xi(x)$, control $u_\theta(x, t)$, corrector $h_\phi(x)$
+\State Initialize $V_{0}(s) \gets 0$
+\For{Outer step $k = 0, 1, \cdots$}
+    \For{Inner step $l = 0, 1, \cdots$}
+    \State $\theta \gets \argmin_\theta \mathbb{E}_{p_{t|0,1}^\text{base} p_{0,1}^{\bar{u}}} [\Vert u_\theta(X_t, t) + \sigma_t (\beta \nabla (E + {\color{highlight} V_k \circ \xi}) + h_\phi)(X_1) \Vert^2 ]$ \Comment{Adjoint Matching}
+    \State $\phi \gets \argmin_\phi \mathbb{E}_{p_{0,1}^{\bar{u}}} [ \Vert h_\phi(X_1) - \nabla_{X_1} \log p^\text{base}(X_1 | X_0) \Vert^2]$ \Comment{Corrector Matching}
+    \EndFor
+    \State \textcolor{highlight}{Sample i.i.d.\@} $\color{highlight} \{X_{1,k}^{(i)}\}_{i=1}^N \sim p_1^u,$ \quad $\color{highlight} s_k^{(i)} \gets \xi(X_{1,k}^{(i)})$
+    \State $\color{highlight} V_{k+1}(s) \gets V_k(s) + h \sum_{i=1}^{N} \exp(-\frac{\beta}{\gamma-1} V_k(s_k^{(i)})) \exp(-\frac{\Vert s - s_k^{(i)} \Vert^2}{2\sigma^2})$ \Comment{Well-Tempered Bias Update}
+\EndFor
+\State \Output Final control $u_\theta^\ast(x, t)$, final bias $V^\ast(s)$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Setup and two-time-scale algorithm}
+We implement WT-ASBS with a well-tempered bias update through stacking Gaussian kernels \citep{barducci2008well} to reach the well-tempered target \cref{eq:wt_bias}.
+Let $\mathcal{S} \subset \mathbb{R}^m$ denote a compact CV region of interest, where bias potentials $V: \mathcal{S} \to \mathbb{R}$ are defined and constructed, which induces the sampling distribution $\nu_V(x) \propto \exp[{-\beta(E(x) + V(\xi(x)))}]$.
+% The CV-space distribution is the pushforward $\tilde{\nu}_V := \xi_\# \nu_V$.
+WT-ASBS presented in \cref{alg:wt_asbs} is executed via a two-time-scale scheme: 
+\begin{enumerate}
+\item \textit{Inner step (ASBS training).}
+For fixed $V_k$, train ASBS with energy $E + V_k \circ \xi$ until convergence so that the marginal distribution at $t = 1$ equals $\nu_{V_k}$.
+\item \textit{Outer step (well-tempered bias update).}
+Draw a conditionally i.i.d.\@ batch of configurations from ASBS $\{X_{1,k}^{(i)}\}_{i=1}^N \sim p_1^u$, project to CV space $s_k^{(i)} = \xi(X_{1,k}^{(i)})$, and update
+\begin{equation}
+V_{k+1}(s) = V_k(s) + h \sum_{i=1}^N \exp{(-\frac{\beta}{\gamma - 1} V_k(s_k^{(i)}))} K_\sigma(s, s_k^{(i)}),
+\end{equation}
+with fixed height $h > 0$ and Gaussian kernel $K_\sigma(s, s') = \exp(-\frac{\Vert s - s' \Vert^2}{2\sigma^2})$.
+\end{enumerate}
+
+We further establish a convergence guarantee showing that WT-ASBS provably approaches the desired well-tempered distribution under the two-time-scale update scheme (proof in \cref{sec:proof_wt_asbs}):
+\begin{restatable}[Convergence of WT-ASBS]{proposition}{propwtasbs}
+\label{prop:wt_asbs}
+When \cref{alg:wt_asbs} is performed until convergence, the bias potential $V_k$ converges almost surely to $V^\ast(s) = -(1 - \frac{1}{\gamma})F(s) + \mathrm{const}$, and hence the sampled distribution converges to the well-tempered target \cref{eq:wt_density_x}.
+\end{restatable}
+
+\begin{remark}
+\label{remark:wt_asbs}
+\cref{prop:wt_asbs} ensures that, upon completion of training, the PMF along the CVs can be recovered up to a constant from the final bias as $F(s) = -\frac{\gamma}{\gamma - 1} V^\ast(s) + \mathrm{const}$.
+\end{remark}
+
+\paragraph{Practical implementation}
+In practice, AM uses a replay buffer: gradient signals are not computed directly from samples of $p_{0,1}^{\bar{u}}$ with the current $u_\theta$, but rather from subsets drawn from stored samples in the buffer.
+Assuming the bias deposition per step is small and AM training is efficient enough for generated samples to follow the current bias closely, we can \textit{merge} the outer and inner sample generation steps by updating the bias during AM training.
+See \cref{sec:implementation_details} for details.
+
+Although our biasing mechanism mirrors classical MD-based enhanced sampling, neural samplers like ASBS generate i.i.d.\@ samples from the current distribution, eliminating the need to wait for decorrelation before bias deposition occurs.
+This allows us to exploit the bias deposition mechanism more efficiently to explore the regions of configurational space.
+We further discuss recent works that promote exploration by shaping the annealing path or by modifying the learning objective in \cref{sec:neural_samplers}.
+
+\subsection{Recipe for Efficient Sampling of Molecular Systems}
+\label{sec:recipe}
+
+Here, we outline three practical ingredients for deploying WT-ASBS to molecular systems.
+ 
+\paragraph{Warm-start with localized pretraining}
+In this work, we consider a single reference configuration that defines the accessible component $\mathcal{A}$, corresponding to the initial conformer used to start MD or MCMC chains.
+Although \cref{alg:wt_asbs} does not require data samples for training, as in the original ASBS, the model can be pretrained with available samples to warm-start and improve training efficiency.
+Accordingly, we perform short MD simulations (local sampling) to generate samples from the mode containing the reference configuration and apply bridge matching pretraining (\cref{sec:implementation_details}) to initialize the control model.
+During early-stage local conformational exploration without energetic barriers, correlated samplers such as MD or MCMC are more efficient because they move locally on the energy landscape, unlike diffusion samplers that must transform noise to physical samples through hundreds of model evaluations for every sample.
+Since this is only a pretraining stage, high accuracy is unnecessary, and we can further reduce computational cost by using approximate energy evaluations (e.g., classical force fields), faster sampling settings, or transfer operator surrogates (e.g., \citealp{schreiner2024implicit}) to create the pretraining data.
+
+\paragraph{WT-ASBS training with CVs and restraints}
+Upon adopting ASBS, the algorithm introduces several additional hyperparameters governing training.
+The first is the choice of low-dimensional CVs that defines the space over which modes are explored. CVs may be selected either from chemical intuition or from topological changes induced by the underlying transformation, as demonstrated in \cref{sec:experiments}.
+For more complex systems, CVs can also be parameterized by shallow neural networks and trained from available conformations \citep{sidky2020machine,bonati2023unified}.
+Other hyperparameters follow conventions from prior enhanced sampling studies.
+However, the improved mode-mixing behavior of diffusion samplers permits the use of smaller $\gamma$ values, i.e., the effective temperature along the CVs can be lower.
+Similarly, the Gaussian height $h$ must be reduced, since diffusion samplers generate uncorrelated samples and thus deposit bias more frequently.
+
+To satisfy \cref{req:restriction}, we use restraint potentials.
+The specific combination of restraints is system dependent, but their application can be formalized through the lens of chemical isomerism.
+Since which types of isomerism are suppressed under physical conditions is well understood, these serve as a natural guide \citep{canfield2018new}.
+We provide a detailed treatment in \cref{sec:isomerism}, and here illustrate the idea with chirality inversion in proteins and peptides.
+The $C_\alpha$ atom of each amino acid is a chiral center: while both L- and D-configurations exist, nearly all natural amino acids only adopt the L-configuration.
+As the energy function does not inherently distinguish mirror-symmetric configurations, we introduce flat-bottom harmonic potentials on improper torsional angles defining chirality, thereby biasing sampling toward the physically relevant L-configurations.
+
+\paragraph{Sampling and refinement}
+\cref{remark:wt_asbs} implies that the PMF along the CVs can be recovered directly from the final bias.
+While samples stored in the buffer may be analyzed to characterize configurations associated with specific regions in CV space, to recover the full weighted conformational distribution, one can integrate \cref{eq:sde} to generate samples $X_i$ and assign weights $W_i = \exp[\beta V^\ast(\xi(X_i))]$, yielding the self-normalized estimator in \cref{eq:snis}.
+Note that this is exact only in the limit of a perfectly trained sampler.
+In principle, the path importance weights in ASBS could be used to debias an imperfect sampler with the gradient-based parametrization of control and corrector \citep{liu2025adjoint}, though these weights may suffer from high variance.
+The learned bias also enables a practical refinement strategy: short MD or MCMC trajectories are initiated from the generated samples under the biased energy $E + V^\ast \circ \xi$, and the resulting configurations are reweighted with $V^\ast$.
+This restores asymptotic correctness while keeping the procedure computationally efficient thanks to the smoother energy landscape along the CVs.
+
+
+\section{Experiments}
+\label{sec:experiments}
+
+We demonstrate the efficiency of the WT-ASBS pipeline on four molecular sampling tasks involving peptides and chemical reactions.
+Since \cref{req:efficiency,req:restriction} are incorporated into the design of the method, correctness with respect to \cref{req:consistency} ensures that all requirements are satisfied.
+We therefore assess whether the empirical PMF, $\hat{F}(s) = -\frac{1}{\beta} \log \hat{\nu}(s)$ obtained from reweighted samples \cref{eq:snis} and the PMF from bias (\cref{remark:wt_asbs}) agree with those from reference densities.
+Accuracy is computed from the PMF by measuring the free energy of state $i$ in conformational states as
+\begin{equation}
+F_i = -\frac{1}{\beta} \log \int_\mathcal{S} \exp(-\beta F(s)) \bm{1}[s \in \mathcal{S}_i] \, \mathrm{d}s \, + \, \mathrm{const},
+\label{eq:dF}
+\end{equation}
+where $\mathcal{S}_i$ is the CV region of state $i$.
+We report free energy differences $\Delta F_{ij} = F_j - F_i$, thereby removing the additive constant as it is the same for all $\mathcal{S}_{i}$. We compute multi-state errors with a common offset.
+Although weighted sampling required by \cref{req:efficiency} is best assessed via PMFs and free energies, we additionally compare with diffusion samplers on alanine dipeptide in \cref{sec:additional_results} using standard distributional metrics. Our main comparisons are with ASBS and WTMetaD.
+
+\subsection{Conformational Sampling for Small Peptides}
+
+We first benchmark the WT-ASBS method on two widely studied peptide systems, alanine dipeptide (Ala2; Ace--Ala--Nme) and alanine tetrapeptide (Ala4; Ace--Ala\tsub{3}--Nme), which serve as standard testbeds for evaluating molecular sampling methods.
+Both peptides are modeled with a classical force field with implicit water solvation, with the chirality restraint applied to all C$_\alpha$ atoms (see \cref{sec:experiment_details}).
+In this work, we focus on sampling the full Cartesian coordinates of the molecules.
+% Previous studies have shown that energy-based diffusion samplers often struggle to reproduce accurate Cartesian coordinate distributions, even for relatively simple molecules like alanine dipeptide.
+Although peptides and proteins adopt a broad range of conformations, these arise largely from the combinatorial organization of local backbone torsional states, specifically the $\phi$ and $\psi$ angles (\cref{fig:ala2}a), as classically illustrated by \citet{ramachandran1963stereochemistry}.
+Building on this insight, we demonstrate that energy-based neural samplers can be made effective for sampling peptides directly in Cartesian space when augmented with biasing along these torsional angles.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala2.pdf}
+\caption{
+\textbf{Sampling alanine dipeptide.}
+(a) Molecular structure of alanine dipeptide and definition of the torsional collective variables $\phi$ and $\psi$.
+(b) Distribution of $\phi$ and $\psi$ obtained from a short unbiased MD trajectory used for pretraining the sampler.
+(c) Evolution of the PMF reconstructed from the accumulated bias during training, illustrating progressive recovery of the major basins in the free energy landscape.
+The dotted box delineates the two states, one with $\phi < 0$ or $\phi > 2$ and the other with $\phi \in [0, 2]$.
+(d) PMF estimated by reweighting $10^6$ samples generated by the trained sampler using the final bias.
+(e) Reference PMF computed from a long unbiased MD simulation for comparison.
+(f) Convergence of free energy differences $\Delta F$ between two states as a function of number of energy evaluations during training.
+}
+\label{fig:ala2}
+\end{figure}
+
+\paragraph{Alanine dipeptide (Ala2)}
+We employ $\phi$ and $\psi$ torsion angles as CVs (\cref{fig:ala2}a).
+The conformational landscape is broadly divided into two states along $\phi$ (\cref{fig:ala2}b).
+Local sampling within the more populated state is efficient due to the absence of a significant barrier; thus, we easily sample pretraining data from a short MD simulation in this region.
+The pretrained model produces samples restricted to this state.
+However, once WT-ASBS training begins, the bias deposition progressively shifts the sampling distribution away from the explored region, enabling the discovery of conformations in the less populated state.
+Over training progress, the deposition asymptotically converges to the bias potential required to reproduce the PMF (\cref{fig:ala2}c).
+\cref{fig:ala2}d shows the PMF obtained from the generated samples of the fully trained model using weights from the final bias.
+Both the bias-derived PMF and the reweighted-sample PMF agree closely with the reference PMF (\cref{fig:ala2}e), whereas the baseline ASBS fails to reproduce the correct distribution in the less populated region (\cref{fig:ala2_hists}).
+Moreover, compared to the baseline enhanced sampling method (WTMetaD) with the same bias factor, WT-ASBS achieves convergence of the $\Delta F$ between the two states more accurately.
+
+To quantify the robustness of WT-ASBS and clarify practical choices, we performed ablations of the WT bias hyperparameters and training mechanisms, and reported detailed results in \cref{sec:ablation_studies}.
+Varying the Gaussian height $h$, kernel width $\sigma$, and bias factor $\gamma$ over wide ranges leaves the final $\Delta F$ unchanged except at the most extreme $h$, while larger $h$ and broader $\sigma$ mainly accelerate early exploration and barrier crossing.
+The training mechanism ablations show that overly frequent replay buffer refreshes slow convergence because the sampler does not have time to adapt to the evolving bias, whereas moderate update intervals and localized pretraining lead to a faster approach to the reference $\Delta F$ and reduce the total number of energy evaluations.
+Furthermore, \cref{sec:mlcv} demonstrates that WT-ASBS can also operate with an automatically learned ML CV \citep{trizio2021enhanced}, recovering accurate PMF and $\Delta F$ after reweighting, which indicates that the method could still be utilized when suitable low-dimensional CVs are not known a priori.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala4.pdf}
+\caption{
+\textbf{Sampling alanine tetrapeptide.}
+(a) Molecular structure of alanine tetrapeptide with torsional collective variables $\phi_1$, $\phi_2$, and $\phi_3$.
+(b) Reference distribution in torsional space. Each torsion is partitioned into two regions, $\phi_i \in [0, 2]$ and $\phi_i < 0$ or $\phi_i > 2$, producing eight metastable states corresponding to all combinations of these regions across the three $\phi_i$. Pretraining is restricted to the single state indicated by $\color{red}\ast$, so the sampler initially encounters only one of the eight possible regions.
+(c) Accumulated number of explored states during the initial phase of training or simulation (up to 2M energy evaluations), showing how the sampler progressively discovers additional states as the bias is deposited.
+(d) Convergence of the free energies of the eight states, reported as the MAE up to an additive constant. For WT-ASBS, the curve extends up to 20M energy evaluations where the bias has converged.
+}
+\label{fig:ala4}
+\end{figure}
+
+\paragraph{Alanine tetrapeptide (Ala4)}
+As seen in the Ala2 case, the main energetic barriers separating conformational states arise from backbone $\phi$ torsions.
+We therefore employ three CVs, $\phi_1$, $\phi_2$, and $\phi_3$.
+A long 100-{\textmu}s reference MD simulation shows that the system occupies eight distinct modes, corresponding to the $2^3$ combinations of the three $\phi$ torsional states (\cref{fig:ala4}b).
+We initialize from a single conformation in the indicated mode and generate pretraining data from a short MD simulation confined in the mode (\cref{fig:ala4_pmf_comparison}).
+As shown in \cref{fig:ala4}c, WT-ASBS explores conformational states far more efficiently than the baseline WTMetaD, discovering all eight modes within the early stages of training.
+This advantage arises from its ability to generate uncorrelated samples from the biased potential, enabling exploration of multiple directions of conformational change simultaneously, whereas MD-based enhanced sampling explores states sequentially in simulation time.
+Consequently, WT-ASBS also achieves effective convergence of free energies (\cref{fig:ala4}d), as measured by the mean absolute error (MAE) of free energies up to a constant $\min_c \frac{1}{8} \sum_i |F_i - F_i^\text{ref} + c|$, within chemical accuracy (1 kcal/mol), demonstrating the practical applicability of WT-ASBS.
+We note that it does not yield lower free energy MAE than WTMetaD, likely because MD already provides efficient local mixing within each basin once barriers along the chosen CV are crossed, whereas the diffusion sampler must learn the full high-dimensional intra-basin distribution.
+Measure-transport-based global sampling is most beneficial for crossing large barriers, whereas MD-based local sampling approaches can still perform well when refining physical observables, which further suggests that combining the two strategies may be advantageous for more complex systems.
+
+\subsection{Sampling Reactive Energy Landscapes}
+
+While peptide results highlight the efficiency of WT-ASBS in terms of the number of energy evaluations, the computational budgets in diffusion-based sampling in these cases are dominated by SDE integration with a control network, since classical force fields are extremely fast to evaluate.
+However, classical force fields are insufficient for accurate conformational sampling, particularly in cases involving bond reorganization, while density functional theory (DFT), the standard for accurate energetics, is computationally prohibitive.
+Recent advances in semiempirical quantum methods \citep{froitzheim2025gxtb} and universal ML interatomic potentials (uMLIPs) demonstrate that near-DFT accuracy can be achieved at a fraction of the compute, and open the door to scalable and accurate sampling.
+To illustrate this direction and compare the computational cost in practical settings, we apply WT-ASBS to sample reactive energy landscapes involving bond formation \citep{trizio2021enhanced}.
+We employ a recent uMLIP, UMA-S-1.1 \citep{wood2025uma}, which accurately reproduces DFT energies, as the underlying energy model.
+For reaction sampling, we cross-check with WTMetaD results since sampling the transition region with unbiased samplers like MD is practically impossible (e.g., $\sim10^{15}$ samples required for a 20 kcal/mol barrier at 300 K).
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/rxn.pdf}
+\caption{
+\textbf{Sampling reactive landscapes.}
+(a) S\textsubscript{N}2 reaction scheme with nucleophilic substitution between states 1 and 2, along with the two bond distance CVs $d_1$ and $d_2$ that describe approach and departure of the chloride ions.
+(b) PMF $F(d_1, d_2)$ for the S\textsubscript{N}2 system, showing the reactant and product basins and the transition-state region along the two-dimensional distance coordinates.
+(c) Cycloaddition reaction scheme exhibiting a post-TS bifurcation, highlighting the competing pathways that originate from the same transition structure.
+(d) Definition of the three forming bond distances $d_1$, $d_2$, and $d_3$ used to parameterize progress along the bifurcating reaction pathways.
+(e) Contact CVs $c_i$ obtained from the distances $d_i$, used to construct smoother CVs for sampling.
+(f) One-dimensional PMF $F(s_1)$ along the CV $s_1 = c_1 + c_2 + c_3$, comparing WT-ASBS and WTMetaD.
+(g) Two-dimensional PMF $F(s_1, s_2)$ with $s_2 = c_2 - c_3$, resolving the post-TS bifurcation and showing the distinct product channels, with TS locations from saddle point optimization.
+}
+\label{fig:rxn}
+\end{figure}
+
+\paragraph{Nucleophilic substitution (S\tsub{N}2)}
+We study a prototypical S\tsub{N}2 reaction (\cref{fig:rxn}a), where a chloride ion attacks the tetrahedral carbon and another chloride ion departs, leading to interconversion between states \textbf{1} $\leftrightarrow$ \textbf{2}.
+% Although elementary, the S\tsub{N}2 reaction is a workhorse of modern organic synthesis and serves here to illustrate sampling over reactive energy landscapes with bond rearrangement.
+We set two C--Cl bond distances as CVs and apply restraints to prevent chloride ions from diffusing away, ensuring the CV space remains bounded.
+Given the small system size, a single configuration (state \textbf{1}) suffices for pretraining the sampler.
+Using WT-ASBS, we obtain the 2-D PMF along the two bond distances (\cref{fig:rxn}b).
+The symmetric PMF agrees well with the WTMetaD result (\cref{fig:sn2_pmf_comparison}), and both the location and free energy barrier of the transition state (TS) coincide with the results from standard saddle-point optimization.
+
+\paragraph{Post-transition-state bifurcation}
+For simple reactions like S\tsub{N}2 with a single reaction channel between reactants and products, the process can be well characterized by identifying the TS and evaluating single-point energies, with harmonic approximations describing the local energy landscape around the reaction progress \citep{truhlar1996current,peters2017reaction}.
+However, many realistic challenges in chemistry involve branched or multimodal energy landscapes that cannot be captured by such approximations and instead requires explicit sampling.
+The reaction in \cref{fig:rxn}c exemplifies this difficulty: reactant \textbf{3} passes through a single TS region that bifurcates into two products \textbf{4} and \textbf{5}.
+Because the TS is not uniquely associated with a single product (i.e., the TS is \textit{ambimodal}), characterizing this reaction requires sampling the full reactive landscape.
+
+%
+\begin{wrapfigure}[14]{r}{0.3\textwidth}
+\vspace{-0.5em}
+\includegraphics[width=\linewidth]{figs/pmf_convergence.pdf}
+\vspace{-1.5em}
+\caption{
+\textbf{Convergence of PMFs.}
+PMF MAE from the final converged PMF for each reaction and method, compared over wall-clock time.
+}
+\label{fig:pmf_convergence}
+\end{wrapfigure}
+%
+To construct CVs, we represent the three relevant C--C distances (\cref{fig:rxn}d) as normalized contacts in \cref{eq:contact}, capturing bond formation progress (\cref{fig:rxn}e).
+From these we define two CVs: $s_1 = c_1 + c_2 + c_3$, which tracks overall bond formation (a \textit{soft} bond count), and $s_2 = c_2 - c_3$, which distinguishes between products \textbf{4} and \textbf{5}.
+Details on restraints and settings are provided in the \cref{sec:experiment_details}.
+\cref{fig:rxn}f and g show the PMFs $F(s_1)$ and $F(s_1, s_2)$, and similarly to S\tsub{N}2 example, the PMFs agree well with the WTMetaD result (2-D comparison in \cref{fig:bifurcation_pmf_comparison}), providing accurate energetics for complex, multimodal reactive landscapes that dominate practical challenges in chemistry.
+Further discussion on reaction sampling tasks is provided in \cref{sec:additional_results}.
+
+% \vspace{-1em}
+\paragraph{Computational efficiency}
+We compared wall-clock time on four A100 80GB GPUs, where the MAE of the current bias relative to the final one, defined in \cref{eq:pmf_mae}, is shown in \cref{fig:pmf_convergence}.
+For the S\tsub{N}2 reaction, WT-ASBS required 0.77M energy evaluations and 4.3 hours, versus 4.0M and 29 hours for WTMetaD.
+For the bifurcation reaction, WT-ASBS used 2.6M evaluations and 23 hours, compared to 6.4M and 48 hours.
+Although WT-ASBS integrates SDEs with a control model, it needs fewer energy evaluations, which can be batched during training, effectively \textit{distilling} a lighter sampler model from the heavier uMLIP.
+
+\vspace{.5cm}
+
+\section{Discussion}
+
+We presented WT-ASBS, which integrates well-tempered bias deposition over chosen CVs into a diffusion-based sampler, enabling exploration of unseen conformational modes and recovering PMFs and importance sampling weights that reconstruct the Boltzmann distribution.
+By embedding enhanced sampling directly into the sampler, WT-ASBS links diffusion-based generative samplers with classical rare event techniques and provides a practical recipe for sampling molecular systems with controllable bias strength and straightforward statistical reweighting.
+We have also demonstrated that WT-ASBS can be combined with ML CVs (\cref{sec:mlcv}), illustrating that the method is compatible with data-driven representations and can be used as a downstream sampler once informative low-dimensional coordinates have been learned.
+Looking ahead, we expect the most effective workflows to combine energy-based sampling with data-based generative models and to mix global moves (diffusion-based proposals in configuration or CV space) with local sampling (short MD or MCMC) in a problem-dependent way, for example, using global diffusion moves for slow solute rearrangements and local samplers for fast solvent motions.
+Finally, although this work focuses on sampling molecular configurations, low-dimensional latent variables have proven useful in discrete lattice sampling \citep{swendsen1987nonuniversal,wang2001efficient} and dynamic Bayesian networks \citep{doucet2000rao}, suggesting that extending the WT-ASBS-like approach beyond molecular systems would be a fruitful direction.
+
+\paragraph{Limitations}
+WT-ASBS requires the specification of CVs, and we primarily utilized predefined CVs and extended to ML CVs where metastable states are known.
+More complex systems will benefit from ML CVs and iterative cycles that interleave exploratory WT-ASBS runs with CV training updates.
+A fair comparison of enhanced sampling methods remains challenging due to the large number of algorithmic and system-specific hyperparameters \citep{henin2022enhanced}, and although WTMetaD may not be the optimal baseline for every system, we use it here as a natural baseline because our bias deposition scheme is inherited from WTMetaD.
+Future work will explore combinations of different enhanced sampling strategies to provide a more comprehensive analysis.
+Finally, WT-ASBS does not provide amortized sampling across systems or thermodynamic conditions, and extending it with a variationally parameterized bias \citep{bonati2019neural} or shared control networks across related systems is a promising direction for transferring biases between systems that share similar slow modes.
+
+
+% \subsubsection*{Ethics Statement}
+
+
+% \subsubsection*{Reproducibility Statement}
+
+
+\section*{Acknowledgments}
+
+The authors would like to thank Zachary Ulissi and Larry Zitnick for the helpful discussions and comments.
+
+
+\bibliography{main}
+\bibliographystyle{iclr2026_conference}
+
+
+\clearpage
+\appendix
+
+% \begin{tcolorbox}[colback=metabg,boxsep=6pt,top=8pt,bottom=8pt,boxrule=0.7pt,arc=0pt,breakable]
+{
+\setlength{\parskip}{.03cm}
+\section*{Appendix}
+\startcontents
+\printcontents{}{1}{}{}
+\vspace{.3cm}
+}
+% \end{tcolorbox}
+
+
+\section{Additional Background}
+
+\subsection{Enhanced Sampling}
+\label{sec:enhanced_sampling}
+
+Efficiently sampling molecular configurations requires overcoming high free energy barriers that cause rare but important states to be visited infrequently. Enhanced sampling methods are a class of techniques developed in the computational chemistry community to address this challenge. The core idea is to bias the simulation dynamics to encourage exploration of less-populated regions of phase space, while applying a compensating weight to recover correct thermodynamic averages. Unlike unbiased MD or MCMC (which can get trapped in deep energy wells), enhanced sampling methods add external forces or modify the energy surface so that the system escapes metastable states more readily.
+
+One foundational approach is umbrella sampling. Introduced by \citet{torrie1977nonphysical}, umbrella sampling runs simulations with an added bias potential $U(s)$ along a chosen reaction coordinate or collective variable $s = \xi(x)$. By choosing a series of overlapping bias ``umbrellas'' that cover the range of $\xi$, one can force the system to sample even high-energy configurations in each window. Each window's samples are then reweighted by $\exp(+\beta U(s))$ to reconstruct the unbiased free energy landscape. This method demonstrated the principle of biasing along important coordinates to access otherwise inaccessible states. However, it requires a careful tuning of windows.
+
+Metadynamics took adaptive biasing a step further by dynamically building the bias potential during a single simulation. In the original metadynamics \citep{laio2002escaping}, the simulation deposits small Gaussian hills on the free energy landscape along the chosen CVs every few timesteps. These hills accumulate in wells (low free energy regions), gradually filling them and effectively raising the energy floor so the system escapes. Over time, the bias $V_t(s)$ approximates the negative of the underlying free energy $-F(s)$, flattening the CV landscape. Well-tempered metadynamics \citep{barducci2008well} refined this approach by gradually reducing the height of added hills as the bias grows. This means early in the simulation, the bias grows quickly (promoting exploration), but later it converges towards a finite bias that yields a modified stationary distribution rather than diverging. Specifically, well-tempering introduces a bias factor $\gamma>1$ so that the deposited bias is scaled by a factor that depends on the current bias (preventing overfill). The resulting steady-state is the well-tempered distribution in CV space, in which the free energy barriers are lowered by a factor of $\gamma$, effectively simulating the system at a higher temperature $T_\text{eff} = \gamma T$ along those CVs. Importantly, even with bias, samples can be reweighted to recover the true Boltzmann distribution. Well-tempered metadynamics thus balances exploration and accuracy by never completely flattening the landscape, avoiding infinitely large weights and ensuring the bias converges asymptotically to a finite correction.
+
+In the enhanced sampling community, there have been continual improvements to biasing algorithms. Notably, on-the-fly probability enhanced sampling (OPES) by \citet{invernizzi2020rethinking} is a performant metadynamics variant where the bias is constructed by directly targeting a pre-defined distribution (often the well-tempered distribution) at each step rather than depositing fixed-shape hills. This results in smoother bias updates and often faster convergence. Although we do not explicitly implement OPES, our algorithm likewise targets the well-tempered distribution \cref{eq:wt_density_x}. In a sense, WT-ASBS could incorporate OPES-style updates (adjusting the bias based on deviation between current CV histogram and target distribution), which could be an interesting direction for future work. Additionally, techniques like variationally optimized enhanced sampling (VES) \citep{valsson2014variational} cast bias finding as an optimization problem of $V(s)$ to minimize the KL divergence between biased and unbiased ensembles. Such approaches could also be combined with our generative sampler by using the model's output to estimate that KL objective. In our current work, we use the simpler hill-based scheme inspired by WTMetaD.
+
+Beyond metadynamics, numerous enhanced sampling strategies exist. The adaptive biasing force (ABF) method \citep{darve2008adaptive} takes a different approach: instead of depositing hills, it continuously estimates the mean force along the CV and subtracts it, effectively flattening the free energy gradient. ABF and its extensions (e.g., extended ABF in \citet{comer2015adaptive}) guarantee convergence by driving the observed force toward zero in well-sampled regions. In practice, ABF and metadynamics often achieve similar outcomes: a nearly uniform sampling of $s$, but via force-balancing vs. potential-filling mechanisms.
+Another family of methods is replica exchange and parallel tempering. In replica exchange MD \citep{sugita1999replica}, multiple copies of the system are simulated at different temperatures (or Hamiltonians) in parallel. These replicas occasionally swap configurations, allowing a cold replica to receive a configuration from a hot replica that has overcome barriers. Over many swaps, each replica samples from its designated ensemble (e.g., the lowest-temperature one samples the target distribution) but benefits from exchanges to traverse phase space faster. Parallel tempering effectively raises the chance of barrier crossing by leveraging high-temperature dynamics, albeit at the computational cost of running many simulations. It is a powerful method to explore complex landscapes, though it requires careful selection of the temperature ladder and has high computational overhead if many replicas are needed.
+
+
+% Good CVs correlate with the slow modes (metastable transitions) in the system. By biasing along CVs, one focuses computational effort on the most relevant transitions. Recent efforts use data-driven methods to find optimal low-dimensional representations of conformational dynamics, for example, using autoencoders, time-lagged independent component analysis (TICA), or reinforcement learning to identify coordinates that maximize kinetic variance \citep{sidky2020machine,bonati2023unified}. These approaches extend the enhanced sampling toolkit by alleviating the reliance on intuitive human-chosen order parameters, but they are beyond the scope of our work. In this paper, we assume the CVs are given (e.g. torsional angles in a peptide) and focus on how to leverage them in a neural sampling context.
+
+
+\subsection{Neural Samplers}
+\label{sec:neural_samplers}
+
+\paragraph{Historical developments}
+As opposed to MCMC and MD methods, generative models can potentially be used to generate samples from multimodal distributions without getting trapped in local minima or requiring lengthy equilibration times. Using generative models to sample probability distributions specified by a potential function was originally proposed by \cite{noe2019boltzmann,albergo2019flow}, and \cite{nicoli2020asymptotically} in the contexts of many-body physics, lattice field theory, and statistical mechanics, respectively.
+These initial approaches trained discrete-time normalizing flows \citep{tabak2013family} by optimizing the KL divergence between the model and the unnormalized target densities. As the use of reverse-KL objective is prone to mode collapse, the community explored alternative training objectives for flow-based sampling \citep{vaitl2022gradients,midgley2022flow,mate2023learning}. 
+However, using flow-based methods with these approaches presents challenges. Computing the likelihood of continuous flow models \citep{chen2018neural} is computationally expensive, yet it is a necessary component of many of these potential function-based learning objectives. Meanwhile, designing expressive discrete-time normalizing flows is complex due to the restrictions on their coupling layers \citep{dinh2016density,midgley2023se}.
+
+Thinking of the sampling task as a problem of measure transport opens up other lines of research which make use of ideas introduced by
+denoising diffusion models \citep{sohl2015deep,ho2020denoising} and related, more general frameworks for generative modeling \citep{lipman2022flow,albergo2023stochastic}.
+In data-based settings, these approaches use intermediate distributions to transport samples to the target distribution, guided by a local quadratic regression (``matching'') objective that ensures the correct change of measure.
+The simulation-free nature of these approaches, combined with their straightforward training objectives, makes them more scalable and easier to train than previous methods, establishing them as the leading generative paradigm today.
+In the data-free setting, however, since samples are not available, trajectories must be sampled from the model. The central goal of recent works has thus been to design training objectives that (i) lead to a correct transport of measures and (ii) do not require backpropagation through the learned dynamics. 
+
+\citet{vargas2023denoising,berner2022optimal} optimize the KL divergence in path space and establish connections between generative modeling and SOC.
+\citet{zhang2021path,havens2025adjoint} also approach the problem from the viewpoint of SOC by minimizing the control objective with the terminal cost defined by the target energy.
+\citet{richter2023improved} and \citet{vargas2023transport} optimize the variance of Radon--Nikodym derivative between the forward and backward path measures.
+\citet{albergo2024nets} generalizes annealed importance sampling (AIS) by learning an SDE that minimizes the impact of unbiasing weights of AIS.
+
+\paragraph{Related works}
+Recent methods attempt to alleviate the challenge of energy-based training struggling to capture multiple modes in complex energy landscapes.
+\citet{schopmans2025temperatureannealed} applied temperature annealing in Boltzmann Generators, and concurrently \citet{akhoundsadegh2025progressive,rissanen2025progressive} incorporated inference-time annealing into diffusion models to sample from Boltzmann densities.
+These approaches smoothly interpolate from a high-temperature (smoothed-out) version of the target distribution to the true low-temperature distribution akin to parallel tempering.
+Our method biases the sampler on the fly along specific CVs, which can be seen as a more targeted form of annealing that raises the effective sampling temperature only along selected important degrees of freedom.
+
+Another line of related work focuses on directly encouraging exploration during training. \citet{kim2025scalable} improved training efficiency by incorporating MCMC with bias from random network distillation during the search stage, steering exploration toward configurations that would otherwise be rarely visited, conceptually similar to our goal of amplifying exploration.
+In recent work, \citet{blessing2025trust} formulate a diffusion-based sampler with a trust-region constrained optimal control perspective, which effectively adds Lagrange multiplier terms to enforce constraints on the path distribution.
+Our approach is unique in that it incorporates an adaptive bias during training that specifically targets low-dimensional CVs, which is highly effective for exploring rare-event regions and further enables reconstruction of the PMF.
+
+% (Not sampler, but) BioEmu/PPFT, minimum excess work guidance: tries to add control to fit the experimental free energy difference ($\Delta G$) in the i.i.d.\@ setting because score matching alone does not fit $\Delta G$ well (same problem in mind, different method)
+
+\subsection{Extended Related Works}
+
+\paragraph{ML-based transition path sampling}
+While our method is designed for equilibrium sampling with a CV-based biasing inside an energy-based diffusion sampler, closely related ideas have been developed for sampling rare dynamical trajectories by learning control forces on trajectory space, in the context of transition path sampling (TPS).
+\citet{holdijk2023stochastic} cast molecular TPS as an SOC problem and learn CV-free policies that steer trajectories between metastable states.
+\citet{du2024doob} propose Doob's Lagrangian, a variational formulation of Doob's $h$-transform \citep{doob1957conditional} that learns conditional dynamics for generating transition paths between prescribed endpoints.
+\citet{seong2025transition} introduce a diffusion-based TPS with off-policy training based on log-variance divergence between biased MD and target path measures.
+Different variational approaches to path sampling of rare events are reviewed in \citet{singh2025variational}, with a focus on trajectory ensemble reweighting and optimal control approaches.
+Finally, \citet{raja2025action} repurpose pretrained generative models for TPS by interpreting paths as trajectories of an induced SDE and finding most-probable transition paths via Onsager--Machlup action minimization.
+
+\paragraph{Data-based diffusion sampling in chemistry}
+Complementary to our energy-based sampler that only assumes access to the potential energy and its gradients, several works train diffusion or flow-based generative models directly on molecular simulation or thermodynamic data to build data-driven equilibrium samplers.
+\citet{wang2022data} train diffusion models on ensembles at multiple thermodynamic conditions to generate molecular configurations across temperature or parameter space.
+\citet{herron2024inferring} develop thermodynamic maps, a diffusion-like generative approach to model the joint distribution of configurations and auxiliary thermodynamic variables to reconstruct phase behavior and other macroscopic properties from sparse data.
+\citet{qiu2025latent} develop latent thermodynamic models that jointly learn low-dimensional representations and temperature-dependent equilibrium distributions.
+\citet{benayad2025hamiltonian} combine replica exchange simulations with diffusion models and importance sampling to refine conformational ensembles and explore free-energy landscapes along chosen CVs.
+
+
+\subsection{Molecular Isomerism}
+\label{sec:isomerism}
+
+This appendix specifies how we operationalize chemical ``sameness'' and ``difference'' in terms of minimal geometric features, their coordination numbers at the atoms that define each stereochemical element, and the order parameter restraints we apply during sampling.
+We adopt the IUPAC taxonomy \citep{mcnaught1997compendium}, which separates constitutional isomerism from stereoisomerism and further divides stereoisomerism into configurational and conformational classes.
+\begin{itemize}[leftmargin=*]
+\item \textit{Constitutional isomers} share an elemental formula but differ in bond connectivity and therefore are different compounds.
+In our default setup, they are out of scope, except when the declared reaction of interest explicitly includes bond formation or breaking.
+\item \textit{Stereoisomers} have the same connectivity but differ in three-dimensional arrangement.
+They are subdivided into:
+\begin{itemize}
+    \item \textit{Configurational isomers}, which are separated by large barriers and are isolable on experimental time scales.
+    This category includes absolute configuration at stereogenic centers (R/S), geometric isomerism such as E/Z, and helical forms.
+    When only a single stereocenter is inverted, R and S related molecules are enantiomers; with multiple stereocenters, the possibilities include diastereomers.
+    \item \textit{Conformational isomers}, which interconvert over low barriers, for example, through rotation about single bonds or ring flips.
+\end{itemize}
+\end{itemize}
+This taxonomy is paired with barrier and half-life delineations that mark fluxional, practically isolable, and configurationally stable regimes \citep{canfield2018new}.
+
+\paragraph{Accessible component $\mathcal{A}$}
+Let $\mathcal{X}$ denote the configurational space for a fixed chemical composition. We select a reference configuration and restrict attention to the portion of $\mathcal{X}$ relevant to the molecular process under study, which is the sense in which the main text employs the term accessible component.
+One can regard configurations at temperature $T$ and study time horizon $\tau$ as grouped by an equivalence relation $\sim_\tau$: two configurations belong to the same class if they differ only by stereochemical elements that interconvert with a half-life shorter than $\tau$, while connectivity is preserved unless the chemical transformation of interest explicitly allows bond changes.
+The accessible component $\mathcal{A}$ is then the connected set, under the physical dynamics, in the quotient space $\mathcal{X}/\sim_\tau$ that contains the chosen reference configuration.
+Because the physical dynamics are stochastic, this construction relies on a separation of timescales, which is well supported by the exponential scaling of rates with activation energies and by established isomerism taxonomies.
+
+\paragraph{Isomerism, geometry, and order-parameter restraint}
+The polytope formalism in \citet{canfield2018new} provides a coordination-centric view of stereochemical change and shows how fundamental isomerization processes can be enumerated for each coordination number.
+In our context, this motivates representing each stereochemical element by the smallest stable geometric feature that distinguishes its alternatives, together with a numerical order parameter defined on those features.
+The order parameter then becomes the target of a light, topology-preserving restraint.
+Here, we exemplify this with two main types of restraints considered in this work, bond restraint and tetrahedral center chirality restraint.
+While not discussed here, other types of isomerism, such as axial, planar, and helical chirality, can be handled analogously.
+
+(1) \textit{Bond restraint}: The preservation of molecular topology, i.e., the fixed bond graph of the system, should be encoded explicitly as a restraint whenever bond connectivity is not supposed to change.
+The exceptions are when the simulation potential already contains topological information (e.g., non-reactive classical force fields) or the scientific question explicitly involves bond making or bond breaking.
+Let $r_{ij}(X) = \Vert x_i - x_j \Vert$ be the instantaneous bond length between atoms $i$ and $j$.
+For each bonded pair or non-bonded pair to be preserved, we apply a bond restraint or a no-bond restraint, respectively:
+
+\begin{align}
+U_{ij}^\text{bond}(X) &= \frac{1}{2} \kappa[r_{ij}(X) - r_\text{max}]_+^2,
+\label{eq:bond_restraint} \\
+U_{ij}^\text{no-bond}(X) &= \frac{1}{2} \kappa[r_\text{min} - r_{ij}(X)]_+^2,
+\label{eq:no_bond_restraint}
+\end{align}
+
+where $[z]_+ := \max(z, 0)$.
+Here, we set $r_\text{max} = 1.3(r_i^\text{cov} + r_j^\text{cov})$, $r_\text{min} = 0.7(r_i^\text{vdW} + r_j^\text{vdW})$, and set the force constant $\kappa = 100$ eV/\AA{}$^2$, with $r_i^\text{cov}$ and $r_i^\text{vdW}$ denoting the covalent and van der Waals radii of atom $i$, respectively.
+For examples in this work, we found that no-bond restraint \cref{eq:no_bond_restraint} could be omitted in cases where valency of atoms is well-defined by the base potential energy (see implementation details in \cref{sec:experiment_details}).
+
+(2) \textit{Tetrahedral center chirality restraint}:
+We define the torsion (dihedral) angle of atoms $i$, $j$, $k$, and $l$, $\phi_{ijkl}(X) \in (-\pi, \pi]$ as follows:
+\begin{equation}
+\phi_{ijkl}(X) = \mathrm{atan2}\left(b_2 \cdot ((b_1 \times b_2) \times (b_2 \times b_3)), \, |b_2| (b_1 \times b_2) \cdot (b_2 \times b_3)\right),
+\label{eq:torsion}
+\end{equation}
+where the displacement vectors are defined as $b_1 := x_j - x_i$, $b_2 := x_k - x_j$, and $b_3 := x_l - x_k$.
+A \textit{proper} torsion is the signed angle between two planes that share a central bond, with three bonds in sequence, e.g., $i$--$j$--$k$--$l$, with the torsion angle describing the relative rotation around the bond $j$--$k$.
+In contrast, an \textit{improper} torsion does not describe rotation around a bond, but rather the out-of-plane displacement of one atom relative to a reference plane defined by three others.
+
+We now consider a tetrahedral stereocenter $i$ with three neighboring atoms $j$, $k$, and $l$ (out of its four substituents).
+The corresponding improper torsion angle, $\phi_{ijkl}(X)$, exhibits a bimodal distribution: each mode corresponds to a distinct stereoisomer, and in the ideal tetrahedral geometry, the peaks are centered near $\pm35^\circ$.
+To preserve the stereochemical configuration, we introduce the following flat-bottom harmonic restraint potential on the improper torsion:
+\begin{equation}
+U_{ijkl}^\text{imp}(X; \kappa, \phi_0, \phi_\text{tol}) = \frac{1}{2} \kappa [|w(\phi_{ijkl}(X) - \phi_0)| - \phi_\text{tol}]_+^2
+\end{equation}
+where $w(\alpha) = \mathrm{atan2}(\sin\alpha, \, \cos\alpha) \in (-\pi, \pi]$ is the $2\pi$-periodic wrapping function, $\phi_0$ is the reference torsion value, and $\phi_\text{tol}$ is the flat-bottom tolerance.
+
+For clarity, we illustrate this construction using the C$_\alpha$ stereocenter of an amino acid.
+In naturally occurring L-amino acids, the improper torsion defined by (C$_\alpha$, N, C, C$_\beta$) is positive, whereas the improper torsion (C$_\alpha$, N, C, H$_\alpha$) is negative.
+Based on this, we define the amino acid chirality restraint as
+\begin{equation}
+U_\text{AA}^\text{chiral}(X) = U_\text{C$_\alpha$,N,C,C$_\beta$}^\text{imp}(X; \kappa, +\phi_0, \phi_\text{tol}) + U_\text{C$_\alpha$,N,C,H$_\alpha$}^\text{imp}(X; \kappa, -\phi_0, \phi_\text{tol}),
+\label{eq:chirality_restraint}
+\end{equation}
+where we set $\kappa = 25.0$ eV/rad$^2$, $\phi_0 = 0.615$ rad ($35^\circ$), and $\phi_\text{tol} = 0.436$ rad ($25^\circ$).
+
+
+\section{Proofs and Notes}
+\subsection{Proof for \texorpdfstring{\cref{prop:wt_asbs}}{Proposition 3.1}}
+\label{sec:proof_wt_asbs}
+
+\propwtasbs*
+
+\textit{Proof.}
+We follow \citet{dama2014well} for the bias decomposition and stochastic approximation framework, extending it with WT-ASBS-specific derivations and clearer notation.
+
+\textit{Step 1: Level and driving parts of the bias and the step size.}
+We split the bias $V_k(s)$ into a \textit{level} $L_k := \frac{1}{|\mathcal{S}|} \int_\mathcal{S} V_k(s) \, \mathrm{d}s$ and a \textit{driving} part $D_k(s) := V_k(s) - L_k$.
+Only $D_k$ affects the biased distribution, and adding the scalar $L_k$ shifts the energy by a constant.
+Now, a single step of well-tempered bias update can be split into
+\begin{align}
+L_{k+1} &= L_k + \exp\left(-\frac{\beta}{\gamma - 1}L_k\right) \Lambda[D_k](s_{k+1}), \label{eq:wt_bias_level} \\
+D_{k+1}(s) &= D_k(s) + \exp\left(-\frac{\beta}{\gamma - 1}L_k\right) \Gamma[D_k](s, s_{k+1}), \label{eq:wt_bias_drive}
+\end{align}
+where we define $\Lambda[D](s')$ and $\Gamma[D](s, s')$ as follows:
+\begin{align}
+\Lambda[D](s') &:= \frac{1}{|\mathcal{S}|} \int_\mathcal{S} h K_\sigma(s, s') \exp\left(-\frac{\beta}{\gamma - 1}D(s')\right) \, \mathrm{d}s, \label{eq:wt_lambda} \\
+\Gamma[D](s, s') & := h K_\sigma(s, s') \exp\left(-\frac{\beta}{\gamma - 1}D(s')\right) - \Lambda[D](s'). \label{eq:wt_gamma}
+\end{align}
+
+Now, under mild practical conditions, the driving bias $D_k(s)$ stays bounded, and $\exp(-\frac{\beta}{\gamma - 1}D_k(s'))$ is bounded above and below by positive constants.
+Also, $\int_\mathcal{S} hK_\sigma (s, s') \, \mathrm{d}s$ is a continuous positive function of $s'$ on a compact set, so it also has positive finite bounds.
+Therefore, from \cref{eq:wt_lambda}, we get the following bound with positive constant $a$ and $b$:
+\begin{equation}
+a \le \Lambda[D_k](s_{k+1}) \stackrel{\labelcref{eq:wt_bias_level}}{=} (L_{k+1} - L_k) \exp\left(\frac{\beta}{\gamma - 1}L_k\right) \le b.
+\end{equation}
+This result implies that the asymptotic effective step size is bounded by positive multiples of $\frac{1}{k}$: $\epsilon_k := \exp(-\frac{\beta}{\gamma - 1} L_k) \asymp \frac{1}{k}$.
+
+\textit{Step 2: Stochastic recursion to a mean-field ODE.}
+Now, we define an auxiliary time scale $\tau$ with $\tau_0 = 0$ and $\tau_{k+1} = \tau_k + \epsilon_k$.
+Then, the driving part update \cref{eq:wt_bias_drive} can be written in stochastic approximation form
+\begin{equation}
+D_{k+1}(s) = D_k(s) + \epsilon_k(\Gamma[D_k](s) + \zeta_{k+1}(s)), \label{eq:wt_rm_bias_drive}
+\end{equation}
+where we rewrite \cref{eq:wt_lambda,eq:wt_gamma} with expectation over $S \sim \bar{\nu}_D$, the CV marginal under the bias $V = L + D$, 
+\begin{align}
+\Lambda[D] & := \frac{1}{|\mathcal{S}|} \int_\mathcal{S} \mathbb{E}_{S \sim \bar{\nu}_{D}} \left[ h K_\sigma(s, S) \exp\left(-\frac{\beta}{\gamma - 1}D(S)\right) \right] \, \mathrm{d}s, \label{eq:wt_bias_level_exp} \\
+\Gamma[D](s) & := \mathbb{E}_{S \sim \bar{\nu}_{D}} \left[ h K_\sigma(s, S) \exp\left(-\frac{\beta}{\gamma - 1}D(S)\right) \right] - \Lambda[D], \label{eq:wt_bias_drive_exp}
+\end{align}
+and $\zeta_{k+1}$ is a martingale difference with bounded second moment.
+The mini-batch hill update in \cref{alg:wt_asbs} provides an unbiased estimator of the expectation $\mathbb{E}_{S \sim \bar{\nu}_D}$.
+From Step 1, $\epsilon_k \asymp \frac{1}{k}$, which satisfies the Robbins--Monro step condition $\sum_k \epsilon_k = \infty$ and $\sum_k \epsilon_k^2 < \infty$ \citep{robbins1951stochastic}.
+Standard stochastic approximation arguments then imply that the polygonal interpolation $\hat{D}(\tau_k) = D_k$, $\hat{D}(\tau) = D_k + \frac{\tau - \tau_k}{\epsilon_k}(D_{k+1} - D_k)$ for $\tau \in [\tau_k, \tau_{k+1})$ is an asymptotic pseudo-trajectory of the mean-field ODE $\frac{\mathrm{d}}{\mathrm{d}\tau} D(\tau) = \Gamma[D(\tau)]$ \citep{kushner2003stochastic}.
+Physically, this corresponds to the long-time limit equation in \citet{dama2014well}, obtained by aggregating many small hill updates over a fixed $\tau$ window while the bias changes only slightly within that window.
+
+\textit{Step 3: Fixed points of the asymptotic ODE.}
+At a fixed point $D^\ast$, we have $\Gamma[D^\ast] \equiv 0$.
+From \cref{eq:wt_bias_drive_exp}, this correspond to
+\begin{equation}
+\int_\mathcal{S} h K_\sigma (s, s') \exp\left(- \frac{\beta}{\gamma - 1}D^\ast(s')\right) \bar{\nu}_{D^\ast}(s') \, \mathrm{d}s' = \mathrm{const.} \quad \forall s \in \mathcal{S}.
+\end{equation}
+For Gaussian $K_\sigma$ on a compact domain, the associated integral operator is positive definite.
+Hence, the solution is unique and satisfies
+\begin{align}
+& \exp\left(-\frac{\beta}{\gamma - 1}D^\ast(s)\right) \underbrace{\exp(-\beta(F(s) + D^\ast(s)))}_{\propto \bar{\nu}_{D^\ast}(s)} = \mathrm{const.} \\
+% & \quad \Longrightarrow \quad D^\ast(s) = -\frac{\Delta T}{T + \Delta T} F(s) + \mathrm{const.} \\
+& \quad \Longrightarrow \quad V^\ast(s) = L^\ast + D^\ast(s) = - \left( 1 - \frac{1}{\gamma} \right) F(s) + \mathrm{const.} \label{eq:asymp_bias}
+\end{align}
+
+\textit{Step 4. Global stability.}
+Now, define the tempering-reweighted instantaneous CV density
+\begin{equation}
+p_w(s; \tau) \propto \exp\left(-\frac{\beta}{\gamma - 1}D(s; \tau)\right) \underbrace{\exp(-\beta(F(s)+D(s; \tau)))}_{\propto \bar{\nu}_{D}(s)}.
+\label{eq:temp_rew_cv_density}
+\end{equation}
+Let $p_w^\ast$ denote the target tempering-reweighted distribution, i.e., a normalized solution of
+\begin{equation}
+\int_\mathcal{S} h K_\sigma (s, s') p_w^\ast(s') \, \mathrm{d}s' = \mathrm{const.}
+\label{eq:temp_rew_cv_target}
+\end{equation}
+For Gaussian hills on a compact $\mathcal{S}$, this solution is unique and equals the uniform density $p_w^\ast(s) = |\mathcal{S}|^{-1}$.
+Consider the Lyapunov functional defined as a KL divergence between $p_w^\ast$ and $p_w(\cdot; \tau)$:
+\begin{equation}
+\mathcal{D}(\tau) := D_\text{KL}(p_w^\ast \, \Vert \, p_w(\cdot; \tau)) = \int_S p_w^\ast(s) \log \frac{p_w(s; \tau)}{p_w^\ast(s)} \, \mathrm{d}s.
+\label{eq:lyapunov}
+\end{equation}
+We now show that $\frac{\mathrm{d}}{\mathrm{d}\tau} \mathcal{D}(\tau) \le 0$.
+First,
+\begin{align}
+\frac{\mathrm{d}}{\mathrm{d}\tau} D(s; \tau) &= \Gamma[D(\tau)](s) \\
+& \stackrel{\labelcref{eq:wt_bias_drive_exp}}{=} \int_\mathcal{S} h K_\sigma (s, s') \exp \left( -\frac{\beta}{\gamma - 1} D(s'; \tau) \right) \bar{\nu}_{D(\tau)}(s') \, \mathrm{d}s' - \Lambda[D(\tau)] \\
+& \stackrel{\labelcref{eq:temp_rew_cv_density}}{=} c(\tau) \int_\mathcal{S} h K_\sigma (s, s') p_w (s'; D_k) \, \mathrm{d}s' - \Lambda[D(\tau)] \\
+& \stackrel{\labelcref{eq:temp_rew_cv_target}}{=} c(\tau) \int_\mathcal{S} hK_\sigma(s, s') [p_w(s'; \tau) - p_w^\ast(s') ] \, \mathrm{d}s' - C(\tau),
+\label{eq:drive_dt}
+\end{align}
+where $c(\tau) > 0$ and $C(\tau)$ are constants in $s$.
+Also, from \cref{eq:temp_rew_cv_density}, we get
+\begin{align}
+\frac{1}{p_w(s; \tau)} \frac{\mathrm{d}}{\mathrm{d}\tau} p_w(s; \tau) = -\frac{\beta\gamma}{\gamma - 1} \left( \frac{\mathrm{d}}{\mathrm{d}\tau} D(s; \tau) - \mathbb{E}_{p_w}\left[ \frac{\mathrm{d}}{\mathrm{d}\tau} D(\cdot; \tau)\right]\right).
+\label{eq:temp_rew_cv_dt}
+\end{align}
+Finally, plugging \cref{eq:drive_dt,eq:temp_rew_cv_dt} into the time derivative of \cref{eq:lyapunov} yields
+\begin{align}
+\frac{\mathrm{d}}{\mathrm{d}\tau} \mathcal{D}(\tau) & \stackrel{\labelcref{eq:lyapunov}}{=} - \int_\mathcal{S} p_w^\ast(s) \frac{1}{p_w(s; \tau)} \frac{\mathrm{d}}{\mathrm{d}\tau} p_w(s; \tau) \, \mathrm{d}s \\
+& \stackrel{\labelcref{eq:temp_rew_cv_dt}}{=} \frac{\beta\gamma}{\gamma - 1} \left( \mathbb{E}_{p_w^\ast}\left[ \frac{\mathrm{d}}{\mathrm{d}\tau} D(\cdot; \tau)\right] - \mathbb{E}_{p_w}\left[ \frac{\mathrm{d}}{\mathrm{d}\tau} D(\cdot; \tau)\right]\right) \\
+& \stackrel{\labelcref{eq:drive_dt}}{=} -\frac{\beta\gamma}{\gamma - 1}c(\tau)\int_{\mathcal{S}}\int_{\mathcal{S}} [p_w(s; \tau) - p_w^\ast(s)] hK_\sigma(s, s') [p_w(s'; \tau) - p_w^\ast(s')] \, \mathrm{d}s\mathrm{d}s' \le 0,
+\label{eq:lyapunov_ineq}
+\end{align}
+since the integral operator with the Gaussian kernel $hK_\sigma(\cdot, \cdot)$ is positive semidefinite and $c(\tau) > 0$.
+The equality in \cref{eq:lyapunov_ineq} holds if and only if $p_w(\cdot; \tau) = p_w^\ast$, and $\mathcal{D}$ is a strict Lyapunov functional and the ODE solution converges to the unique fixed point.
+
+Hence, the mean-field ODE $\frac{\mathrm{d}}{\mathrm{d}\tau} D(\tau) = \Gamma[D(\tau)]$ has a globally attracting equilibrium $D^\ast$, and one gets $D_k \to D^\ast$ and $V_k \to V^\ast$ in \cref{eq:asymp_bias} almost surely by following the stochastic approximation \cref{eq:wt_rm_bias_drive}.
+\hfill $\square$
+
+
+\section{Implementation Details for WT-ASBS}
+\label{sec:implementation_details}
+
+\subsection{WT-ASBS with Replay Buffer}
+
+Here, we describe the practical implementation of \cref{alg:wt_asbs}, which merges the well-tempered bias update into the AM replay buffer update within the inner step.
+The resulting WT-ASBS algorithm with replay buffer is shown in \cref{alg:wt_asbs_buffer}.
+After updating the AM replay buffer $\mathcal{B}_\text{adj}$ (line 6), we reuse the same samples, projecting them to CV space to obtain the CV values for Gaussian kernel deposition (line 7).
+
+\begin{algorithm}[!ht]
+\small
+\caption{WT-ASBS with replay buffer}
+\label{alg:wt_asbs_buffer}
+\begin{algorithmic}[1]
+\Require prior $\mu$, potential energy $E(x)$, restraint $U(x)$, CV $\xi(x)$, control $u_\theta(x, t)$, corrector $h_\phi(x)$, replay buffers $\mathcal{B}_\text{adj}$ and $\mathcal{B}_\text{crt}$
+\State Initialize $V(s) \gets 0$, $h_\phi^{(0)} \gets 0$ \Comment{Bias and IPF initialization}
+\For{Stage $k = 1, 2, \cdots, K$}
+    \For{AM epoch $m = 1, \cdots, M_\text{adj}$} \Comment{Adjoint Matching with WT bias update}
+        \State Sample from model $\{(X_0^{(i)}, X_1^{(i)})\}_{i=1}^N \sim p^{\bar{u}^{(k)}}$, where $\bar{u}^{(k)} = \text{\texttt{stopgrad}}(u_\theta^{(k)})$
+        \State Compute adjoint target $a_t^{(i)} \gets \text{\texttt{stopgrad}}(\text{\texttt{clip}}(\nabla (E + U + V \circ \xi)(X_1^{(i)}), \alpha_\text{max}) + h_\phi^{(k)}(X_1^{(i)}))$
+        \State Update replay buffer $\mathcal{B}_\text{adj} \gets \mathcal{B}_\text{adj} \cup \{(X_0^{(i)}, X_1^{(i)}, a_t^{(i)})\}_{i=1}^N$
+        \State Update bias with sampled CVs $s^{(i)} \gets \xi(X_1^{(i)})$: \\
+        \begin{minipage}{\textwidth}
+        \begin{equation}
+        \textstyle
+        V(s) \gets V(s) + h \sum_{i=1}^{N} \exp(-\frac{\beta}{\gamma-1} V(s^{(i)})) \exp(-\frac{\Vert s - s^{(i)} \Vert^2}{2\sigma^2})
+        \end{equation}
+        \end{minipage}
+        \State Take $L$ gradient steps $\nabla_\theta \mathcal{L}_\text{AM}$ w.r.t. the AM objective: \\
+        \begin{minipage}{\textwidth}
+        \begin{equation}
+        \textstyle
+        \mathcal{L}_\text{AM}(\theta) \gets \mathbb{E}_{t \sim \mathcal{U}[0, 1], (X_0, X_1, a_t) \sim \mathcal{B}_\text{adj}, X_t \sim p^\text{base}(\cdot | X_0, X_1)} \left[ \lambda_t \Vert u_\theta^{(k)}(t, X_t) + \sigma_t a_t \Vert^2 \right]
+        \end{equation}
+        \end{minipage}
+    \EndFor
+    \vspace{1ex}
+    \For{CM epoch $m = 1, 2, \cdots, M_\text{crt}$}
+    \Comment{Corrector Matching}
+        \State Sample from model $\{(X_0^{(i)}, X_1^{(i)})\}_{i=1}^N \sim p^{\bar{u}^{(k)}}$, where $\bar{u}^{(k)} = \text{\texttt{stopgrad}}(u_\theta^{(k)})$
+        \State Update replay buffer $\mathcal{B}_\text{crt} \gets \mathcal{B}_\text{crt} \cup \{(X_0^{(i)}, X_1^{(i)})\}_{i=1}^N$
+        \State Take $L$ gradient steps $\nabla_\phi \mathcal{L}_\text{CM}$ w.r.t. the CM objective: \\
+        \begin{minipage}{\textwidth}
+        \begin{equation}
+        \textstyle
+        \mathcal{L}_\text{CM}(\phi) \gets \mathbb{E}_{(X_0, X_1) \sim \mathcal{B}_\text{crt}} \left[ \Vert h_\phi^{(k)}(X_1) - \nabla_{X_1} \log p^\text{base}(X_1 | X_0) \Vert^2 \right]
+        \end{equation}
+        \end{minipage}
+    \EndFor
+\EndFor
+\vspace{1ex}
+\State \Output Final control $u^\ast_\theta(x, t)$, final bias $V^\ast(s)$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Grid discretization of bias potential}
+Since the bias potential is accumulated over the entire training history, longer training would require summing over an increasingly large number of Gaussian kernels to evaluate $\nabla(V \circ \xi)$.
+To ensure computational efficiency, we adopt the standard grid discretization approach commonly used in enhanced sampling simulations.
+The bias is stored on a discretized grid with spacing chosen to be smaller than the kernel width $\sigma$, and both energies and forces are obtained through interpolation between grid points.
+
+\paragraph{Pretraining for WT-ASBS}
+As proposed in ASBS \citep{liu2025adjoint}, we warm-start the training process with the approximate bridge matching objective, which aligns the control model $u_\theta$ more closely with available data samples.
+In our setting, these samples are generated by short MD simulations that perform local sampling around a reference configuration $x_\text{ref}$.
+The bridge matching objective $\mathcal{L}_\text{pretrain}$ is defined as follows:
+\begin{equation}
+\mathcal{L}_\text{pretrain}(\theta) = \mathbb{E}_{t \sim \mathcal{U}[0, 1], X_0 \sim \mu, X_1 \sim q, X_t\sim p^\text{base}(\cdot | X_0, X_1)} \left[ \hat{\lambda}_t \Vert u_t(X_t) - \sigma_t \nabla_{X_t} \log p^\text{base}(X_1 | X_t) \Vert^2 \right],
+\end{equation}
+where $q$ denotes the empirical distribution of the MD samples, and $\hat{\lambda}_t$ is a time-dependent weighting factor, chosen as $\kappa_{1|t} / \sigma_t^2$, where $\kappa_{1|t}$ is the conditional variance of the base process (see \cref{sec:base_process}).
+This pretraining is only approximate, since the marginal distribution of the optimal $u_\theta^\ast$ matches $q(X_1)$ exactly only when the base process is memoryless (i.e., when $X_0$ and $X_1$ are independent).
+Nevertheless, for warm-start purposes, this approximation is sufficient to rapidly align the model with a distribution concentrated in a single conformational mode.
+
+\subsection{Model Architecture}
+We build on PaiNN \citep{schutt2021equivariant}, an $\mathrm{E}(3)$-equivariant graph neural network designed for molecular energy and force prediction, with minimal modifications: adding time-conditioning inputs, incorporating vector product layers \citep{schreiner2024implicit} to break parity symmetry, restricting the model to $\mathrm{SE}(3)$-equivariance, and applying equivariant layer normalization \citep{liao2024equiformerv2} to improve training stability.
+Each atom is assigned a unique atomic embedding, as the reference configuration used to define the accessible component (\cref{req:restriction}) already specifies atom indices.
+The model outputs a single vector per atom, which is scaled by $\sigma_t$ to produce the final control and corrector outputs.
+
+\subsection{Base Process}
+\label{sec:base_process}
+
+% We employ two types of base SDEs to define the underlying stochastic processes used in our framework.
+% The first is the geometric or variance-exploding (VE) SDE \citep{song2020score}, which specifies a time-dependent noise scale $\sigma_t$ and an associated variance term $\kappa_{t|s}$ as
+% \begin{align}
+% \sigma_t &:= \sigma_\text{min} \left( \frac{\sigma_\text{max}}{\sigma_\text{min}} \right)^{1-t} \sqrt{2 \log \frac{\sigma_\text{max}}{\sigma_\text{min}}}, \label{eq:ve_sde} \\
+% \kappa_{t|s} &:= \int_s^t \sigma_\tau^2 \, \mathrm{d}\tau = \sigma_\text{max}^2 \left[ \left(\frac{\sigma_\text{min}}{\sigma_\text{max}}\right)^{2s} - \left(\frac{\sigma_\text{min}}{\sigma_\text{max}}\right)^{2t} \right],
+% \end{align}
+% so that $\kappa_{1|0} = \sigma_\text{max}^2 - \sigma_\text{min}^2$ and the reparametrized time $\gamma_t := \frac{\kappa_{t|0}}{\kappa_{1|0}} \in [0, 1]$.
+% Conditional base distributions for the driftless base $\mathrm{d}X_t = \sigma_t \mathrm{d}W_t$ are
+% \begin{align}
+% p_{t|0}^\text{base}(X_t | X_0) &= \mathcal{N}(X_t; X_0, \kappa_{t|0}I), \label{eq:time_marginal_0} \\
+% p_{t|0,1}^\text{base}(X_t | X_0, X_1) &= \mathcal{N}(X_t; (1-\gamma_t)X_0 + \gamma_t X_1, \gamma_t(1-\gamma_t)\kappa_{1|0}I). \label{eq:time_marginal_01}
+% \end{align}
+
+We employ the base distribution in \citet{karras2022elucidating} (EDM), which defines $\sigma_t$ through a power-schedule parameter $\rho$ and yields an analytically integrable variance between two different times $\kappa_{t|s}$:
+\begin{align}
+\sigma_t &:= \left[ (1-t) \sigma_\text{max}^{1/\rho} + t \sigma_\text{min}^{1/\rho} \right]^{\rho}, \label{eq:edm_sde} \\
+\kappa_{t|s} &:= \int_s^t \sigma_\tau^2 \, \mathrm{d}\tau = \frac{1}{2\rho + 1} \frac{\sigma_s^{2+1/\rho} - \sigma_t^{2+1/\rho}}{\sigma_\text{max}^{1/\rho} - \sigma_\text{min}^{1/\rho}}.
+\end{align}
+% With reparametrized time $\gamma_t$ defined analogously, its conditional base distributions coincide with those of the geometric SDE in \cref{eq:time_marginal_0,eq:time_marginal_01}.
+With the reparametrized time $\gamma_t := \frac{\kappa_{t|0}}{\kappa_{1|0}} \in [0, 1]$, conditional base distributions for the driftless base $\mathrm{d}X_t = \sigma_t \mathrm{d}W_t$ are
+\begin{align}
+p_{t|0}^\text{base}(X_t | X_0) &= \mathcal{N}(X_t; X_0, \kappa_{t|0}I), \label{eq:time_marginal_0} \\
+p_{t|0,1}^\text{base}(X_t | X_0, X_1) &= \mathcal{N}(X_t; (1-\gamma_t)X_0 + \gamma_t X_1, \gamma_t(1-\gamma_t)\kappa_{1|0}I). \label{eq:time_marginal_01}
+\end{align}
+
+\paragraph{Translational invariance}
+As in AS \citep{havens2025adjoint}, we enforce translational invariance by projecting the SDE onto the subspace $\mathcal{X}^\text{CoM} = \{ x \, \vert \, \sum_{i=1}^n x^i = 0 \} \subset \mathcal{X}$, where $x^i \in \mathbb{R}^3$ is the position of $i$-th atom.
+This is achieved through the projection operator $P$, which acts on any $y \in \mathbb{R}^{n \times 3}$ by subtracting the center of mass from each coordinate $y^i$ for $i \in [n]$.
+\begin{equation}
+x = P y, \qquad P = \left( I_n - \frac{1}{n} \bm{1}_n \bm{1}_n^\top \right) \otimes I_d
+\end{equation}
+\begin{equation}
+dX_t = \sigma_t P u_t (X_t) \, \mathrm{d}t + \sigma_t P \, \mathrm{d} W_t, \qquad X_0 = 0
+\end{equation}
+For the base process, the dynamics are given by
+\begin{align}
+X_t &= X_0 + \int_0^t \sigma_s P \, \mathrm{d}W_s \\
+\operatorname{Var}[X_t | X_0] &= \int_0^t \sigma_s^2 PP^\top \, \mathrm{d}s = \kappa_{t|0} PP^\top.
+\end{align}
+Sampling can be carried out by first drawing $Y_t \sim \mathcal{N}(X_0, \kappa_{t|0} I)$ and then projecting to obtain $X_t = P Y_t$, which enforces the translational invariance constraint.
+
+Adjoint matching \cref{eq:am} and corrector matching \cref{eq:cm} are modified accordingly as follows:
+\begin{align}
+u &:= \argmin_u \mathbb{E}_{p_{t|0,1}^\text{base} p_{0,1}^{\bar{u}}} [ \Vert P(u_t(X_t) + \sigma_t (\nabla E + h^{(k-1)})(X_1)) \Vert^2 ], \; \bar{u} = \texttt{stopgrad}(u), \label{eq:am_proj} \\
+h &:= \argmin_h \mathbb{E}_{p_{0,1}^{u^{(k)}}} [ \Vert P(h(X_1) - \nabla_{X_1} \log p_{1|0}^\text{base}(X_1 \vert X_0)) \Vert^2 ]. \label{eq:cm_proj}
+\end{align}
+
+\subsection{Hyperparameters}
+
+\begin{table}
+\caption{
+\textbf{Hyperparameters for WT-ASBS.}
+Model and training hyperparameters for each experiment.
+}
+\label{table:hparams}
+\centering
+\begin{tblr}{
+    colspec={lcccc},rowsep=.5pt,colsep=5pt,
+    vline{2},
+    row{1}={bg=themecolor!15},
+    row{2,8,12,17,25}={bg=themecolor!5},
+}
+\toprule
+Hyperparameter & \makecell{Alanine \\[-.3ex] dipeptide} & \makecell{Alanine \\[-.3ex] tetrapeptide} & \makecell{Nucleophilic \\[-.3ex] substitution} & \makecell{Post-TS \\[-.3ex] bifurcation} \\
+\midrule
+\textit{Models} &&&& \\
+Hidden dimension & 128 & 128 & 64 & 128 \\
+Radial basis & 64 & 64 & 32 & 64 \\
+Control layers & 4 & 4 & 3 & 4 \\
+Corrector layers & 3 & 3 & 3 & 3 \\
+Radial cutoff [\AA{}] & 8.0 & 8.0 & 8.0 & 8.0 \\
+\midrule
+\textit{Batch and replay buffer} &&&& \\
+AM/CM buffer size & 16,384 & 4,096 & 4,096 & 4,096 \\
+Buffer samples per epoch & 2,048 & 512 & 512 & 512 \\
+Batch size & 2,048 & 512 & 512 & 512 \\
+\midrule
+\textit{Base SDE} &&&& \\
+Source distribution & $\mathcal{N}(0, 1 \, \text{\AA}^2)$ & $\mathcal{N}(0, 1 \, \text{\AA}^2)$ & $\mathcal{N}(0, 1 \, \text{\AA}^2)$ & $\mathcal{N}(0, 1 \, \text{\AA}^2)$ \\
+$\sigma_\text{min}$ [\AA{}] & 0.001 & 0.001 & 0.001 & 0.001 \\
+$\sigma_\text{max}$ [\AA{}] & 6.0 & 6.0 & 5.0 & 6.0 \\
+EDM exponent $\rho$ & 3.0 & 3.0 & 3.0 & 3.0 \\
+\midrule
+\textit{Bias update} &&&& \\
+Initial Gaussian $h$ [eV] & $5 \times 10^{-4}$ & $5 \times 10^{-4}$ & $5 \times 10^{-4}$ & $2 \times 10^{-4}$ \\
+Gaussian width $\sigma$ & [0.2, 0.2] rad & [0.3, 0.3, 0.3] rad & [0.2, 0.2] \AA{} & [0.05, 0.05] \\
+CV grid minimum & [$-\pi,-\pi$] rad & [$-\pi,-\pi,-\pi$] rad & [1.0, 1.0] \AA{} & [0.0, -1.0] \\
+CV grid maximum & [$+\pi,+\pi$] rad & [$+\pi,+\pi,+\pi$] rad & [4.0, 4.0] \AA{} & [3.0, 1.0] \\
+CV grid bins & [150, 150] & [100, 100, 100] & [150, 150] & [300, 200] \\
+Periodic CV grid & True & True & False & False \\
+Bias factor $\gamma$ & 8.0 & 12.0 & 12.0 & 30.0 \\
+\midrule
+\textit{Training} &&&& \\
+Pretraining learning rate & $3 \times 10^{-4}$ & $3 \times 10^{-4}$ & $3 \times 10^{-4}$ & $3 \times 10^{-4}$ \\
+Pretraining steps & 100,000 & 100,000 & 20,000 & 100,000 \\
+Training stages $K$ & 4 & 40 & 2 & 4 \\
+AM epochs $M_\text{adj}$ & 1,000 & 1,000 & 500 & 1,000 \\
+CM epochs $M_\text{crt}$ & 500 & 500 & 250 & 500 \\
+Initial learning rate & $1 \times 10^{-4}$ & $1 \times 10^{-4}$ & $3 \times 10^{-5}$ & $3 \times 10^{-5}$ \\
+Final learning rate & $3 \times 10^{-5}$ & $5 \times 10^{-5}$ & $1 \times 10^{-5}$ & $1 \times 10^{-5}$ \\
+Gradient clipping value & 100.0 & 100.0 & 100.0 & 100.0 \\
+\bottomrule
+\end{tblr}
+\end{table}
+
+Model and training hyperparameters for each experiment are listed in \cref{table:hparams}.
+For WT-ASBS \cref{alg:wt_asbs_buffer}, we use $L = 100$ gradient updates per AM and CM epoch, and $\alpha_\text{max} = 100.0$ to clip the energy gradient in the terminal cost.
+Models were trained with AdamW optimizer \citep{loshchilov2017decoupled} using a weight decay of $10^{-3}$, and diffusion process was integrated with Euler--Maruyama method using 250 steps.
+For the first AM stage, we applied a 50-epoch learning rate warmup, after which bias deposition began.
+After completing $K$ training stages, we added a final AM stage without further bias deposition.
+Learning rates followed a cosine annealing schedule during training, applied independently to AM and CM optimization.
+
+Several hyperparameters affecting training duration were selected based on the convergence of \cref{alg:wt_asbs_buffer}.
+The number of gradient updates $L$ was chosen to ensure that the controller parameters could track the outer-loop bias updates, as examined further in the ablation studies in \cref{sec:ablation_studies}.
+The AM and CM epochs per stage ($M_\text{adj}$ and $M_\text{crt}$) were largely adopted from previous work \citep{liu2025adjoint}, and we found them sufficient for the AM and CM losses to stabilize within each training stage.
+The number of alternating training stages $K$ was set according to the convergence of the bias or PMF, assessed by whether newly deposited bias became negligible or whether the estimated free energy differences along the selected CVs had stabilized.
+
+\section{Experiment Details}
+\label{sec:experiment_details}
+
+For small peptides, we performed classical force field simulations with OpenMM 8.3.1 \citep{eastman2023openmm}, while reactions were modeled using UMA-S-1.1 uMLIP \citep{wood2025uma} as implemented in the \texttt{fairchem-core} 2.3.0 package \citep{fairchem} with MD integrators in ASE 3.25.0 \citep{larsen2017atomic}.
+All MD-based enhanced sampling (WTMetaD) simulations were carried out with PLUMED 2.9.3 \citep{tribello2014plumed,plumed2019promoting}.
+
+\subsection{Alanine Dipeptide}
+\paragraph{Energy model}
+The potential energy of the system was described by
+Amber ff96 force field \citep{kollman1997development} with GBSA-OBC implicit solvation \citep{onufriev2004exploring}, as implemented in OpenMM \citep{eastman2023openmm}.
+
+\paragraph{Restraints}
+We apply the chirality restraint \cref{eq:chirality_restraint} to the central alanine, $U_\text{Ala2}^\text{chiral}(X)$, during WT-ASBS training.
+This restraint is not used in MD-based sampling because chirality inversion does not occur under physical dynamics.
+
+\paragraph{Pretraining data}
+We generated pretraining data using a 100 ps molecular dynamics simulation at 300 K with a 4 fs time step, enabled by hydrogen bond constraints and hydrogen mass repartitioning (HMR; \citet{hopkins2015long}) with hydrogen masses set to 1.5 amu.
+The system was equilibrated for 10 ps before sampling $10^3$ frames at 0.1 ps intervals.
+Simulations employed the Langevin middle integrator \citep{zhang2019unified} as implemented in OpenMM \citep{eastman2023openmm}, with a collision rate of 1 ps$^{-1}$.
+In total, pretraining data generation required $2.75 \times 10^4$ energy evaluations.
+
+\paragraph{Reference data}
+We employed the test split of $10^7$ samples from \citet{midgley2022flow}, generated by replica exchange MD with 21 replicas spanning 300 K to 1300 K.
+Their dataset generation required $2.3 \times 10^{10}$ energy evaluations.
+
+\paragraph{WTMetaD simulations}
+We performed WTMetaD simulations on the backbone torsion CVs $(\phi,\psi)$.
+The dynamics were propagated with Langevin middle integrator \citep{zhang2019unified} at 300 K with a 1 fs timestep and 1 ps$^{-1}$ collision rate.
+Following a 10 ps equilibration at 300 K, Gaussian biases were deposited every 500 steps with widths of 0.2 rad for both variables.
+The bias update employed an initial Gaussian height of 1.2 kJ/mol, a bias factor of 8, and a grid covering $[-\pi,\pi]^2$ with $150 \times 150$ bins.
+Each production run was 10 ns in length, and simulations were repeated four times to ensure statistical reliability, yielding $4.0 \times 10^7$ energy evaluations.
+
+\subsection{Alanine Tetrapeptide}
+\paragraph{Energy model}
+The potential energy of the system was described by
+Amber ff99SB-ILDN force field \citep{lindorff2010improved} with Amber99-OBC implicit solvation \citep{onufriev2004exploring}, as implemented in OpenMM \citep{eastman2023openmm}.
+
+\paragraph{Restraints}
+We apply the chirality restraints \cref{eq:chirality_restraint} to three alanine residues, $U_\text{Ala2}^\text{chiral}(X) + U_\text{Ala3}^\text{chiral}(X) + U_\text{Ala4}^\text{chiral}(X)$, during WT-ASBS training.
+As in the alanine dipeptide case, these restraints are not used in MD-based sampling.
+
+\paragraph{Pretraining data}
+We generated pretraining data using a 1 ns molecular dynamics simulation at 300 K with a 4 fs time step, enabled by hydrogen bond constraints and HMR with hydrogen masses set to 1.5 amu.
+The system was equilibrated for 10 ps before sampling $10^3$ frames at 1 ps intervals.
+Simulations employed the Langevin middle integrator \citep{zhang2019unified} as implemented in OpenMM \citep{eastman2023openmm}, with a collision rate of 1 ps$^{-1}$.
+In total, pretraining data generation required $2.52 \times 10^5$ energy evaluations.
+
+\paragraph{Reference data}
+We generated unbiased alanine tetrapeptide conformations by first performing parallel tempering simulations to sample initial states, followed by long unbiased molecular dynamics runs for data collection.
+Parallel tempering simulations were carried out with OpenMM and OpenMMTools \citep{openmmtools} using MPI parallelization across 8 replicas, with temperatures geometrically spaced between 300 K and 600 K.
+Replicas were propagated with the generalized hybrid Monte Carlo (GHMC) integrator \citep{stoltz2010free} using a 2 fs timestep (with hydrogen bond constraints), 1 ps$^{-1}$ collision rate, and 1000 steps between exchange attempts (2 ps).
+Simulations were initialized from an energy-minimized structure, equilibrated for 200 ps, and then run for 100 ns of production with replica exchanges attempted every 2 ps.
+
+From the 300 K replica, 64 independent unbiased MD simulations were seeded from randomly selected frames.
+Each simulation employed a Langevin middle integrator \citep{zhang2019unified} at 300 K with a 1 fs timestep and 1 ps$^{-1}$ collision rate.
+After 100 ps of equilibration, production simulations were performed for 1.56 {\textmu}s, yielding a total of 100 {\textmu}s simulation time across all replicas.
+Trajectories were saved every 2 ps, producing $5 \times 10^7$ samples in total.
+Reference data generation required approximately $1.01 \times 10^{11}$ energy evaluations.
+
+\paragraph{WTMetaD simulations}
+We performed WTMetaD simulations on the three backbone torsion CVs $(\phi_1, \phi_2, \phi_3)$.
+The same integrator settings as in the reference data generation were used.
+Following a 10 ps equilibration at 300 K, Gaussian biases were deposited every 500 steps with widths of 0.3 rad for each CV.
+The biasing scheme employed an initial Gaussian height of 1.2 kJ/mol, a bias factor of 12, and a grid covering $[-\pi, \pi]^3$ with $75^3$ bins.
+Each production run was 20 ns in length, and simulations were repeated four times to ensure statistical reliability, yielding $8.0 \times 10^7$ energy evaluations.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.6\linewidth]{figs/rxn_atom_index.pdf}
+\caption{
+\textbf{Atom index definition for chemical reactions.}
+(a) Nucleophilic substitution (S\tsub{N}2).
+(b) Cycloaddition reaction between tropone and dimethylfulvene with post-TS bifurcation.
+}
+\label{fig:rxn_atom_index}
+\end{figure}
+
+\subsection{Nucleophilic Substitution}
+\paragraph{Energy model}
+The potential energy of the system was described by the UMA-S-1.1 \citep{wood2025uma} model with the DFT task label \texttt{omol}, a system charge of –1, and a singlet spin state (total spin 0).
+
+\paragraph{Restraints}
+In WT-ASBS, three C--H bonds (1--2, 1--3, and 1--4 in \cref{fig:rxn_atom_index}a) are maintained using the bond restraint in \cref{eq:bond_restraint}.
+For both WT-ASBS and WTMetaD, to keep the accessible CV space $\mathcal{S}$ bounded, the same restraint form is applied to two C--Cl distances (1--5 and 1--6) with $r_\text{max} = 3.3$ \AA{}, preventing chloride ions from escaping the reaction complex.
+
+\paragraph{WTMetaD simulations}
+We performed WTMetaD simulations using $(d_1, d_2)$ as the CVs.
+The dynamics were propagated with a Langevin thermostat at 300 K, a 0.5 fs timestep, and a friction coefficient of 10 ps$^{-1}$.
+Initial velocities were assigned from a Maxwell--Boltzmann distribution, and the total momentum was removed.
+Following a 1 ps equilibration at 300 K, Gaussian biases were deposited every 250 steps with widths of 0.2 \AA{} for both CVs.
+The biasing scheme used an initial Gaussian height of 0.02 eV, a bias factor of 20, and a grid spanning $[1.0, 4.0]$ \AA{} $\times$ $[1.0, 4.0]$ \AA{}.
+Each production run was 0.5 ns in length, and simulations were repeated four times to ensure statistical reliability, yielding $4.0 \times 10^6$ energy evaluations.
+
+
+\subsection{Post-Transition-State Bifurcation}
+\paragraph{Energy model}
+The potential energy of the system was described by the UMA-S-1.1 \citep{wood2025uma} model with the DFT task label \texttt{omol}, a system charge of 0, and a singlet spin state (total spin 0).
+
+\paragraph{Collective variables}
+We define a normalized contact $c_i$ that maps the bond distance $d_i$ to a \textit{soft} bond indicator,
+\begin{equation}
+c_i = \frac{1-(d_i/d_\text{ref})^6}{1-(d_i/d_\text{ref})^8} \in [0, 1],
+\label{eq:contact}
+\end{equation}
+which approaches 1 when $d_i$ is much smaller than $d_\text{ref}$ and decays to 0 as $d_i$ increases (bond dissociation).
+To construct the CVs, we express the three relevant C--C distances (\cref{fig:rxn}d) as normalized contacts using \cref{eq:contact} with $d_\text{ref} = 1.7$ \AA{}, thereby capturing bond formation progress (\cref{fig:rxn}e).
+We then define two CVs: $s_1 = c_1 + c_2 + c_3$, which measures overall bond formation, and $s_2 = c_2 - c_3$, which distinguishes between products \textbf{4} and \textbf{5}. A similar approach has been applied to enhanced sampling of mechanistically related reactions \citep{nam2023enhanced}.
+
+\paragraph{Restraints}
+In WT-ASBS, bonds present in the reactant configuration (\textbf{3}, \cref{fig:rxn}c) are preserved using the bond restraint in \cref{eq:bond_restraint}.
+Furthermore, to prevent tropone (upper reactant) from ``teleporting'' to the opposite face of dimethylfulvene (lower reactant), we enforce an inter-planar distance defined by three atoms per plane:
+\begin{equation}
+d(X) = \underbrace{\frac{(x^{(1)}_1 - x^{(1)}_0) \times (x^{(1)}_2 - x^{(1)}_0)}{\Vert(x^{(1)}_1 - x^{(1)}_0) \times (x^{(1)}_2 - x^{(1)}_0)\Vert}}_{\text{Unit normal of plane 1}} \,\cdot\, \underbrace{\left( \frac{1}{3}\sum_{m=0}^2 x^{(2)}_m - \frac{1}{3}\sum_{m=0}^2 x^{(1)}_m \right)}_{\text{Inter-centroid displacement}}.
+\label{eq:planar_distance}
+\end{equation}
+$d(X)$ is positive if the centroid of plane 2 lies on the side of plane 1 pointed to by its normal vector, and negative otherwise.
+The magnitude is the perpendicular distance between the two centroids along the normal direction of the first plane.
+We evaluate $d(X)$ using three pairs of bond-forming atoms (plane 1: dimethylfulvene atoms 15, 13, 24; plane 2: tropone atoms 2, 3, 7 in \cref{fig:rxn_atom_index}b) and apply a lower harmonic wall restraint $U_\text{plane}(X) = \frac{1}{2} \kappa [-d(X)]_+^2$ with $\kappa = 100$ eV/\AA{}$^2$ to enforce $d(X) > 0$.
+
+Finally, for both WT-ASBS and WTMetaD, the no-bond restraint in \cref{eq:no_bond_restraint} is applied to atom pairs C6--C24, C3--C18, and O8--C19 to suppress sampling of irrelevant reactive pathways.
+
+
+\paragraph{Pretraining data}
+The system was propagated with a Langevin thermostat at 300 K, a 1 fs timestep, and a friction coefficient of 1 ps$^{-1}$.
+Initial velocities were assigned from a Maxwell--Boltzmann distribution and the total momentum was removed.
+After 2 ps of equilibration (2000 steps), production dynamics were carried out for 10 ps (10k steps), saving configurations every 10 fs.
+In total, pretraining data generation required $1.2 \times 10^4$ sequential energy evaluations.
+
+\paragraph{WTMetaD simulations}
+We performed WTMetaD simulations using $(s_1, s_2)$ as the CVs.
+The dynamics were propagated with a Langevin thermostat at 300 K, a 0.5 fs timestep, and a friction coefficient of 10 ps$^{-1}$.
+Initial velocities were assigned from a Maxwell--Boltzmann distribution, and the total momentum was removed.
+Following a 1 ps equilibration at 300 K, Gaussian biases were deposited every 250 steps with widths of 0.05 for both CVs.
+The biasing scheme used an initial Gaussian height of 0.02 eV, a bias factor of 30, and a grid spanning $[0.0, 3.0] \times [-1.0, 1.0]$.
+Each production run was 0.8 ns in length, and simulations were repeated four times to ensure statistical reliability, yielding $6.4 \times 10^6$ energy evaluations.
+
+
+\section{Ablation Studies}
+\label{sec:ablation_studies}
+
+\subsection{Well-Tempered Bias Update}
+
+Here, we examine how the well-tempered bias hyperparameters (Gaussian height $h$, width $\sigma$, and bias factor $\gamma$) influence bias deposition, the intermediate sample distribution, and the convergence of free energy differences, using alanine dipeptide as a representative example.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.8\linewidth]{figs/ala2_ablations_1.pdf}
+\caption{
+\textbf{Ablation of well-tempered bias updates on free energy convergence.}
+The free energy difference $\Delta F$ between two states of alanine dipeptide is shown as a function of the number of energy evaluations during training.
+Each panel varies $h$, $\sigma$, and $\gamma$, and the default values used in the main text are indicated in gray background.
+$h$ and $\sigma$ are in units of eV and radians, respectively.
+}
+\label{fig:ala2_ablations_wt}
+\end{figure}
+
+The convergence of $\Delta F$ shown in \cref{fig:ala2_ablations_wt} across different well-tempered bias hyperparameters indicates that the method is robust over a broad range of settings.
+For the Gaussian height, values from $h = 1.5 \times 10^{-5}$ to $5 \times 10^{-4}$ eV yield nearly identical converged results despite spanning almost a factor of 30, while only the largest value, $h = 1.5 \times 10^{-3}$ eV, shows a slight deviation.
+As seen in \cref{fig:ala2_ablations_wt_1}, increasing $h$ enhances early exploration of new modes and leads to a faster initial approach to the target $\Delta F$, but excessively large $h$ can impair final convergence.
+We note that, across different experiments, $h$ values on the order of $10^{-4}$ eV perform well.
+This is roughly two orders of magnitude smaller than the $h$ values commonly used in standard WTMetaD simulations, since multiple Gaussians are deposited simultaneously during WT-ASBS training.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala2_ablations_bias_1_1.pdf}
+\caption{
+\textbf{Bias deposition and projected samples during training for different $h$ values.}
+Each row shows, for selected $h$, how the deposited bias $V(\phi, \psi)$ (shifted to have a minimum of zero) evolves with increasing numbers of energy evaluations, along with the samples produced by the process at the corresponding training step, projected onto the $\phi$--$\psi$ space.
+$h$ values are reported in units of eV.
+}
+\label{fig:ala2_ablations_wt_1}
+\end{figure}
+
+For $\sigma$, larger values promote faster initial exploration by producing a broader bias early in training (\cref{fig:ala2_ablations_wt_2}), while their impact on $\Delta F$ convergence is comparatively modest (\cref{fig:ala2_ablations_wt}).
+For $\gamma$, we observe that a small value such as $\gamma = 4$ leads to much slower convergence (\cref{fig:ala2_ablations_wt}) and reduced exploration (\cref{fig:ala2_ablations_wt_3}), as the effective temperature along the CVs is lower.
+For both $\sigma$ and $\gamma$, we observed that values commonly used in WTMetaD simulations provide good performance.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala2_ablations_bias_1_2.pdf}
+\caption{
+\textbf{Bias deposition and projected samples during training for different $\sigma$ values.}
+Each row shows, for selected $\sigma$, how the deposited bias $V(\phi, \psi)$ (shifted to have a minimum of zero) evolves with increasing numbers of energy evaluations, along with the samples produced by the process at the corresponding training step, projected onto the $\phi$--$\psi$ space.
+}
+\label{fig:ala2_ablations_wt_2}
+\end{figure}
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala2_ablations_bias_1_3.pdf}
+\caption{
+\textbf{Bias deposition and projected samples during training for different $\gamma$ values.}
+Each row shows, for selected $\gamma$, how the deposited bias $V(\phi, \psi)$ (shifted to have a minimum of zero) evolves with increasing numbers of energy evaluations, along with the samples produced by the process at the corresponding training step, projected onto the $\phi$--$\psi$ space.
+}
+\label{fig:ala2_ablations_wt_3}
+\end{figure}
+
+
+\subsection{Training Mechanism}
+
+Now we perform analogous ablations on two training mechanisms central to the practical implementation of WT-ASBS: the replay buffer and data-based pretraining.
+Although several replay buffer hyperparameters, such as AM/CM buffer sizes, the number of buffer samples per epoch, and the number of gradient updates between buffer refreshes, can influence training dynamics, we use the number of AM gradient updates (\cref{alg:wt_asbs_buffer}, $L$ in line 8) as a representative control variable to assess the effect of the replay buffer.
+Because the replay buffer update is coupled to the bias update, increasing $L$ makes both updates less frequent.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.7\linewidth]{figs/ala2_ablations_2.pdf}
+\caption{
+\textbf{Ablation of training mechanisms on free energy convergence.}
+The free energy difference $\Delta F$ between two states of alanine dipeptide is shown as a function of the number of energy evaluations during training.
+Each panel varies the number of steps per epoch (replay buffer update frequency) and whether pretraining is used.
+}
+\label{fig:ala2_ablations_mech}
+\end{figure}
+
+First, the $\Delta F$ convergence in \cref{fig:ala2_ablations_mech} shows that the replay buffer has a substantial impact on training efficiency: using only a small number of AM steps per replay buffer update slows convergence significantly.
+The bias deposition patterns in \cref{fig:ala2_ablations_mech_1} further indicate that overly frequent buffer and bias updates prevent the sampler parameters from keeping pace with the evolving bias, causing excessive bias to accumulate in the initial basin and leading to slow exploration of the next state.
+This illustrates that sufficient parameter updates between buffer updates help bridge the gap between the \textit{ideal} two-time-scale WT-ASBS in \cref{alg:wt_asbs}, where ASBS training converges at each fixed bias, and the \textit{practical} WT-ASBS in \cref{alg:wt_asbs_buffer}, where parameter and bias updates proceed concurrently.
+The replay mechanism must therefore provide enough time for parameter updates to keep up with bias deposition.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala2_ablations_bias_2_1.pdf}
+\caption{
+\textbf{Bias deposition and projected samples during training for different number of AM steps per epoch.}
+Each row shows, for selected number of steps per epoch, how the deposited bias $V(\phi, \psi)$ (shifted to have a minimum of zero) evolves with increasing numbers of energy evaluations, along with the samples produced by the process at the corresponding training step, projected onto the $\phi$--$\psi$ space.
+}
+\label{fig:ala2_ablations_mech_1}
+\end{figure}
+
+Next, \cref{fig:ala2_ablations_mech} shows that $\Delta F$ convergence is substantially faster when training begins from localized pretraining.
+The sample distributions in \cref{fig:ala2_ablations_mech_2} clarify this behavior: without pretraining, the model must identify low-energy modes from scratch, which requires a large number of energy gradient evaluations during the early stages of training.
+While the well-tempered bias update can converge to the correct PMF under mild conditions regardless of the initial sampling distribution, these results show that it is beneficial to exploit the initial structure of the chemical system and the efficiency of local, dynamics-based exploration.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala2_ablations_bias_2_2.pdf}
+\caption{
+\textbf{Bias deposition and projected samples during training with or without pretraining.}
+The upper row shows results without pretraining and the lower row shows results with pretraining.
+Each row illustrates how the deposited bias $V(\phi, \psi)$ (shifted to have a minimum of zero) evolves with increasing numbers of energy evaluations, along with the samples produced by the process at the corresponding training step, projected onto the $\phi$--$\psi$ space.
+}
+\label{fig:ala2_ablations_mech_2}
+\end{figure}
+
+
+\section{Additional Results}
+\label{sec:additional_results}
+
+% \subsection{Gaussian Mixture in Two Dimensions}
+
+% % \paragraph{Gaussian mixture in two dimensions}
+% % \todo{Add results.}
+
+% \begin{figure}[htbp]
+%     \centering
+%     \begin{minipage}{0.16\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/gt}
+%     \end{minipage}
+%     \begin{minipage}{0.16\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/asbs}
+%     \end{minipage}
+%     \begin{minipage}{0.16\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/wtasbs}
+%     \end{minipage}
+%     \hfill
+%     \begin{minipage}{0.5\textwidth}
+%         \centering
+%         \resizebox{1\linewidth}{!}{
+%             \begin{tabular}{lcccc}
+%                 \toprule
+%                 Algorithm & NLL & ESS & $\mathcal{W}_{2}$ & Modes \\
+%                 \midrule
+%                 FAB~\citep{midgley2022flow}               & 7.14\std{0.01} & 0.653 \std{0.017} & 12.0\std{5.73} & -- \\
+%                 PIS~\citep{zhang2021path}                 & 7.72\std{0.03} & 0.295 \std{0.018} & 7.64\std{0.92} & -- \\
+%                 DDS~\citep{vargas2023denoising}           & 7.43\std{0.46} & 0.687 \std{0.208} & 9.31\std{0.82} & -- \\
+%                 iDEM~\citep{akhound2024iterated}          & 6.96\std{0.07} & 0.734 \std{0.092} & 7.42\std{3.44} & -- \\
+%                 ASBS~\citep{liu2025adjoint} ($\sigma_{\text{max}}=40$) & 6.96\std{0.07} & 0.734 \std{0.092} & 7.42\std{3.44} & -- \\
+%                 ASBS ($\sigma_{\text{max}}=1$)                         & -- \\
+%                 WT-ASBS ($\sigma_{\text{max}}=1$) (ours)               & -- \\
+%                 \bottomrule
+%             \end{tabular}
+%         }
+%     \end{minipage}
+%     \caption{(left) Ground truth, Adjoint Schr\"odinger Bridge Sampler, and Well-tempered Adjoint Schr\"odinger Bridge Sampler. Both ASBS algorithms have $\sigma=2$. Note that ASBS fails to explore beyond its initalization due to the flatness of the target energy landscape, while WT-ASBS finds all modes of the target distribution. (right) Quantitative results of each algorithm's learned representation of the target using Negative Log Likelihood (NLL), Effective Sample Size (ESS), Wasserstein-2 distance ($\mathcal{W}_{2}$), and Number of modes (Modes).}
+%     \label{fig:image-table}
+% \end{figure}
+
+% One standard benchmark for neural samplers is a 40-Gaussian mixture model (GMM) distribution where each Gaussian has equal weight and standard deviation, but a distinct location parameter. The sampler is trained without data, but it is allowed to query the unnormalized log-likelihood (or spatial derivative). The sampler is evaluated based on its reconstruction of the GMM. Following other works, we apply a simple multi-layer perceptron architecture with sinusoidal positional embeddings.
+
+% This simple benchmark can elucidate algorithmic dependence on hyperparameters, especially regarding the practical ability of an algorithm to explore distant modes of a distribution. Despite theoretical asymptotic behavior on infinite samples, our results demonstrate that ASBS, and other algorithms, require careful tuning of the base process' scale parameter in-order to find all modes of the target distribution. Meanwhile, our approach of adding a sequential bias to the target distribution encourages exploration and finds all modes of the target without tuning the scale hyperparameter. Although our method introduces four additional hyperparameters, they can be chosen using simple heuristics and do not require knowledge of the spacial extend of the target distribution in advance.
+% Our method gains the ability to explore, but does not require MCMC in the loop.
+
+
+\subsection{Alanine Dipeptide}
+
+In this section, we extend the alanine dipeptide sampling comparison from the main text to standard distributional metrics following \citet{liu2025adjoint}.
+Specifically, we report KL divergence for 1-D marginals of torsion angles, as well as $\mathcal{W}_2$ and Jensen--Shannon divergence (JSD) for the joint distribution of backbone torsions $(\phi, \psi)$.
+Results for previous diffusion samplers using internal coordinate representations (bond distances, angles, and torsions) and for models trained in this work using Cartesian coordinates are summarized in \cref{table:ala2_dist}.
+We used $10^6$ samples to compute $D_\text{KL}$ and JSD, and randomly selected $10^4$ samples for $\mathcal{W}_2$ (with weighted random sampling for WT-ASBS).
+
+\begin{table}[!ht]
+\caption{
+\textbf{Distributional metrics for alanine dipeptide.}
+Comparison of diffusion samplers applied in internal or Cartesian coordinate representations of alanine dipeptide sampling.
+The KL divergence ($D_\text{KL}$) of five 1-D torsion angle marginals and the Wasserstein-2 distance ($\mathcal{W}_2$) and JSD on joint backbone torsion distribution are reported.
+$^\ast$Results from \citet{liu2025adjoint}.
+$^\dagger$Result from \citet{choi2025nonequilibrium}.
+$^\ddagger$Reweighted samples are used.
+}
+\small
+\label{table:ala2_dist}
+\centering
+\begin{tblr}{
+    colspec={lccccccc},rowsep=1pt,colsep=3.8pt,
+    vline{2,7},
+    row{1,2}={bg=themecolor!15},
+    row{3,9}={bg=themecolor!5},
+    cell{1}{2}={c=5}{c},
+    cell{1}{7}={c=2}{c},
+    rows={1.2em},
+}
+\toprule
+& $D_\text{KL}$ on 1-D marginal ($\downarrow$) &&&&& $(\phi, \psi)$ joint \\
+Method & $\phi$ & $\psi$ & $\gamma_1$ & $\gamma_2$ & $\gamma_3$ & $\mathcal{W}_2$ ($\downarrow$) & JSD $(\downarrow)$ \\
+\midrule
+\textit{Internal coordinates} &&&&&& \\
+PIS \citep{zhang2021path}$^\ast$ & 0.05\spm{0.03} & 0.38\spm{0.49} & 5.61\spm{1.24} & 4.49\spm{0.03} & 4.60\spm{0.03} & 1.27\spm{1.19} & -- \\
+DDS \citep{vargas2023denoising}$^\ast$ & 0.03\spm{0.01} & 0.16\spm{0.07} & 2.44\spm{0.96} & 0.03\spm{0.00} & 0.03\spm{0.00} & 0.68\spm{0.09} & -- \\
+AS \citep{havens2025adjoint}$^\ast$ & 0.09\spm{0.09} & 0.04\spm{0.04} & 0.17\spm{0.17} & 0.56\spm{0.09} & 0.51\spm{0.06} & 0.65\spm{0.52} & -- \\
+NAAS \citep{choi2025nonequilibrium}$^\dagger$ & 0.26\hphantom{\spm{0.00}} & 0.24\hphantom{\spm{0.00}} & 0.27\hphantom{\spm{0.00}} & 0.13\hphantom{\spm{0.00}} & 0.16\hphantom{\spm{0.00}} & -- & -- \\
+ASBS \citep{liu2025adjoint}$^\ast$ & 0.02\spm{0.00} & 0.01\spm{0.00} & 0.03\spm{0.01} & 0.02\spm{0.00} & 0.02\spm{0.00} & 0.25\spm{0.01} & -- \\
+\midrule
+\textit{Cartesian coordinates} &&&&& \\
+ASBS \citep{liu2025adjoint} & 0.14\spm{0.03} & 0.09\spm{0.03} & 0.02\spm{0.00} & 0.00\spm{0.00} & 0.00\spm{0.00} & 0.45\spm{0.01} & 0.014\spm{0.003} \\
+WT-ASBS (this work)$^\ddagger$ & 0.02\spm{0.00} & 0.04\spm{0.01} & 0.02\spm{0.00} & 0.00\spm{0.00} & 0.00\spm{0.00} & 0.43\spm{0.02} & 0.005\spm{0.001} \\
+\bottomrule
+\end{tblr}
+\end{table}
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala2_hists.pdf}
+\caption{
+\textbf{Ramachandran plots for alanine dipeptide.}
+Comparison of backbone torsion distributions $(\phi, \psi)$ in log densities, for reference, ASBS (internal coordinates), ASBS and WT-ASBS (Cartesian coordinates), as in \cref{table:ala2_dist}.
+All three methods reproduce the more populated regions reasonably well, but their behavior in less populated regions differs substantially.
+Negligibly low-density regions are omitted for visual clarity.
+$^\ast$Taken from \citet{liu2025adjoint}.
+}
+\label{fig:ala2_hists}
+\end{figure}
+
+\cref{table:ala2_dist} shows that WT-ASBS performs well on all metrics, with similar $\mathcal{W}_2$ performance to baseline ASBS (Cartesian) and slightly worse than reference ASBS (internal coordinates).
+However, the Ramachandran plots in \cref{fig:ala2_hists} reveal that WT-ASBS better reproduces the overall density, while the other two methods either collapse into highly populated regions or leak into sparsely populated ones.
+This discrepancy arises because the metrics in \cref{table:ala2_dist} assume equal weight for all samples.
+WT-ASBS, designed to satisfy \cref{req:efficiency}, incorporates weighted sampling to achieve balanced efficiency across all relevant modes.
+Since Boltzmann populations depend \textit{exponentially} on free energy, focusing on more populated regions can yield good metrics without capturing the full distribution.
+Therefore, we emphasize evaluations more closely aligned with the design choices discussed in the main text.
+
+\subsection{Alanine Tetrapeptide}
+In \cref{fig:ala4_pmf_comparison}, we show the distribution of pretraining data and compare the PMF obtained by reweighting (\cref{eq:snis}) for WT-ASBS, the bias (\cref{remark:wt_asbs}) for WTMetaD and WT-ASBS, and the reference PMF.
+The populations within each mode are well reproduced, while biased sampling methods (WT-ASBS and WTMetaD) capture the energetic features of the transition region between modes.
+This region is inaccessible even with a huge number of unbiased samples ($5 \times 10^7$ for the reference), underscoring the necessity of biased sampling.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figs/ala4_pmf_comparison.pdf}
+\caption{
+\textbf{Alanine tetrapeptide PMFs.}
+Columns show pretraining data, PMFs from reweighting (WT-ASBS), PMFs from WT-ASBS and WTMetaD biases, and the reference PMF.
+Rows correspond to different torsion angle pairs $(\phi_1, \phi_2)$, $(\phi_1, \phi_3)$, and $(\phi_2, \phi_3)$.
+Dotted lines at $\phi_i = 0$ and $2$ mark the mode boundaries.
+All method reproduces populations within metastable modes, while biased sampling (WT-ASBS and WTMetaD) captures transition regions inaccessible to unbiased sampling.
+}
+\label{fig:ala4_pmf_comparison}
+\end{figure}
+
+\subsection{Sampling Reactive Energy Landscapes}
+
+To quantify the convergence of PMFs in \cref{fig:pmf_convergence}, we define the PMF MAE between a PMF $F(s)$ and its reference $F_\text{ref}(s)$, both shifted to have minimum zero, as
+\begin{equation}
+\text{MAE}[F, F_\text{ref}] = \frac{\min_c \int_\mathcal{S} |F(s) - F_\text{ref}(s) + c| \, \bm{1}[F_\text{ref}(s) < F_\text{thres}] \, \mathrm{d}s}{\int_\mathcal{S} \bm{1}[F_\text{ref}(s) < F_\text{thres}] \, \mathrm{d}s},
+\label{eq:pmf_mae}
+\end{equation}
+i.e., the average absolute deviation (up to an optimal constant shift $c$) over regions of CV space where $F_\text{ref}(s)$ is below the threshold $F_\text{thres}$.
+We used $F_\text{thres}$ of 30 kcal/mol for the S\tsub{N}2 reaction, and 45 kcal/mol for the post-TS bifurcation reaction.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.6\linewidth]{figs/sn2_pmf_comparison.pdf}
+\caption{
+\textbf{S\tsub{N}2 reaction PMFs.}
+Comparison of PMFs obtained from WT-ASBS and WTMetaD biases.
+Red dotted lines mark regions influenced by restraints, gray dotted lines denote the $d_1 = d_2$ symmetry lines, and the purple cross indicates the transition state location.
+}
+\label{fig:sn2_pmf_comparison}
+\end{figure}
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.65\linewidth]{figs/bifurcation_pmf_comparison.pdf}
+\caption{
+\textbf{Post-TS bifurcation reaction PMFs.}
+Comparison of 1-D PMF $F(s_1)$ and 2-D PMF $F(s_1, s_2)$ obtained from WT-ASBS and WTMetaD biases.
+Red dotted lines mark regions influenced by restraints, gray dotted lines denote the $c_2 = c_3$ symmetry lines, and the purple cross indicates the transition state locations.
+}
+\label{fig:bifurcation_pmf_comparison}
+\end{figure}
+
+We compare PMFs for reactions obtained with bias from WT-ASBS and WTMetaD in \cref{fig:sn2_pmf_comparison,fig:bifurcation_pmf_comparison}, and confirm that the final PMFs from both methods agree well.
+For the post-TS bifurcation, valuable chemical insights into the mechanistic understanding of reactions can be obtained from the free energy profiles.
+For example, while \textbf{5} is the experimentally observed product, two competing mechanisms of \textbf{3} $\to$ \textbf{4} $\to$ \textbf{5} \citep{paddon1974concerning} vs. \textbf{3} $\to$ \textbf{5} \citep{houk1970novel} have been proposed.
+The 2-D PMF reveals that the initial reactive flux is biased toward product \textbf{4}, but the deeper free energy basin of \textbf{5} makes it the thermodynamically favored product, consistent with previous findings that \textbf{4} forms transiently and subsequently converts to \textbf{5} \citep{yu2017mechanisms}.
+
+\subsection{ML Collective Variables}
+\label{sec:mlcv}
+
+To illustrate the generalizability of the method to non–hand-crafted CVs, we present initial experiments coupling WT-ASBS with an ML CV learned automatically from unbiased samples of the metastable states of alanine dipeptide.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.85\linewidth]{figs/ala2_mlcv_summary.pdf}
+\caption{
+\textbf{WT-ASBS for alanine dipeptide with ML CV.}
+(a) CV training data from each state in the $(\phi, \psi)$ space.
+(b) Trained ML CV values for reference equilibrium configurations.
+(c) One-dimensional PMF along the Deep-TDA CV obtained with WT-ASBS and from reference unbiased configurations.
+(d, e) Two-dimensional PMF on $(\phi, \psi)$ from (d) WT-ASBS with reweighting and (e) reference unbiased configurations.
+(f) Convergence of $\Delta F$ between the two states for WT-ASBS as a function of the number of energy evaluations.
+}
+\label{fig:ala2_mlcv}
+\end{figure}
+
+Starting from 5,000 unbiased configurations collected from each state (\cref{fig:ala2_mlcv}a), we trained a Deep-TDA \citep{trizio2021enhanced} CV that maps the samples to a one-dimensional space in which each state corresponds to a single Gaussian distribution.
+We used the default settings of the mlcolvar package \citep{bonati2023unified}, employing a multilayer perceptron CV model that takes pairwise heavy-atom distances as inputs and includes hidden layers of sizes 24 and 12.
+We assign states 1 and 2 to Gaussians $\mathcal{N}(-7.0, 1.0^2)$ and $\mathcal{N}(7.0, 1.0^2)$, respectively.
+The resulting ML CV values for long unbiased reference configurations (including transitions) are shown in \cref{fig:ala2_mlcv}b: configurations from the two metastable states cluster around $-7$ and $7$, while transition configurations lie smoothly between them.
+We then perform WT-ASBS training using the same settings as in the main-text alanine dipeptide experiment, except for a smaller Gaussian height $h = 1 \times 10^{-5}$ eV to account for the reduced CV dimensionality.
+
+The final 1-D PMF along the CV in \cref{fig:ala2_mlcv}c shows good agreement with the reference PMF, and $\Delta F$ approaches the reference value smoothly (\cref{fig:ala2_mlcv}f).
+The 2-D PMF on $(\phi, \psi)$ obtained by reweighting 1M samples with their bias values (\cref{fig:ala2_mlcv}d) also agrees reasonably well with the reference 2-D PMF (\cref{fig:ala2_mlcv}e), though the modes appear broadened along the $\psi$ direction, which is less well resolved by the ML CV.
+This behavior is consistent with the difference between baseline ASBS and WT-ASBS (\cref{fig:ala2_hists}), where WT-based weights help recover structure in sparsely sampled regions by downweighting configurations that are distinguishable in the CV space.
+These preliminary results suggest that WT-ASBS can be combined with ML CV pipelines to enable enhanced exploration when a good CV is not known a priori.
+
+
+% \section{Large Language Model Statement}
+% We made limited use of large language models (LLMs) to assist with language refinement and proofreading.
+% No content, ideas, or analyses were produced by these tools.
+
+\end{document}

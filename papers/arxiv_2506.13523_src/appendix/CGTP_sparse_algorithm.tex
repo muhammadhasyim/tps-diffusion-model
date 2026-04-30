@@ -1,0 +1,99 @@
+\section{CGTP Sparse Algorithm}
+While leveraging sparsity of the Clebsch-Gordan coefficients will improve asymptotic runtime, in practice we would like an implementation which is GPU friendly. Here we present an algorithm which uses the sparsity to create a constant number of generalized convolution operations.
+
+\begin{algorithm}[!htb]
+\caption{CGTP sparse}
+\label{alg:CGTP_sparse}
+\begin{algorithmic}
+\Require Irrep 1 $\xl{1}$, Irrep 2 $\yl{2}$, Clebsch-Gordan coefficients $C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,m_2}$
+\For{$m_3 = -\ell_3,\ldots,\ell_3$}:
+\For{$m_1 = -\ell_1,\ldots,\ell_1$}:
+\Let{$A^{\ell_3,m_3}_{\ell_1,m_1,\ell_2}$}{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,m_1+m_3}$}
+\Let{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,m_1+m_3}$}{$0$}
+\EndFor
+\EndFor
+\For{$m_3 = -\ell_3,\ldots,\ell_3$}:
+\For{$m_1 = -\ell_1,\ldots,\ell_1$}:
+\Let{$B^{\ell_3,m_3}_{\ell_1,m_1,\ell_2}$}{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,m_1-m_3}$}
+\Let{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,m_1-m_3}$}{$0$}
+\EndFor
+\EndFor
+\For{$m_3 = -\ell_3,\ldots,\ell_3$}:
+\For{$m_1 = -\ell_1,\ldots,\ell_1$}:
+\Let{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2}$}{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,-m_1+m_3}$}
+\Let{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,-m_1+m_3}$}{$0$}
+\EndFor
+\EndFor
+\For{$m_3 = -\ell_3,\ldots,\ell_3$}:
+\For{$m_1 = -\ell_1,\ldots,\ell_1$}:
+\Let{$D^{\ell_3,m_3}_{\ell_1,m_1,\ell_2}$}{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,-m_1-m_3}$}
+\Let{$C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2,-m_1-m_3}$}{$0$}
+\EndFor
+\EndFor
+\For{$m_3=-\ell_3,\ldots,\ell_3$}
+\For{$m_1=-\ell_1,\ldots,\ell_1$}
+\Let{$\mathbf{z}^{(\ell_3)}_{m_3}$}{$\mathbf{z}^{(\ell_3)}_{m_3}+A^{\ell_3,m_3}_{\ell_1,m_1,\ell_2}\xl{1}_{m_1}\yl{2}_{m_1+m_3}$}
+\EndFor
+\EndFor
+\For{$m_3=-\ell_3,\ldots,\ell_3$}
+\For{$m_1=-\ell_1,\ldots,\ell_1$}
+\Let{$\mathbf{z}^{(\ell_3)}_{m_3}$}{$\mathbf{z}^{(\ell_3)}_{m_3}+B^{\ell_3,m_3}_{\ell_1,m_1,\ell_2}\xl{1}_{m_1}\yl{2}_{m_1-m_3}$}
+\EndFor
+\EndFor
+\For{$m_3=-\ell_3,\ldots,\ell_3$}
+\For{$m_1=-\ell_1,\ldots,\ell_1$}
+\Let{$\mathbf{z}^{(\ell_3)}_{m_3}$}{$\mathbf{z}^{(\ell_3)}_{m_3}+C^{\ell_3,m_3}_{\ell_1,m_1,\ell_2}\xl{1}_{m_1}\yl{2}_{-m_1+m_3}$}
+\EndFor
+\EndFor
+\For{$m_3=-\ell_3,\ldots,\ell_3$}
+\For{$m_1=-\ell_1,\ldots,\ell_1$}
+\Let{$\mathbf{z}^{(\ell_3)}_{m_3}$}{$\mathbf{z}^{(\ell_3)}_{m_3}+D^{\ell_3,m_3}_{\ell_1,m_1,\ell_2}\xl{1}_{m_1}\yl{2}_{-m_1-m_3}$}
+\EndFor
+\EndFor
+\State\Return $\mathbf{z}^{(\ell_3)}$
+\end{algorithmic}
+\end{algorithm}
+
+
+% \begin{algorithm}[H]
+% \caption{CGTP Sparse Triton}
+% \begin{algorithmic}[1]
+% \Require \textbf{input1}, $\mathbf{input2} \in \mathbb{R}^{B \times L}$ in HBM
+% \Require Sparse tensor representation: $\mathbf{indptr} \in \mathbb{N}^{K+1}$, $\mathbf{l1s}, \mathbf{l2s} \in \mathbb{N}^{NNZ}$, $\mathbf{vals} \in \mathbb{R}^{NNZ}$
+% \State Set grid block sizes $B_{b2}$, $B_{k2}$ and tile sizes $B_{b1}$, $B_{k1}$
+% \State Initialize $\mathbf{out} = (0)_{B \times K}$ in HBM
+% \For{$\text{pid}_{b2} < \ceil{B/B_{b2}}$ \textbf{parallel}}
+%     \For{$\text{pid}_{k2} < \ceil{K/B_{k2}}$ \textbf{parallel}}
+%         \State $b_{\text{grid}} \gets \text{pid}_{b2} \cdot B_{b2}$
+%         \State $k_{\text{grid}} \gets \text{pid}_{k2} \cdot B_{k2}$
+%         \For{$b_2 = 0$ \textbf{to} $B_{b2}$ \textbf{step} $B_{b1}$}
+%             \State $b_{\text{block}} \gets b_{\text{grid}} + b_2$
+%             \State $\mathbf{b\_range} \gets [0, B_{b1})$
+%             \State $\mathbf{b} \gets b_{\text{block}} + \mathbf{b\_range}$
+%             \For{$k_2 = 0$ \textbf{to} $B_{k2}$ \textbf{step} $B_{k1}$}
+%                 \State $k_{\text{block}} \gets k_{\text{grid}} + k_2$
+%                 \State $\mathbf{k\_range} \gets [0, B_{k1})$
+%                 \State $\mathbf{k} \gets k_{\text{block}} + \mathbf{k\_range}$
+%                 \State Initialize $\mathbf{acc} = (0)_{B_{k1} \times B_{b1}}$ in SRAM \Comment{Batch-first layout}
+%                 \State Load $\mathbf{start}, \mathbf{end} \gets \mathbf{indptr}[\mathbf{k}], \mathbf{indptr}[\mathbf{k}+1]$
+%                 \For{$p = 0$ \textbf{to} $\max(\mathbf{end} - \mathbf{start})$}
+%                     \State $\mathbf{pos} \gets \mathbf{start} + p$
+%                     \State Load $\mathbf{l1} \gets \mathbf{l1s}[\mathbf{pos}]$ from HBM
+%                     \State Load $\mathbf{l2} \gets \mathbf{l2s}[\mathbf{pos}]$ from HBM
+%                     \State Load $\mathbf{v} \gets \mathbf{vals}[\mathbf{pos}]$ from HBM
+%                     \State $\mathbf{in1\_off} \gets \mathbf{b} \cdot B + \mathbf{l1}$ \Comment{Batch-stride B}
+%                     \State $\mathbf{in2\_off} \gets \mathbf{b} \cdot B + \mathbf{l2}$ \Comment{Batch-stride B}
+%                     \State Load $\mathbf{in1} \gets \mathbf{input1}[\mathbf{in1\_off}]$ from HBM
+%                     \State Load $\mathbf{in2} \gets \mathbf{input2}[\mathbf{in2\_off}]$ from HBM
+%                     \State $\mathbf{acc} \gets \mathbf{acc} + \mathbf{in1} \odot \mathbf{in2} \odot \mathbf{v}$
+%                 \EndFor
+%                 \State $\mathbf{out\_off} \gets \mathbf{b} \cdot B + \mathbf{k}$ \Comment{Batch-first output}
+%                 \State Write $\mathbf{out}[\mathbf{out\_off}] \gets \mathbf{acc}$ to HBM
+%             \EndFor
+%         \EndFor
+%     \EndFor
+% \EndFor
+% \State \Return out
+% \end{algorithmic}
+% \end{algorithm}
+

@@ -1,0 +1,114 @@
+\begin{tikzpicture}
+
+    % === Bottom curve (original) ===
+    \begin{scope}[rotate=20]
+        \draw[line width=1.2pt, black] (0,0) .. controls (1,0.8) and (3,0.8) .. (4,0)
+            coordinate[pos=0.00] (A1)
+            coordinate[pos=0.33] (A2)
+            coordinate[pos=0.66] (A3)
+            coordinate[pos=1.00] (A4);
+    \end{scope}
+    
+    % Equidistant circles on bottom curve
+    \foreach \p in {A1, A2, A3, A4} {
+        \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (\p) {};
+    }
+    
+    % Label for bottom curve
+    \node[right=5pt, font=\Large] at (A4) {$\phi_t$};
+
+    % === Middle curve (first push) ===
+    \begin{scope}[rotate=20]
+        \draw[line width=1.2pt, black] (0,1.3) .. controls (1.8,2.1) and (4.5,2.1) .. (6,1.3)
+            % Non-equidistant positions (where original points moved - crosses)
+            coordinate[pos=0.00] (C1)
+            coordinate[pos=0.22] (C2)
+            coordinate[pos=0.48] (C3)
+            coordinate[pos=1.00] (C4)
+            % Equidistant positions (new proper distribution - circles)
+            coordinate[pos=0.00] (B1)
+            coordinate[pos=0.33] (B2)
+            coordinate[pos=0.66] (B3)
+            coordinate[pos=1.00] (B4);
+    \end{scope}
+    
+    % Equidistant circles on middle curve
+    \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (B1) {};
+    \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (B2) {};
+    \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (B3) {};
+    \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (B4) {};
+    
+    % Crosses at non-equidistant positions on middle curve
+    \foreach \p in {C2, C3} {
+        \draw[line width=1.2pt, black] (\p) ++(-0.12,-0.12) -- ++(0.24,0.24);
+        \draw[line width=1.2pt, black] (\p) ++(-0.12,0.12) -- ++(0.24,-0.24);
+    }
+    
+    % Label for middle curve
+    \node[right=5pt, font=\Large] at (B4) {$\phi_{t+1}$};
+
+    % === Top curve (second push) ===
+    \begin{scope}[rotate=20]
+        \draw[line width=1.2pt, black] (0,2.6) .. controls (2.5,3.6) and (6,3.6) .. (8,2.6)
+            % Non-equidistant positions (where middle points moved - crosses)
+            coordinate[pos=0.00] (E1)
+            coordinate[pos=0.25] (E2)
+            coordinate[pos=0.52] (E3)
+            coordinate[pos=1.00] (E4)
+            % Equidistant positions (new proper distribution - circles)
+            coordinate[pos=0.00] (D1)
+            coordinate[pos=0.33] (D2)
+            coordinate[pos=0.66] (D3)
+            coordinate[pos=1.00] (D4);
+    \end{scope}
+    
+    % Equidistant circles on top curve
+    \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (D1) {};
+    \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (D2) {};
+    \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (D3) {};
+    \node[circle, draw=black, fill=white, minimum size=5pt, inner sep=0pt, line width=1.2pt] at (D4) {};
+    
+    % Crosses at non-equidistant positions on top curve
+    \foreach \p in {E2, E3} {
+        \draw[line width=1.2pt, black] (\p) ++(-0.12,-0.12) -- ++(0.24,0.24);
+        \draw[line width=1.2pt, black] (\p) ++(-0.12,0.12) -- ++(0.24,-0.24);
+    }
+    
+    % Label for top curve
+    \node[right=5pt, font=\Large] at (D4) {$\phi_{t+2}$};
+
+    % === Arrows from bottom to middle curve ===
+    \draw[-{Stealth}, dashed, gray, line width=1pt, shorten <=4pt, shorten >=4pt] (A1) -- (C1);
+    \draw[-{Stealth}, dashed, gray, line width=1pt, shorten <=4pt, shorten >=4pt] (A2) -- (C2);
+    \draw[-{Stealth}, dashed, gray, line width=1pt, shorten <=4pt, shorten >=4pt] (A3) -- (C3);
+    \draw[-{Stealth}, dashed, gray, line width=1pt, shorten <=4pt, shorten >=4pt] (A4) -- (C4);
+
+    % === Arrows from middle to top curve ===
+    \draw[-{Stealth}, dashed, gray, line width=1pt, shorten <=4pt, shorten >=4pt] (B1) -- (E1);
+    \draw[-{Stealth}, dashed, gray, line width=1pt, shorten <=4pt, shorten >=4pt] (B2) -- (E2);
+    \draw[-{Stealth}, dashed, gray, line width=1pt, shorten <=4pt, shorten >=4pt] (B3) -- (E3);
+    \draw[-{Stealth}, dashed, gray, line width=1pt, shorten <=4pt, shorten >=4pt] (B4) -- (E4);
+
+    % === Reparametrization arrows (cross to circle on same curve) ===
+    % Middle curve reparametrization
+    \draw[-{Stealth}, dotted, blue!60, line width=1pt, shorten <=5pt, shorten >=5pt, bend left=40] (C2) to (B2);
+    \draw[-{Stealth}, dotted, blue!60, line width=1pt, shorten <=5pt, shorten >=5pt, bend right=40] (C3) to (B3);
+    
+    % Top curve reparametrization
+    \draw[-{Stealth}, dotted, blue!60, line width=1pt, shorten <=5pt, shorten >=5pt, bend left=40] (E2) to (D2);
+    \draw[-{Stealth}, dotted, blue!60, line width=1pt, shorten <=5pt, shorten >=5pt, bend right=40] (E3) to (D3);
+
+    \begin{scope}[shift={(5.5,0)}]
+        % Legend box
+        \draw[rounded corners, fill=white, draw=gray!50] (-0.3,-0.4) rectangle (2.2,1.1);
+        
+        % Gray arrow legend
+        \draw[-{Stealth}, dashed, gray, line width=1pt] (0,0.7) -- (1,0.7);
+        \node[right] at (1.1,0.7) {$v_t$};
+        
+        % Blue arrow legend
+        \draw[-{Stealth}, dotted, blue!60, line width=1pt] (0,0.1) -- (1,0.1);
+        \node[right] at (1.1,0.1) {Rep};
+    \end{scope}
+    
+\end{tikzpicture}

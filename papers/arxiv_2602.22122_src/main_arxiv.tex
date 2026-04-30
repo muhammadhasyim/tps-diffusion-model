@@ -1,0 +1,1008 @@
+\documentclass{article}
+
+
+
+\usepackage{arxiv}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{lipsum}		% Can be removed after putting your text content
+\usepackage{graphicx}
+\usepackage{natbib}
+%\usepackage[capitalize,noabbrev]{cleveref}
+\usepackage{doi}
+
+\usepackage{microtype}
+\usepackage{subcaption}
+\usepackage{booktabs} % for professional tables
+
+\usepackage{wrapfig}
+
+% Attempt to make hyperref and algorithmic work together better:
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% For preprint, use
+% \usepackage[preprint]{icml2026}
+
+% If accepted, instead use the following line for the camera-ready submission:
+% \usepackage[accepted]{icml2026}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=*, labelsep=.3em}
+\setlist[enumerate]{leftmargin=*, labelsep=.3em}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, bending}
+
+\usepackage{mdframed}
+\newmdenv[
+  linecolor=pink!60!purple,
+  backgroundcolor=pink!30,
+  linewidth=0pt,
+  roundcorner=2pt,
+  skipabove=3pt,
+  skipbelow=1pt,
+  innerleftmargin=3pt,
+  innerrightmargin=3pt,
+  innertopmargin=3pt,
+  innerbottommargin=3pt
+]{pinkbox}
+
+% For a blue box
+\newmdenv[
+  linecolor=blue!60!cyan,
+  backgroundcolor=blue!10,
+  linewidth=0pt,
+  roundcorner=2pt,
+  skipabove=3pt,
+  skipbelow=1pt,
+  innerleftmargin=3pt,
+  innerrightmargin=3pt,
+  innertopmargin=3pt,
+  innerbottommargin=3pt
+]{bluebox}
+
+\usepackage[dvipsnames]{xcolor}
+\definecolor{mygreen}{HTML}{96D93D}
+\definecolor{myblue}{HTML}{26808F}
+\definecolor{mypurple}{HTML}{420052}
+
+\usepackage[most]{tcolorbox}
+\tcbset{colback=blue!5!white, colframe=blue!40!black, boxrule=0.5pt, arc=3pt, left=6pt, right=6pt, top=3pt, bottom=3pt}
+\newtcolorbox{propbox}{colback=blue!5!white, colframe=blue!40!black, boxrule=0.5pt, arc=3pt, left=3pt, right=3pt, top=2pt, bottom=2pt}
+
+
+
+% if you use cleveref..
+\usepackage[capitalize,noabbrev]{cleveref}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% THEOREMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\bfC}{\mathbf{C}}
+\newcommand{\bfQ}{\mathbf{Q}}
+
+% Todonotes is useful during development; simply uncomment the next line
+%    and comment out the line below the next line to turn off comments
+%\usepackage[disable,textsize=tiny]{todonotes}
+\usepackage[textsize=tiny]{todonotes}
+
+
+
+\title{Probing the Geometry of Diffusion Models\\ with the String Method}
+
+%\date{September 9, 1985}	% Here you can change the date presented in the paper title
+%\date{} 					% Or removing it
+
+\author{{\hspace{-2mm}Elio Moreau}\thanks{Elio Moreau is the corresponding author. Email: elio.moreau@ens.psl.eu.} \\
+	\hspace{-1mm}Capital Fund Management \\
+ \hspace{-1mm} 23 Rue de l'Université, 75007 Paris \\
+	\texttt{elio.moreau@ens.psl.eu} \\
+	%% examples of more authors
+	\And
+	{Florentin Coeurdoux} \\
+	Capital Fund Management \\
+  23 Rue de l'Université, 75007 Paris \\
+	\texttt{florentin.coeurdoux@cfm.com} \\
+    \AND
+    {\hspace{1mm}Grégoire Ferre} \\
+	Capital Fund Management \\
+  23 Rue de l'Université, 75007 Paris \\
+	\texttt{gregoire.ferre@cfm.com} \\
+    \And
+    {\hspace{1mm}Eric ~Vanden-Eijnden} \\
+    ML Lab, Capital Fund Management \\
+  23 Rue de l'Université, 75007 Paris \\
+  Courant Institute of Mathematical Sciences, \\
+  New York University,\\
+  New York, NY 10012, USA,\\
+	\texttt{eve2@cims.nyu.edu} \\
+}
+
+% Uncomment to remove the date
+%\date{}
+
+% Uncomment to override  the `A preprint' in the header
+%\renewcommand{\headeright}{Technical Report}
+%\renewcommand{\undertitle}{Technical Report}
+
+%%% Add PDF metadata to help others organize their library
+%%% Once the PDF is generated, you can check the metadata with
+%%% $ pdfinfo template.pdf
+
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Understanding the geometry of learned distributions is fundamental to improving and interpreting diffusion models, yet systematic tools for exploring their landscape remain limited. Standard latent-space interpolations fail to respect the structure of the learned distribution, often traversing low-density regions. We introduce a framework based on the string method that computes continuous paths between samples by evolving curves under the learned score function. Operating on pretrained models without retraining, our approach interpolates between three regimes: pure generative transport, which yields continuous sample paths; gradient-dominated dynamics, which recover minimum energy paths (MEPs); and finite-temperature string dynamics, which compute principal curves---self-consistent paths that balance energy and entropy. We demonstrate that the choice of regime matters in practice. For image diffusion models, MEPs contain high-likelihood but unrealistic ``cartoon'' images, confirming prior observations that likelihood maxima appear unrealistic; principal curves instead yield realistic morphing sequences despite lower likelihood. For protein structure prediction, our method computes transition pathways between metastable conformers directly from models trained on static structures, yielding paths with physically plausible intermediates. Together, these results establish the string method as a principled tool for probing the modal structure of diffusion models---identifying modes, characterizing barriers, and mapping connectivity in complex learned distributions.
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Generative models based on diffusion and flow matching have achieved remarkable success in learning complex data distributions. These models transport individual samples from noise to data, implicitly encoding an energy landscape through learned score functions. Yet this point-wise perspective obscures the global geometry of the learned distribution: its modal structure, the barriers between modes, and the connectivity of the data manifold.
+
+
+Understanding pathways between samples has broad applications: morphing between configurations, identifying transition states, and revealing mechanisms underlying rare events. In molecular systems, such pathways explain conformational changes and folding; in other domains, they can illuminate how the learned distribution connects distinct modes. However, current generators provide only samples, not the pathways between them. Exploiting the geometric information encoded in the learned landscape requires a principled definition of transition pathways, along with a computational procedure to find them.
+
+
+
+We introduce a framework that evolves entire \emph{curves} of samples---strings---rather than individual points. By controlling how these strings interact with the learned score function, we can probe different aspects of the distribution geometry. Figure~\ref{fig:teaser} previews our main finding: the choice of dynamics reveals a fundamental tension between likelihood and realism. Paths that maximize likelihood traverse ``cartoon'' configurations---simplified, stylized images that the model assigns high probability but that lie outside the typical set. Paths that account for entropy, in contrast, remain within the typical set and produce perceptually natural transitions.
+\begin{figure}
+    \centering
+    \includegraphics[width=0.9\linewidth]{Images_arxiv/entropy_n_likelihood_orizz.pdf}
+    \caption{\textbf{The likelihood-realism paradox.} Top: schematic showing the MEP (green) passing through the high-likelihood region (yellow), while the principal curve (red) stays within the typical set where data concentrates (blue points). Dashed lines indicate Voronoi cells---regions of points closest to each image along the string. Bottom: actual images at numbered locations. Endpoints (1, 2) are identical for both paths; the principal curve intermediate (3) is realistic; the MEP intermediate (4) is cartoonish. Full pathways computed by our method are shown in Figures~\ref{fig:beaver_lambda} and \ref{fig:beaver_temperature}.}
+    \label{fig:teaser}
+\end{figure}
+This paper makes three main contributions:
+\begin{enumerate}
+    \item We adapt the string method from computational chemistry to work with learned score functions, enabling pathway computation from pretrained generative models without explicit energy functions.
+    \item We show how three choices of dynamics---pure transport, gradient-dominated, and finite-temperature---reveal complementary aspects of the learned landscape.
+   \item We demonstrate that accounting for entropy is essential for realistic pathways in high dimensions---principal curves traverse the typical set while MEPs do not---and illustrate this on image morphing and protein conformational transitions.
+\end{enumerate}
+
+Importantly, our method operates directly on pretrained models without any retraining or fine-tuning. Given only access to the learned velocity field $b_t$ and score $s_t$, we can compute strings in any of the three regimes. This makes the approach immediately applicable to existing models.
+
+
+\subsection{Related Work}
+
+\paragraph{Transition path methods.} Computing pathways between metastable states has a long history in computational chemistry. The nudged elastic band method \citep{henkelman2000climbing} and string methods \citep{e2002string, ren2007simplified,maragliano2006string} evolve chains of configurations to find minimum (free) energy paths. Extensions like the finite-temperature string method \citep{e2005finite} incorporate entropic effects by computing principal curves \citep{hastie1989principal}, building on concepts from transition path theory \citep{vanden2006towards, e2010transition}. These methods traditionally require explicit, time-independent energy functions or force fields. Our key contribution is adapting them to time-dependent energies defined implicitly through learned score functions, enabling pathway computation directly from pretrained generative models.
+
+\paragraph{Generative modeling.} Diffusion models and flows \citep{ho2020denoising, song2021scorebased} learn to reverse a noising process. Stochastic interpolants \citep{albergo2023building,albergo2023stochastic}, flow matching \citep{lipman2022}, and rectified flows \citep{liu2022} provide unified frameworks connecting these approaches. Our method builds on this foundation, using the learned velocity and score fields to define string dynamics. Recent work observed that likelihood-maximizing points in diffusion models appear ``cartoonish''---perceptually unrealistic despite high probability \citep{guth2025learning, karczewski2025diffusion}. We attribute this paradox to concentration of measure in high dimensions, and resolve it via finite-temperature string dynamics that account for entropy.
+
+\paragraph{Image morphing.} Interpolating between images in generative models is typically done via linear paths in latent space, but such paths often traverse low-density regions producing unrealistic intermediates. DiffMorpher \citep{zhang2024diffmorpher} addresses this through attention interpolation and self-attention guidance; other methods optimize latent trajectories \citep{wang2023interpolating}. Our framework differs by grounding interpolation in the geometry of the learned distribution, showing that naive approaches fail by ignoring entropy and that accounting for it yields realistic paths without task-specific modifications.
+
+\paragraph{Protein conformations.} Recent generative models learn conformational distributions from structural databases: AlphaFlow \citep{jing2024alphaflow} fine-tunes AlphaFold with flow matching, while DiG \citep{zheng2023digmultimod}, EigenFold \citep{jing2023eigenfold}, ConfDiff \citep{wang2024confdiff}, and FoldingDiff \citep{wu2024foldingdiff} train diffusion models on conformational ensembles. These methods sample individual conformations but do not provide transition pathways between them---yet such pathways are essential for understanding protein function, since biological activity often involves conformational changes \citep{frauenfelder1991energy, henzler2007dynamic}. Our string method complements these approaches by computing pathways directly from the learned score, potentially revealing folding mechanisms and conformational change dynamics from models trained only on static structures.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Methodology}
+\label{sec:method}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Generative Models as Score-Based Dynamics}
+\label{sec:gen_mod}
+
+Diffusion and flow-matching models learn to reverse a noising process that transforms data into noise. At the heart of these methods is a time-dependent density $\rho_t(x)$ interpolating between a simple density $\rho_0(x)$ (typically Gaussian) and the data density $\rho_1(x)$. The model learns either a velocity field $b_t(x)$ or a score function $s_t(x) = \nabla \log \rho_t(x)$, which are related through the structure of the interpolation.
+
+Sampling proceeds by integrating a forward-time dynamics. In its most general form, this takes the shape of an SDE:
+\begin{equation}
+    dx_t = \underbrace{b_t(x_t)}_{\text{transport}} dt + \underbrace{\gamma_t^2 s_t(x_t)}_{\text{score correction}} dt + \underbrace{\sqrt{2}\gamma_t\, dW_t}_{\text{noise}},
+    \label{eq:general_sde}
+\end{equation}
+where the volatility $\gamma_t \geq 0$ can be tuned. Setting $\gamma_t = 0$ recovers the deterministic probability flow ODE; positive $\gamma_t$ yields stochastic samplers.
+
+A key observation is that $s_t(x) = -\nabla V_t(x)$ where $V_t(x) = -\log \rho_t(x)$ is an implicit energy landscape. While we cannot evaluate $V_t$ directly, the learned score provides access to its gradient---exactly what the string method requires.
+
+Crucially, the score is estimated via Stein's identity (Gaussian integration by parts), which requires adding noise to the signal. As $t \to 1$, the noise vanishes and this estimator degrades---the learned score becomes unreliable precisely at the data distribution. This is why generative models sample via nonequilibrium transport (pushing noise toward data) rather than Langevin dynamics on $s_1$. For the same reason, we cannot simply evolve strings under $s_1$; instead, we must work dynamically across the full time interval, leveraging reliable scores at intermediate times. More theoretical details on diffusion models can be found in Appendix~\ref{app:diff}.
+
+\subsection{The String Method: General Formulation}
+\label{sec:string}
+
+The classical string method \citep{e2002string, ren2007simplified} evolves curves under a time-independent potential $V(x)$. Here we generalize to time-dependent velocities $v_t(x)$ arising from diffusion models. For $s \in (0,1)$, the string evolves according to
+\begin{equation}
+    \dot{\phi}_t(s) = v_t(\phi_t(s)) + \lambda_t(s) \partial_s \phi_t(s),
+    \label{eq:string_continuous}
+\end{equation}
+where $\lambda_t(s)$ is a Lagrange multiplier enforcing the constraint $|\partial_s \phi_t(s)| = \text{const}$ in $s$. This constraint prevents bunching or spreading of points---without it, points would cluster at attractors of $v_t$ rather than tracing a path between them. The endpoints $\phi_t(0)$ and $\phi_t(1)$ follow the probability flow ODE $\dot{\phi}_t = b_t(\phi_t)$, which serve as boundary conditions for the string evolution.
+
+\paragraph{Discrete algorithm.} We discretize the string as $N+1$ images $\{\phi_t^{(i)}\}_{i=0}^N$. The endpoints $\phi_t^{(0)}$ and $\phi_t^{(N)}$ follow the probability flow; the interior images $i = 1, \ldots, N-1$ evolve via alternating steps (Figure~\ref{fig:string}):
+
+\textbf{Step 1: Evolution.} Move each interior image using~$v_t$:
+\begin{equation}
+    \phi_{t+\Delta t}^{(i)} = \phi_t^{(i)} + \Delta t \, v_t(\phi_t^{(i)}), \quad i = 1, \ldots, N-1.
+\end{equation}
+
+\textbf{Step 2: Reparametrization.} Redistribute images to restore equal arc-length spacing via linear or cubic spline interpolation (for details see Appendix~\ref{sec:reparam}).
+
+The reparametrization implicitly enforces the $\lambda_t$ constraint. To fully specify the dynamics, we must choose both the velocity field $v_t$ for interior images and an initial string $\{\phi_0^{(i)}\}_{i=0}^N$; both choices are discussed in Section~\ref{sec:three_regimes}. For more details on the string method, we refer the reader to Appendix~\ref{app:string}.
+
+
+\subsection{From Transport to Energy to Entropy}
+\label{sec:three_regimes}
+
+What should $v_t$ be? We consider three choices, each motivated by limitations of the previous one.
+
+\subsubsection{Pure Transport ($\gamma_t = 0$)}
+
+\begin{wrapfigure}{r}{0.6\linewidth}
+    \centering
+    \resizebox{\linewidth}{!}{\input{string_fig.tex}}
+    \caption{\textbf{The string method.} Grey dashed arrows show Step 1 (evolution): each image moves according to $v_t$, landing at positions marked with $\times$. Blue dotted arrows show Step 2 (reparametrization): images are redistributed to restore equal arc-length spacing along the string.}
+    \label{fig:string}
+\end{wrapfigure}
+The simplest choice sets $v_t = b_t$, the learned velocity field:
+\begin{equation}
+    \dot{\phi}_t(s) = b_t(\phi_t(s)) + \lambda_t(s) \partial_s \phi_t(s).
+    \label{eq:pure_transport}
+\end{equation}
+Starting from a curve of noise samples at $t=0$, this produces at $t=1$ a continuous path morphing between generated images. For variance-preserving schedules where $\rho_0 = \mathcal{N}(0, I)$, typical noise samples have norm approximately $\sqrt{d}$. Given two such samples $z_0$ and $z_1$, a natural initialization is
+\begin{equation}
+    \phi_0(s) = z_0 \cos(\pi s/2) + z_1 \sin(\pi s/2),
+    \label{eq:sphere_init}
+\end{equation}
+which traces an approximate geodesic on this sphere; a reparametrization step may be applied to enforce $|\partial_s \phi_0(s)| = \text{const}$ exactly. Alternatively, to morph between two specific data samples $x_A$ and $x_B$, we can integrate the probability flow backward from $t=1$ to $t=0$ to obtain $z_0$ and $z_1$ and use these as endpoints---this is the approach taken in our experiments.
+
+Pure transport produces visually appealing morphs, but the resulting path is simply the image of the initial string under the flow. While individual images remain typical samples of $\rho_t$, the path as a curve is not intrinsically defined---it depends entirely on the initialization. To obtain paths with a principled geometric meaning, we must incorporate the score.
+
+\subsubsection{Minimum Energy Paths ($\gamma_t \gg 1$, $T=0$)}
+
+Adding the score term to the velocity connects the string to the energy landscape $V_t = -\log \rho_t$:
+\begin{equation}
+    v_t = b_t + \gamma_t^2 s_t = b_t - \gamma_t^2 \nabla V_t.
+    \label{eq:mep_velocity}
+\end{equation}
+In the limit $\gamma_t \to \infty$, the score term dominates and the string relaxes rapidly toward high-density regions of $\rho_t$. Since this relaxation is much faster than the evolution of $V_t$ itself, the string effectively sees a quasi-static energy landscape at each time, recovering the classical string method and computing \emph{minimum energy paths} (MEPs).
+
+\begin{propbox}
+\begin{definition}[Minimum Energy Path]
+A curve $\phi^*: [0,1] \to \mathbb{R}^d$ is an MEP if the energy gradient (and hence the score) is everywhere tangent to the path:
+\begin{equation*}
+    [\nabla V(\phi^*(s))]^\perp = -[s(\phi^*(s))]^\perp = 0, \quad \forall s \in [0,1],
+    % \label{eq:mep_condition}
+\end{equation*}
+where $[\cdot]^\perp$ denotes the component perpendicular to the tangent $\partial_s \phi^*$.
+\end{definition}
+\end{propbox}
+Since in our setting $V_t = -\log \rho_t$, minimizing energy is equivalent to maximizing likelihood: MEPs are \emph{maximum likelihood paths} connecting two endpoints.
+
+MEPs are geometrically well-defined: they pass through saddle points, identify transition states, and characterize barrier heights. However, in high dimensions, a fundamental problem emerges.
+
+\begin{pinkbox}
+\paragraph{The likelihood-realism paradox.} MEPs maximize likelihood along the path, but in high dimensions, high likelihood does not imply high probability mass. Probability mass depends on both the density $\rho(x)$ and the volume of nearby configuration space; the latter is an entropic contribution that dominates in high dimensions. Regions where the product of density and volume is maximized form the \emph{typical set}---where samples actually concentrate.\footnotemark{} As a result, MEPs traverse modes, which lie outside the typical set.
+\end{pinkbox}
+\footnotetext{For example, the density of a $d$-dimensional Gaussian $\mathcal{N}(0,I)$ is maximal at the origin, but typical samples lie on a sphere of radius $r \approx \sqrt{d}$.}
+
+This explains the ``cartoon'' phenomenon \citep{guth2025learning, karczewski2025diffusion}: likelihood-maximizing images appear simplified and unrealistic. Our experiments confirm this---as $\gamma$ increases, MEPs traverse higher-likelihood regions with increasingly cartoonish intermediates (Figure~\ref{fig:beaver_lambda}).
+
+To find paths connecting samples that remain within the typical set, we must account for entropy. Principal curves, discussed next, achieve this.
+
+\subsubsection{Principal Curves ($\gamma_t \gg 1$, $T > 0$)}
+
+
+Principal curves were introduced by \citep{hastie1989principal} to find structure in unstructured data.
+
+\begin{propbox}
+\begin{definition}[Principal Curve]
+A curve $\phi^*: [0,1] \to \mathbb{R}^d$ is a principal curve for a distribution $\rho$ if it is self-consistent: each point equals the conditional expectation of points that project onto it:
+\begin{equation*}
+    \phi^*(s) = \mathbb{E}_\rho[X \mid s^*(X) = s], \quad \forall s \in [0,1],
+\end{equation*}
+where $s^*(X) = \arg\min_{s'} \|X - \phi^*(s')\|$ is the projection of $X$ onto the curve.
+\end{definition}
+\end{propbox}
+
+\begin{wrapfigure}[21]{r}{0.4\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/score_reliability.pdf}
+\caption{\textbf{Relative score estimation error:} $\mathbb{E}_{\text{model}}[|s_t - \hat{s}_t|/|s_t|]$ as a function of $t$ for a mixture of Gaussians in various dimensions. The error increases sharply near $t=1$, motivating the quenching of $\gamma_t$ as $t \to 1$. For details see Appendix~\ref{app:testing}}
+\label{fig:score_quality}
+\end{wrapfigure}
+
+In our setting, we take $\rho = \rho_T \propto \rho_1^{1/T}$, where $\rho_1$ is the data distribution and $T \in [0,1]$ controls the energy-entropy balance, and we fix the endpoints $\phi^*(0) = x_A$ and $\phi^*(1) = x_B$. At $T = 1$, we obtain principal curves for $\rho_1$ connecting the two samples through the typical set; as $T \to 0$, $\rho_T$ concentrates near modes and the principal curve converges to an MEP. Our experiments confirm that increasing $T$ yields increasingly realistic intermediates (Figure~\ref{fig:beaver_temperature}).
+
+
+To compute principal curves, we discretize them into $N+1$ images $\{\phi_t^{(i)}\}_{i=0}^N$, where the projection regions become Voronoi cells $\mathcal{V}_i = \{x : \|x - \phi^{(i)}\| < \|x - \phi^{(j)}\| \text{ for all } j \neq i\}$. We associate to each image a walker $x_t^{(i)}$ that samples its Voronoi cell via the full SDE:
+\begin{equation}
+    dx_t^{(i)} = b_t(x_t^{(i)})\, dt + \gamma_t^2 s_t(x_t^{(i)})\, dt + \sqrt{2T}\gamma_t\, dW_t,
+    \label{eq:walker_sde}
+\end{equation}
+where integration uses timesteps $\Delta t = O(\gamma_t^{-2})$, and we let each walker drag its string image toward the running average of its position. This effectively defines the velocity $v_t$ of the string. Walkers must also remain closer to their associated string image than to any other; moves violating this constraint are rejected, enforcing the Voronoi restriction. Since $b_t$ and $s_t$ are time-dependent, we impose a separation of timescales via $\gamma_t \gg 1$: the walkers equilibrate within their Voronoi cells much faster than the landscape $V_t$ evolves, so the string tracks an approximate principal curve at each instant.
+
+
+The complete finite-temperature string method iterates the following steps for $t \in [0,1]$:
+
+\textbf{Step 1: Walker evolution.} Evolve each walker $x_t^{(i)}$ according to \eqref{eq:walker_sde}, rejecting moves that violate the minimum-distance criterion.
+
+\textbf{Step 2: String update.} Update each string image via EMA: $\phi_{t+\Delta t}^{(i)} = (1-\eta)\phi_t^{(i)} + \eta\, x_{t+\Delta t}^{(i)}$, where $\eta \in (0,1]$ controls the averaging timescale.
+
+\textbf{Step 3: Reparametrization.} Redistribute string images to equal arc-length spacing.
+
+
+
+
+\begin{remark}
+One might ask why not compute principal curves directly on a pregenerated dataset or the original training data. While this could work for curves that remain within high-density regions, we are primarily interested in principal curves connecting metastable states---such as distinct protein conformations or image modes. These transition regions are precisely where data points are scarce. The string method addresses this by using the learned score to sample locally along the curve, even in low-density regions. This also highlights the importance of the boundary conditions in our setting: we seek principal curves connecting two specified endpoints, which differs from Hastie's original formulation where the curve is unconstrained.
+\end{remark}
+
+\subsection{Summary and Implementation}
+\label{sec:algorithm}
+
+Table~\ref{tab:regimes} compares the three regimes in which our framework can operate: pure transport gives appealing but geometrically unmotivated morphs; MEPs provide geometric grounding but fail in high dimensions; principal curves combine geometric meaning with realistic outputs. Algorithm~\ref{alg:string_method} provides the complete procedure for computing strings in any of these regimes.
+
+\begin{table}
+\caption{Three regimes of string dynamics.}
+\label{tab:regimes}
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+& \textbf{Transport} & \textbf{MEP} & \textbf{Principal curve} \\
+& $\gamma_t = 0$ & $\gamma_t \gg1$ & $\gamma_t \gg1$ \\
+&  & $T=0$ & $T > 0$ \\
+\midrule
+Geometric & No & Yes & Yes \\
+Entropic & No & No & Yes \\
+Realistic & Yes & No & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{algorithm}
+\caption{Diffusion String Method}
+\label{alg:string_method}
+\begin{algorithmic}[1]
+\REQUIRE Data samples $x_A, x_B$; velocity $b_t$; score $s_t$
+\REQUIRE Parameters $\gamma_t$, $T \in [0,1]$; initial time $t_0$; number of images $N$; timestep $\Delta t = O(\gamma_t^{-2})$
+\STATE $z_0, z_1 \gets$ integrate $\dot{x}_t = b_t(x_t)$ from $t=1$ to $t=0$ starting at $x_A, x_B$
+\STATE Initialize: $\phi_{t_0}^{(i)} = z_0 \cos(\pi i / 2N) + z_1 \sin(\pi i / 2N)$ for $i = 0, \ldots, N$
+\STATE Reparametrize $\{\phi_{t_0}^{(i)}\}$ to equal arc-length spacing
+\WHILE{$t < 1$}
+    \FOR{$i = 0$ to $N$}
+        \STATE Evolve $\phi_t^{(i)}$ (and walker $x_t^{(i)}$ if $T > 0$) according to chosen regime
+    \ENDFOR
+    \STATE Reparametrize to equal arc-length spacing
+\ENDWHILE
+\end{algorithmic}
+\textbf{Output:} String $\{\phi_1^{(i)}\}_{i=0}^N$ connecting $x_A$ to $x_B$
+\end{algorithm}
+
+
+
+\paragraph{Quenching near $t=1$.} When using $\gamma_t >0$ (for example to compute MEPs or principal curves), we quench $\gamma_t \to 0$ as $t \to 1$ to avoid amplifying errors in the estimated score near the data distribution (Figure~\ref{fig:score_quality}). This ensures that interior images arrive accurately at $t = 1$. The endpoints always evolve with pure transport ($\gamma_t = 0$), so they return exactly to $x_A$ and $x_B$.
+
+
+
+
+\paragraph{Computational cost.} The three regimes differ in expense. Pure transport ($\gamma_t = 0$) requires only forward integration of $b_t$ with moderate timesteps. MEPs and principal curves ($\gamma_t \gg 1$) require smaller timesteps $\Delta t = O(\gamma_t^{-2})$ for stability, which dominates the computational cost. In practice, $N = 50$--$70$ images, and for principal curves $\eta = 0.1$--$0.5$, provide a good balance between path resolution and cost. Our focus is on interpretability rather than speed: the method provides a tool for analyzing the geometry of pretrained diffusion models, requiring only access to $b_t$ and $s_t$ without any retraining. Our experiments demonstrate that the approach is practical for realistic applications.
+
+\begin{figure*}
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/beaver_intensity_graph_with_dos.pdf}
+    \caption{\textbf{Effect of score weight $\gamma$.} Left: string realizations for $\gamma$ ranging from 15 (\textcolor{mygreen}{top}) to 2 (\textcolor{myblue}{middle}) to $10^{-2}$ (\textcolor{mypurple}{bottom}) in logarithmic steps (factor of $\sqrt{10}$). Higher $\gamma$ drives paths through abstract, high-likelihood modes; lower $\gamma$ preserves realism. Right: log-likelihood of images along each string (colored curves), overlaid on the likelihood distribution of ImageNet validation images (heatmap; see Figure~\ref{fig:likelihood_hist} for details). The intermediate images along the MEP reach likelihoods far exceeding typical images.}
+    \label{fig:beaver_lambda}
+\end{figure*}
+\begin{figure*}
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_337_wdos_compressed.pdf}
+    \caption{\textbf{Effect of temperature $T$.} Left: string realizations for $T$ ranging from 0.1 (\textcolor{mygreen}{top}) to 0.5 (\textcolor{myblue}{middle}) to 0.9 (\textcolor{mypurple}{bottom}). Lower $T$ drives paths through cartoon-like, high-likelihood regions; higher $T$ produces realistic samples. Right: log-likelihood of images along each string (colored curves), overlaid on the likelihood distribution of ImageNet validation images (heatmap; see Figure~\ref{fig:likelihood_hist}). As $T$ increases, the likelihood of the intermediates images decreases toward typical values, and images become more realistic.}
+    \label{fig:beaver_temperature}
+\end{figure*}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Experiments}
+\label{sec:expriments}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+We demonstrate the string method on two domains: ImageNet for the likelihood-realism paradox, and proteins for conformational transitions.
+
+
+
+\subsection{Images: The Three Regimes on ImageNet}
+\label{sec:imagenet}
+
+
+
+We apply the string method to ImageNet ($256 \times 256$) using the SiT-XL-2-256 model \citep{ma2024sit}. Images are encoded to a $4 \times 32 \times 32$ latent space via a VAE. Details of the model architecture are given in Appendix~\ref{app:sit}. Additional image pathways are shown in Appendix~\ref{app:add_exp}.
+
+
+
+\paragraph{Setup.} Given two images, we: (1) encode into the Gaussian latent space by backward ODE to $t = 0$, (2) initialize a discrete string of $N = 71$ points along a spherical geodesic Eq~\eqref{eq:sphere_init}, and (3) evolve the string according to Eq~\eqref{eq:walker_sde} with score weight $\gamma_t = \gamma$ for $0.1 \ge t \ge 0.95$ and $\gamma_t = 0$ otherwise, where $\gamma$ is a tunable parameter described below. This schedule prevents the string from drifting away from the typical set (i.e., the sphere in Gaussian latent space) near $t = 0$, while avoiding regions where the score approximation degrades as $t \to 1$ (Figure~\ref{fig:score_quality}).
+
+
+
+\paragraph{Effect of score weight $\gamma$ at $T=0$.} Figure~\ref{fig:beaver_lambda} visualizes strings interpolating between two beaver images for varying $\gamma$ and $T=0$. Full strings are size 71, but we show only of subsample of 11 (1 image every 6).
+
+
+
+With a \emph{large} score weight ($\gamma = 15$, \textcolor{mygreen}{top row}), the string is driven toward high-likelihood regions, yielding intermediates that lie close to the MEP. Notably, the maximum-likelihood intermediate is a highly abstract, nearly single-color image, confirming that \textbf{the MEP passes through likelihood maxima that lie outside the typical set and, as a result, are perceptually unrealistic}.
+
+\begin{wrapfigure}[26]{r}{0.50\linewidth}
+    \centering
+    \includegraphics[width=0.9\linewidth]{Images_arxiv/histos.pdf}
+\caption{\textbf{Likelihood distributions.} Histogram of log-likelihoods for ImageNet $256 \times 256$ validation images (blue), compared with images along MEPs (orange) and finite-temperature strings at $T = 0.1$ (green), $T = 0.5$ (red), and $T = 0.9$ (purple), aggregated across multiple strings. MEP intermediates have significantly higher likelihood than real images, confirming they lie outside the typical set. As temperature increases, string images approach the likelihood distribution of real data. Inset: same data on log scale.}
+\label{fig:likelihood_hist}
+\end{wrapfigure}
+
+
+With a \emph{moderate} score weight ($\gamma = 2$, \textcolor{myblue}{middle row}), intermediates become \emph{cartoon-like}, consistent with prior observations in diffusion-based interpolation \citep{guth2025learning, karczewski2025diffusion}. With \emph{small} score guidance ($\gamma = 10^{-2}$, \textcolor{mypurple}{bottom row}), the string produces visually plausible intermediates throughout.
+
+
+
+
+The left panel reports log-likelihood along each string: for large $\gamma$, the trajectory passes through a pronounced likelihood peak. The gap between typical-image likelihoods and this maximum provides a rough estimate of the data-manifold diameter in likelihood space.
+
+
+
+\paragraph{Effect of temperature $T$.} Figure~\ref{fig:beaver_temperature} illustrates the finite-temperature method for varying $T$ when $\gamma=7$.
+% with score weight $\gamma_t = \gamma \, \delta(t - 0.7)$ with $\gamma = 10$ and $\delta(\cdot)$ the Dirac delta function. Each walker is evolved for 100 steps of langevin.
+
+
+
+At \emph{low temperature} ($T = 0.1$, \textcolor{mygreen}{first row}), results closely resemble those of the zero-temperature MEP string method, recovering cartoon-like images. At \emph{moderate temperature} ($T = 0.5$, \textcolor{myblue}{second row}), intermediates exhibit slightly more detail but remain cartoon-like. At \emph{high temperature} ($T \approx 1$, \textcolor{mypurple}{final row}), \textbf{the principal curve passes through realistic-looking intermediates that balance energy and entropy.} Additional examples illustrating the effect of temperature can be found in Appendix~\ref{app:add_exp}.
+
+\paragraph{Principal curves.} Figure~\ref{fig:goose-stacked} shows a principal curve between two images from the \emph{goose} class, computed using the finite-temperature method with $T = 0.9$ and $\gamma = 7$. The first row displays the principal curve itself: each image is obtained by EMA from its associated walker. The remaining three rows show the walkers at $t = 1$ that were used to compute the EMA. Upon close inspection, one can observe subtle differences between walkers---an effect of entropy---which average out to produce the smoother images along the principal curve.
+
+
+
+\paragraph{Likelihood Distributions} In Figure \ref{fig:likelihood_hist}, we present the histogram of log-likelihood values for the ImageNet validation set, alongside the log-likelihoods of images obtained from a large collection of strings generated using the algorithms described above. The distribution corresponding to the MEP exhibits pronounced peaks at substantially higher likelihoods than those observed for the validation set. Moreover, the finite-temperature strings display peaks whose locations shift systematically with temperature: as the temperature increases, the peak likelihood decreases, indicating a negative correlation between temperature and likelihood, consistent with theoretical expectations.
+
+\begin{figure*}[htbp]
+  \centering
+  \text{Principal curve}\par
+  \includegraphics[width=\linewidth]{Images_arxiv/principalgoose.pdf}
+  \par
+  \text{Walkers}\par 
+  \vspace{3px}
+  \includegraphics[width=\linewidth]{Images_arxiv/walking_goose.pdf}
+  \caption{\textbf{Principal curve for images from the \emph{goose} class.} Top row: images along the principal curve, computed as the EMA of associated walkers ($T = 0.9$, $\gamma = 7$). Bottom three rows: individual walkers at $t = 1$. The walkers exhibit subtle variations due to entropic effects (best seen when zoomed in); averaging produces the smoother images in the principal curve.}
+  \label{fig:goose-stacked}
+\end{figure*}
+
+\subsection{Proteins: Conformational Transitions}
+
+We apply the string method to predict transition pathways between protein conformations using two diffusion models. One, called DiG \citep{zheng2023digmultimod}, operates in SE(3) and it has been trained on experimental structures up to December 2020. The other, ScoreMD \citep{ScoreMD2026}, operates in $\mathbb{R}^3$ and includes a Fokker--Planck regularization term during training to improve score estimation near $t = 1$.
+
+\paragraph{Motivation.} Proteins fluctuate between metastable conformations, but experiments typically capture only static snapshots. Transition pathways---the sequence of intermediate structures connecting conformers---are crucial for understanding function but are rarely observed directly. Computational methods such as molecular dynamics can in principle reveal these pathways, but the timescales involved often exceed what is computationally accessible \citep{shaw2010atomic}. We demonstrate that our framework, applied to a pretrained generative model, can predict plausible transition pathways by computing principal curves with the finite-temperature string method. These pathways connect endpoint conformations while remaining within the typical set of the learned distribution, balancing likelihood and entropy.
+
+\begin{figure*}
+    \centering
+    \includegraphics[width=0.95\linewidth]{Images_arxiv/ake_string.pdf}
+    \caption{\textbf{Adenylate Kinase transition pathway.} Pathway between the open (4AKE) and closed (1AKE) conformations computed using DiG. Intermediate structures maintain physical plausibility (secondary structure preservation, no steric clashes).}
+    \label{fig:protein_pathways_ake}
+\end{figure*}
+
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=0.90\linewidth]{Images_arxiv/bba_sequence.png}
+    \includegraphics[width=0.95\linewidth]{Images_arxiv/bba_MEP_tens0.0.pdf}
+    \caption{\textbf{BBA folding pathway.} Top: structures along the initial string obtained by pure transport ($\gamma = 0$). Bottom: structures along the converged MEP. Both show progressive formation of secondary structure. Left panel: initial string (purple) and MEP (green) projected onto the first two TIC components, overlaid on a free-energy landscape estimated from ScoreMD samples; darker regions indicate lower free energy. Asterisks mark equal arc-length intervals. Right panel: energy profile along each pathway. The MEP achieves significantly lower energy than the initial string.}
+    \label{fig:protein_TICA_bba}
+\end{figure*}
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=0.90\linewidth]{Images_arxiv/chigno_sequence.png}
+    \includegraphics[width=0.95\linewidth]{Images_arxiv/chignolin_MEP_tens0.0.pdf}
+    \caption{\textbf{Chignolin folding pathway.} Top: structures along the initial string obtained by pure transport ($\gamma = 0$). Bottom: structures along the converged MEP. Both show progressive formation of secondary structure. Left panel: initial string (purple) and MEP (green) projected onto the first two TIC components, overlaid on a free-energy landscape estimated from ScoreMD samples; darker regions indicate lower free energy. Asterisks mark equal arc-length intervals. Right panel: energy profile along each pathway. The MEP achieves significantly lower energy than the initial string.}
+    \label{fig:protein_TICA_chignolin}
+\end{figure*}
+
+\paragraph{Method.} Given two conformations of the same protein, we apply the string method in the SE(3)-equivariant space of the model. The score function is derived from the model's denoising objective. Details are given in Appendices~\ref{app:scoreMD} and~\ref{app:dig}.
+
+\paragraph{Adenylate Kinase.} Adenylate kinase (AdK) is a phosphotransferase enzyme that undergoes a large-scale conformational change between open and closed states during catalysis \citep{muller1996adenylate}. This transition has been extensively studied as a model system for understanding protein dynamics \citep{arora2007large, beckstein2009zipping}. Using DiG, we computed the pathway between the open (PDB: 4AKE) and closed (PDB: 1AKE) conformations (Figure~\ref{fig:protein_pathways_ake}). The intermediates preserve secondary structure elements and avoid steric clashes, suggesting physically plausible transitions despite the model being trained only on static structures.
+
+
+\paragraph{BBA and Chignolin.} BBA and Chignolin are small protein domains widely used as model systems for protein folding due to their rapid folding kinetics and simple topologies \citep{shaw2011fastfolding}. Using ScoreMD \citep{ScoreMD2026}, we computed minimum energy paths (MEPs) connecting extended and folded conformations for both proteins.
+
+For ScoreMD, the score function is accurately learned near $t = 1$, allowing us to apply the classical string method at a fixed time to compute MEPs. However, the high dimensionality and rough landscape make optimization sensitive to initialization. We therefore use as initialization a string obtained by pure transport ($\gamma = 0$).
+
+Figures~\ref{fig:protein_TICA_bba} and \ref{fig:protein_TICA_chignolin} show the computed pathways projected onto the first two time-independent components (TICs) \citep{liu2008desolvation}. Left panels display the MEP (yellow) and initial string (purple) projected onto TIC coordinates and overlaid on a free-energy landscape, where free energy is estimated as $-\log \rho$ from a histogram of i.i.d.\ samples generated by ScoreMD; darker regions indicate lower free energy. The MEP is driven toward lower free-energy regions compared to the initial string. Some path segments may appear to overlap due to projection from high dimensions; asterisks mark equal arc-length intervals to clarify the geometry.
+
+Right panels show the free energy profile along each pathway, relative to the starting conformation. The initial string has significantly higher free energy than the converged MEP, demonstrating that the string relaxation is essential. Because the dimensionality is substantially lower than in the image setting, the MEPs remain physically realistic rather than cartoonish.
+
+Above the two panels for each protein, we include a three-dimensional rendering of its folding pathway; the protein is colored consistently with the corresponding pathway to facilitate visual correspondence.
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+We adapted the string method to probe the geometry of learned distributions using score functions from pretrained generative models. By varying the dynamics---pure transport, gradient-dominated, or finite-temperature---we reveal complementary aspects of the distribution landscape.
+
+Our key finding is that accounting for entropy is essential in high dimensions. Minimum energy paths traverse high-likelihood but low-probability regions, producing cartoonish artifacts. Principal curves, which balance energy against entropy, yield realistic transitions with stronger theoretical grounding. These results confirm and explain prior observations that high-likelihood samples from diffusion models appear unrealistic \citep{guth2025learning, karczewski2025diffusion}: the phenomenon is not a model defect but a consequence of concentration of measure, and can be resolved by accounting for entropy.
+
+This establishes the string method as a tool for analyzing generative models beyond sampling: identifying modes, characterizing barriers, and mapping connectivity in complex learned distributions. Importantly, the method requires no retraining---only access to the learned velocity and score fields.
+
+\paragraph{Limitations.} The computed pathways are only as good as the underlying generative model. If the model assigns low probability to physically relevant transition states, the string method cannot recover them. Similarly, errors in score estimation---particularly near the data distribution---propagate to the computed paths, motivating our quenching strategy.
+
+\paragraph{Future directions.} Several extensions are natural. Scaling to larger models (e.g., text-to-image diffusion) would test whether the likelihood-realism tradeoff persists across architectures. Theoretical analysis of convergence rates and approximation error would strengthen the foundations. Beyond images and proteins, the method applies wherever transition pathways matter: molecular design, robotics, and latent space exploration in multimodal models. Finally, combining string methods with conditional generation could enable targeted pathway computation---for instance, finding transitions that pass through specified intermediate states.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section*{Impact Statement}
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here.
+
+
+\bibliography{reference.bib}
+\bibliographystyle{unsrt}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% APPENDIX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\appendix
+\onecolumn
+
+\section{Background on Diffusion Models} \label{app:diff}
+
+\subsection{Velocity and Score: Definitions and Estimators}
+
+In the stochastic interpolant framework, we construct a time-dependent density $\rho_t$ via the interpolant $I_t = \alpha_t x_0 + \beta_t x_1$ with $x_0 \sim \mathcal{N}(0, I)$ and $x_1 \sim \rho_1$. Common choices include:
+\begin{itemize}
+    \item Linear: $\alpha_t = 1-t$, $\beta_t = t$
+    \item Trigonometric: $\alpha_t = \cos(\tfrac{\pi t}{2})$, $\beta_t = \sin(\tfrac{\pi t}{2})$ (variance-preserving)
+    \item $\alpha_t = \sqrt{1-t^2}$, $\beta_t = t$ (variance-preserving; time-rescaled Ornstein-Uhlenbeck)
+\end{itemize}
+The velocity field and score are defined as:
+\begin{align}
+    b_t(x) &= \mathbb{E}[\dot{I}_t \mid I_t = x], \\
+    s_t(x) &= \nabla \log \rho_t(x).
+\end{align}
+Both can be estimated by regression: $b_t$ by minimizing $\mathbb{E}[|\dot{I}_t - b_t(I_t)|^2]$, and $s_t$ via denoising score matching using the conditional Gaussian structure $I_t \mid x_1 \sim \mathcal{N}(\beta_t x_1, \alpha_t^2 I)$.
+The two are related by:
+\begin{equation}
+    s_t(x) = \frac{\beta_t b_t(x) - \dot{\beta}_t x}{\alpha_t(\dot{\alpha}_t \beta_t - \alpha_t \dot{\beta}_t)}.
+\end{equation}
+
+\subsection{The General SDE and Fokker-Planck Equation}
+
+The general SDE used in our framework is:
+\begin{equation}
+    dx_t = b_t(x_t)\,dt + \gamma_t^2 s_t(x_t)\,dt + \sqrt{2}\gamma_t\,dW_t.
+\end{equation}
+The corresponding Fokker-Planck equation for the density is:
+\begin{equation}
+    \partial_t \rho_t + \nabla \cdot \left[ (b_t + \gamma_t^2 s_t) \rho_t \right] = \gamma_t^2 \Delta \rho_t.
+\end{equation}
+Substituting $s_t = \nabla \log \rho_t$, one can verify that $\rho_t$ is preserved for any $\gamma_t \geq 0$: the score correction $\gamma_t^2 s_t \rho_t = \gamma_t^2 \nabla \rho_t$ and the diffusion term $\gamma_t^2 \Delta \rho_t$ cancel in the flux, leaving the evolution determined by $b_t$ alone. This is a local detailed balance condition at each time $t$; since $b_t$ and $s_t$ are time-dependent, the overall dynamics describe nonequilibrium sampling from $\rho_0$ to $\rho_1$.
+
+\subsection{Likelihood Computation via the Probability Flow ODE}
+\label{app:like}
+
+Setting $\gamma_t = 0$ in the general SDE gives the probability flow ODE
+\begin{equation}
+    \dot{x}_t = b_t(x_t).
+\end{equation}
+The corresponding transport equation for the density is
+\begin{equation}
+    \partial_t \rho_t + \nabla \cdot (b_t \rho_t) = 0.
+\end{equation}
+This can be solved by the method of characteristics. Let $x_t$ be a solution of the ODE starting from $x_0$. Differentiating $\rho_t(x_t)$ along the flow we deduce
+\begin{equation}
+    \frac{d}{dt} \rho_t(x_t) = \partial_t \rho_t(x_t) + \nabla \rho_t(x_t) \cdot \dot{x}_t = \partial_t \rho_t(x_t) + \nabla \rho_t(x_t) \cdot b_t(x_t).
+\end{equation}
+Using the transport equation $\partial_t \rho_t = -\nabla \cdot (b_t \rho_t) = -b_t \cdot \nabla \rho_t - \rho_t \nabla \cdot b_t$, we obtain
+\begin{equation}
+    \frac{d}{dt} \rho_t(x_t) = -\rho_t(x_t) \nabla \cdot b_t(x_t).
+\end{equation}
+This is a linear ODE in $\rho_t(x_t)$, with solution
+\begin{equation}
+    \rho_t(x_t) = \rho_0(x_0) \exp\left( -\int_0^t \nabla \cdot b_\tau(x_\tau) \, d\tau \right).
+\end{equation}
+Taking logarithms gives the log-likelihood
+\begin{equation}
+    \log \rho_t(x_t) = \log \rho_0(x_0) - \int_0^t \nabla \cdot b_\tau(x_\tau) \, d\tau.
+    \label{eq:log_likelihood}
+\end{equation}
+In practice, given a data sample $x_1 \sim \rho_1$, we integrate the ODE backward from $t=1$ to $t=0$ to obtain $x_0$, and accumulate the divergence $\nabla \cdot b_t$ along the trajectory. Since $\rho_0 = \mathcal{N}(0, I)$, the term $\log \rho_0(x_0)$ is simply $-\frac{1}{2}\|x_0\|^2 - \frac{d}{2}\log(2\pi)$.
+
+
+
+\section{String Method: Derivation and Implementation}
+\label{app:string}
+
+\subsection{Continuous Evolution}
+
+We derive the continuous string evolution equation from the constraint that arc-length parametrization is preserved.
+
+\begin{proposition}
+Let $\phi_t: [0,1] \to \mathbb{R}^d$ be a curve evolving under a velocity field $v_t$. Assume that the endpoints evolve as independent points:
+\begin{equation}
+    \dot{\phi}_t(0) = v_t(\phi_t(0)), \quad \dot{\phi}_t(1) = v_t(\phi_t(1)).
+\end{equation}
+Then, for $s \in (0,1)$, the evolution
+\begin{equation}
+    \dot{\phi}_t(s) = v_t(\phi_t(s)) + \lambda_t(s) \partial_s \phi_t(s)
+\end{equation}
+preserves the arc-length parametrization $|\partial_s \phi_t(s)| = L(t)$ (constant in $s$) for an appropriate choice of $\lambda_t(s)$ with $\lambda_t(0) = \lambda_t(1) = 0$.
+\end{proposition}
+
+\begin{proof}
+The arc-length parametrization requires $|\partial_s \phi_t|^2$ to be constant in $s$, i.e., $\langle \partial_s \phi_t, \partial_s^2 \phi_t \rangle = 0$ for all $s$ and $t$. Taking the time derivative:
+\begin{equation}
+    \partial_t \langle \partial_s \phi_t, \partial_s^2 \phi_t \rangle = \langle \partial_s \dot{\phi}_t, \partial_s^2 \phi_t \rangle + \langle \partial_s \phi_t, \partial_s^2 \dot{\phi}_t \rangle = 0.
+\end{equation}
+Substituting $\dot{\phi}_t = v_t(\phi_t) + \lambda_t \partial_s \phi_t$ and requiring this to hold for all $s$ determines $\lambda_t(s)$. The boundary conditions $\lambda_t(0) = \lambda_t(1) = 0$ are consistent with the endpoints evolving according to $v_t$.
+\end{proof}
+
+In practice, we enforce the constraint via discrete reparametrization rather than computing $\lambda_t$ explicitly. The derivation above applies to $\mathbb{R}^d$ with the Euclidean metric; for Riemannian manifolds such as $SO(3)$, we work directly with the discrete algorithm.
+
+\subsection{Reparametrization on $\mathbb{R}^d$} \label{sec:reparam}
+
+The discrete reparametrization step redistributes points $\{\phi^{(i)}\}_{i=0}^N$ to equal arc-length spacing:
+\begin{enumerate}
+    \item Compute cumulative arc-lengths: $L_0 = 0$, $L_i = L_{i-1} + |\phi^{(i)} - \phi^{(i-1)}|$.
+    \item Normalize: $\alpha_i = L_i / L_N \in [0,1]$.
+    \item Fit a cubic spline through $(\alpha_i, \phi^{(i)})$.
+    \item Evaluate at uniform positions: $\phi^{(i)}_{\text{new}} = \text{spline}(i/N)$.
+\end{enumerate}
+
+\subsection{Reparametrization on $SO(3)$}
+
+On $SO(3)$, reparametrization requires converting between the rotation matrix representation $\{\phi^{(i)}_M\}_{i=0}^N$ and the axis-angle vector representation $\{\phi^{(i)}_V\}_{i=0}^N$. To reparametrize into $K+1$ equally spaced points $\{\psi^{(j)}\}_{j=0}^K$:
+\begin{enumerate}
+    \item Compute the incremental rotations: $s^{(i)}_M = \phi^{(i)}_M (\phi^{(i-1)}_M)^{-1}$ for $1 \le i \le N$.
+    \item Compute cumulative arc-lengths in the axis-angle representation: $L_0 = 0$, $L_i = L_{i-1} + |s^{(i)}_V|$.
+    \item Normalize: $\alpha_i = L_i / L_N \in [0,1]$.
+    \item For each $0 \le j \le K$, find the preceding index $p(j) = \max\{i : \alpha_i \le j/K\}$.
+    \item Compute interpolated displacements: $d^{(j)}_V = s^{(p(j)+1)}_V \cdot \frac{j/K - \alpha_{p(j)}}{\alpha_{p(j)+1} - \alpha_{p(j)}}$.
+    \item Set $\psi^{(0)}_M = \phi^{(0)}_M$, $\psi^{(K)}_M = \phi^{(N)}_M$, and for $1 \le j \le K-1$: $\psi^{(j)}_M = d^{(j)}_M \phi^{(p(j))}_M$.
+\end{enumerate}
+
+\subsection{Reparametrization on $SE(3)$}
+
+The group $SE(3)$ is the semidirect product of $\mathbb{R}^3$ and $SO(3)$, hence every element $\phi \in SE(3)$ can be written as $\phi = (t,R)$ with $t \in \mathbb{R}^3$ and $R \in SO(3)$. There is not a criterion to choose a norm in $SE(3)$, in this paper we chose to have $|\phi| = \sqrt{|t|^2 + |R_V|^2}$ where $|R_V|$ is the norm of the vector in the axis angle representation. With this choice for the norm we do the reparameterization as follows:
+
+\begin{enumerate}
+    \item Compute the incremental rotations: $s^{(i)}_M = R^{(i)}_M (R^{(i-1)}_M)^{-1}$ for $1 \le i \le N$.
+    \item Compute the incremental translations: $q^{(i)} = t^{(i)} - t^{(i-1)}$ for $1 \le i \le N$.
+    \item Compute cumulative arc-lengths in with this norm: $L_0 = 0$, $L_i = L_{i-1} + \sqrt{|q|^2 + |s_V|^2}$.
+    \item Normalize: $\alpha_i = L_i / L_N \in [0,1]$.
+    \item For each $0 \le j \le K$, find the preceding index $p(j) = \max\{i : \alpha_i \le j/K\}$.
+    \item Compute interpolated rotation displacements: $d^{(j)}_V = s^{(p(j)+1)}_V \cdot \frac{j/K - \alpha_{p(j)}}{\alpha_{p(j)+1} - \alpha_{p(j)}}$.
+    \item Compute interpolated translation displacements: $y^{(j)} = q^{(p(j)+1)} \cdot \frac{j/K - \alpha_{p(j)}}{\alpha_{p(j)+1} - \alpha_{p(j)}}$.
+    \item Set $\psi^{(0)}_M = \phi^{(0)}_M$, $\psi^{(K)}_M = \phi^{(N)}_M$, and for $1 \le j \le K-1$: $\psi^{(j)}_M = (t^{p(j)} + y^{(j)},d^{(j)}_M \phi^{(p(j))}_M)$.
+\end{enumerate}
+
+\section{Testing the score reliability on Gaussian Mixtures}
+\label{app:testing}
+
+To examine how score estimation error varies along the generative process (i.e., as $t$ increases from 0 to 1), we trained MLPs to learn a stochastic interpolant transporting a Gaussian distribution to a mixture of two Gaussians in $d$ dimensions, for different values of $d$. The two modes in the mixture have means $(\pm 3.0, 0, \ldots, 0) \in \mathbb{R}^d$ and covariance matrices
+\[
+\begin{pmatrix}
+    \frac{7.9}{4} & \pm\frac{6.7\sqrt{3}}{4} \\[4pt] \pm\frac{6.7\sqrt{3}}{4} & \frac{7.9}{4} 
+\end{pmatrix}
+\oplus I_{d-2}.
+\]
+where the sign corresponds to the sign of the mean.
+
+We parametrized the score function using an MLP with 3 hidden layers of sizes 512, 1024, and 512. Each model was trained with batch size 1000 for $1500 \times d$ iterations. For inference, we used batch size $5000 \times d$ and 200 timesteps. For each value of $d$, we trained 10 models; Figure~\ref{fig:score_quality} shows the average relative score error $\mathbb{E}[|s_t - \hat{s}_t|/|s_t|]$ as a function of $t$.
+
+\newpage
+\section{Hyperparameters for SiT}
+\label{app:sit}
+
+ \begin{table}[!htbp]
+ \label{tab:hparam:sit}
+%  \small
+\centering
+\caption{Hyperparameter choices for the SiT Model}
+% \vspace{10pt}
+\setlength{\tabcolsep}{16mm
+}
+% \setlength{\abovecaptionskip}{0.cm}
+\begin{tabular}{ll}
+\toprule[1.2pt]
+
+
+% \textbf{Configurations} & \textbf{Values}\\ 
+\textbf{Hyperparameters} & \textbf{Values}\\ 
+ \midrule[0.5pt]
+ \multicolumn{2}{c}{\textbf{Neural network}} \\
+ \midrule[0.5pt]
+Depth & 28 \\
+Hidden Size & 1152 \\
+Patch Size & 2 \\
+Number of Attention Heads & 16 \\
+MLP ratio & 4.0 \\
+Class Dropout Probability &  0.1 \\
+Input Size &  32 \\
+Input Channels & 4 \\
+
+\bottomrule[1.2pt]
+\end{tabular}
+
+\label{tab:hyperparameters_SiT}
+\end{table}
+
+
+
+\section{Hyperparameters for DiG}
+\label{app:dig}
+
+\begin{table}[h]
+    \centering
+    \caption{Hyperparameters of the Distributional Graphormer Protein Model.}
+    \begin{tabular}{c|c|c|c}
+        \toprule
+         Hyperparameter & Initialization & PIDP & Data Training \\
+         \midrule
+         Model depth & \multicolumn{3}{c}{12} \\
+         Hidden dim (Single) & \multicolumn{3}{c}{768}\\
+         Hidden dim (Pair) & \multicolumn{3}{c}{256} \\
+         Hidden dim (Feed Forward) & \multicolumn{3}{c}{1024} \\
+         Number of Heads & \multicolumn{3}{c}{32} \\
+         \bottomrule
+    \end{tabular}
+    \label{tab:protein_hps}
+\end{table}
+
+\section{Hyperparameters for ScoreMD}
+\label{app:scoreMD}
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Graph transformer model definitions} extracted from the configuration file.}
+\label{tab:model_definitions}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Model name} & \textbf{\texttt{hidden\_nf}} & \textbf{\texttt{feature\_embedding\_dim}} & \textbf{\texttt{n\_layers}} & \textbf{\texttt{potential}} & \textbf{\texttt{dropout}} \\
+\hline
+\texttt{transformer\_large\_score}     & 128 & 16 & 3 & \texttt{false} & 0.0 \\
+\texttt{transformer\_large\_potential} & 128 & 16 & 3 & \texttt{true}  & 0.0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Ranged models configuration} extracted from the configuration file of the model, it should be kept in mind that for this model $t=0$ is actually the interpolant time $t=1$ and vice versa.}
+\label{tab:ranged_models}
+\begin{tabular}{lll}
+\hline
+\textbf{Entry} & \textbf{Model reference} & \textbf{Range} \\
+\hline
+1 & \texttt{transformer\_large\_score}     & $[1.0,\;0.6]$ \\
+2 & \texttt{transformer\_large\_score}     & $[0.6,\;0.1]$ \\
+3 & \texttt{transformer\_large\_potential} & $[0.1,\;0.0]$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\newpage
+
+\section{Another model: ConfDiff}
+\label{app:confdiff}
+
+We also applied the model on another model: ConfDiff \citep{wang2024confdiff}, a model operating on $SO(3)$ trained on the Protein Data Bank up to December 2021.
+
+\paragraph{WW Domain.} The WW domain is a small protein module that has served as a model system for studying protein folding due to its fast folding kinetics and simple topology \citep{jager2006structure}. Using ConfDiff, we computed the folding pathway from an extended to a folded conformation (Figure~\ref{fig:protein_pathways_wwdom}). The pathway reveals progressive formation of secondary structure, consistent with experimental observations of WW domain folding \citep{liu2008desolvation}.
+
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=0.95\linewidth]{Images_arxiv/WW_domain_strng.pdf}
+    \caption{ Pathway from extended to folded conformation computed using ConfDiff. Intermediates show progressive formation of secondary structure.}
+    \label{fig:protein_pathways_wwdom}
+\end{figure*}
+
+\subsection{Hyperparameters of the model}
+
+ \begin{table}[!htbp]
+ \label{tab:hparam}
+%  \small
+\centering
+\caption{Hyperparameter choices for ConfDiff Model}
+% \vspace{10pt}
+\setlength{\tabcolsep}{16mm
+}
+% \setlength{\abovecaptionskip}{0.cm}
+\begin{tabular}{ll}
+\toprule[1.2pt]
+
+
+% \textbf{Configurations} & \textbf{Values}\\ 
+\textbf{Hyperparameters} & \textbf{Values}\\ 
+ \midrule[0.5pt]
+ \multicolumn{2}{c}{\textbf{Neural network}} \\
+ \midrule[0.5pt]
+Number of IPA blocks & 4 \\
+Dimension of single repr. & 256 \\
+Dimension of pairwise Repr.& 128 \\
+Dimension of hidden & 256 \\
+Number of IPA attention heads & 4 \\
+Number of IPA query points &  8 \\
+Number of IPA value points &  12 \\
+Number of transformer attention heads&4 \\
+Number of transformer layers&  2 \\
+
+
+\bottomrule[1.2pt]
+\end{tabular}
+
+\label{tab:hyperparameters}
+\end{table}
+
+
+\newpage
+\section{Additional Experiments} \label{app:add_exp}
+
+\subsection{Effect of the Temperature in finite-temperature string method}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_007_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_007}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_024_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_024}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_029_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_029}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_042_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_042}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_067_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_067}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_080_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_080}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_099_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_099}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_104_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_104}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_111_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_111}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Temperature_likelihood/thermal_strings_w_likelihood_class_132_wdos_compressed.pdf}
+    \caption{Effect of temperature $T$ on images principal curve. Lower $T$ drives paths through cartoonish high-likelihood modes (top); higher $T$ preserves realism (bottom).}
+    \label{fig:hot_like_class_132}
+\end{figure}
+
+\subsection{Multiple realizations of a principle curves}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_007_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_007}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_024_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_024}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_029_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_029}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_042_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_042}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_067_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_067}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_080_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_080}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_099_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_099}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_104_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_104}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_111_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_111}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{Images_arxiv/Voronoy_and_sons/genealogy_class_132_compressed.pdf}
+    \caption{A principal curves with three realizations coming from this curve}
+    \label{fig:genea_class_132}
+\end{figure}
+
+\end{document}

@@ -1,0 +1,293 @@
+{
+   "sources" : [
+      {
+         "usage" : "toplevel",
+         "filename" : "paper.tex"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "algorithmic.sty"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "bibliography.bib"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_cc_gflops_MIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_cc_gflops_MIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_cc_gflops_SIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_cc_gflops_SIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_cc_gflops_SISO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_cc_gflops_SISO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_gbs_MIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_gbs_MIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_gbs_SIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_gbs_SIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_gbs_SISO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_gbs_SISO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_tc_gflops_MIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_tc_gflops_MIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_tc_gflops_SIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_tc_gflops_SIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_tc_gflops_SISO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/mean_tc_gflops_SISO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/total_gb_MIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/total_gb_MIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/total_gb_SIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/total_gb_SIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/total_gb_SISO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/total_gb_SISO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/walltime_cpu_MIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/walltime_cpu_MIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/walltime_cpu_SIMO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/walltime_cpu_SIMO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/walltime_cpu_SISO_10000.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/walltime_cpu_SISO_10000_A100.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/ICLR_experiments/walltime_cpu_SISO_10000_RTX.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/MACE/3bpa-rmse_f.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/MACE/rmd17-rmse_f.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/SH__gaunt.jpg"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/SH_eSCN_Gaunt.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/VSTP_diagram.jpg"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/eSCN.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_flops_analysis_MIMO.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_flops_analysis_SIMO.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_flops_analysis_SISO.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_flops_analysis_walltime_MIMO.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_wall_time_MIMO_cpu.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_wall_time_MIMO_gpu.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_wall_time_SIMO_cpu.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_wall_time_SIMO_gpu.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_wall_time_SISO_cpu.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experiments/tp_wall_time_SISO_gpu.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/avg_all_glfops_MIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/avg_all_glfops_SIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/avg_all_glfops_SISO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/avg_gbs_MIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/avg_gbs_SIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/avg_gbs_SISO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/legend.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/peak_gbs_MIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/peak_gbs_SIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/peak_gbs_SISO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/peak_glfops_MIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/peak_glfops_SIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/peak_glfops_SISO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/walltime_cpu_MIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/walltime_cpu_SIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/walltime_cpu_SISO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/walltime_gpu_MIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/walltime_gpu_SIMO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/experimentsv2/walltime_gpu_SISO.pdf"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "figures/sh_gaunt.png"
+      },
+      {
+         "usage" : "ignore",
+         "filename" : "icml2025.bst"
+      }
+   ],
+   "version" : 2,
+   "texlive_version" : 2023,
+   "process" : {
+      "compiler" : "pdflatex"
+   }
+}

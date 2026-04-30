@@ -1,0 +1,565 @@
+@ARTICLE{Owen2024-pn,
+  title     = "Complexity of many-body interactions in transition metals via
+               machine-learned force fields from the {TM23} data set",
+  author    = "Owen, Cameron J and Torrisi, Steven B and Xie, Yu and Batzner,
+               Simon and Bystrom, Kyle and Coulter, Jennifer and Musaelian,
+               Albert and Sun, Lixin and Kozinsky, Boris",
+  journal   = "Npj Comput. Mater.",
+  publisher = "Springer Science and Business Media LLC",
+  volume    =  10,
+  number    =  1,
+  abstract  = "This work examines challenges associated with the
+               accuracy of machine-learned force fields (MLFFs) for bulk solid
+               and liquid phases of d-block elements. In exhaustive detail, we
+               contrast the performance of force, energy, and stress predictions
+               across the transition metals for two leading MLFF models: a
+               kernel-based atomic cluster expansion method implemented using
+               sparse Gaussian processes (FLARE), and an equivariant
+               message-passing neural network (NequIP). Early transition metals
+               present higher relative errors and are more difficult to learn
+               relative to late platinum- and coinage-group elements, and this
+               trend persists across model architectures. Trends in complexity
+               of interatomic interactions for different metals are revealed via
+               comparison of the performance of representations with different
+               many-body order and angular resolution. Using arguments based on
+               perturbation theory on the occupied and unoccupied d states near
+               the Fermi level, we determine that the large, sharp d density of
+               states both above and below the Fermi level in early transition
+               metals leads to a more complex, harder-to-learn potential energy
+               surface for these metals. Increasing the fictitious electronic
+               temperature (smearing) modifies the angular sensitivity of forces
+               and makes the early transition metal forces easier to learn. This
+               work illustrates challenges in capturing intricate properties of
+               metallic bonding with current leading MLFFs and provides a
+               reference data set for transition metals, aimed at benchmarking
+               the accuracy and improving the development of emerging
+               machine-learned approximations.",
+  month     =  may,
+  year      =  2024,
+  language  = "en"
+}
+
+@Article{3bpa,
+author={Kov{\'a}cs, D{\'a}vid P{\'e}ter
+and Oord, Cas van der
+and Kucera, Jiri
+and Allen, Alice E. A.
+and Cole, Daniel J.
+and Ortner, Christoph
+and Cs{\'a}nyi, G{\'a}bor},
+title={Linear Atomic Cluster Expansion Force Fields for Organic Molecules: Beyond RMSE},
+journal={Journal of Chemical Theory and Computation},
+year={2021},
+month={Dec},
+day={14},
+publisher={American Chemical Society},
+volume={17},
+number={12},
+pages={7696-7711},
+issn={1549-9618},
+doi={10.1021/acs.jctc.1c00647},
+url={https://doi.org/10.1021/acs.jctc.1c00647}
+}
+
+@misc{rmd17,
+      title={On the role of gradients for machine learning of molecular energies and forces}, 
+      author={Anders S. Christensen and O. Anatole von Lilienfeld},
+      year={2020},
+      eprint={2007.09593},
+      archivePrefix={arXiv},
+      primaryClass={physics.chem-ph},
+      url={https://arxiv.org/abs/2007.09593}, 
+}
+
+
+@ARTICLE{Frey2023-gg,
+  title     = "Neural scaling of deep chemical models",
+  author    = "Frey, Nathan C and Soklaski, Ryan and Axelrod, Simon and Samsi,
+               Siddharth and Gómez-Bombarelli, Rafael and Coley, Connor W and
+               Gadepally, Vijay",
+  journal   = "Nature Machine Intelligence",
+  publisher = "Nature Publishing Group",
+  volume    =  5,
+  number    =  11,
+  pages     = "1297--1305",
+  abstract  = "Massive scale, in terms of both data availability and
+               computation, enables important breakthroughs in key application
+               areas of deep learning such as natural language processing and
+               computer vision. There is emerging evidence that scale may be a
+               key ingredient in scientific deep learning, but the importance of
+               physical priors in scientific domains makes the strategies and
+               benefits of scaling uncertain. Here we investigate neural-scaling
+               behaviour in large chemical models by varying model and dataset
+               sizes over many orders of magnitude, studying models with over
+               one billion parameters, pre-trained on datasets of up to ten
+               million datapoints. We consider large language models for
+               generative chemistry and graph neural networks for
+               machine-learned interatomic potentials. We investigate the
+               interplay between physical priors and scale and discover
+               empirical neural-scaling relations for language models in
+               chemistry with a scaling exponent of 0.17 for the largest dataset
+               size considered, and a scaling exponent of 0.26 for equivariant
+               graph neural network interatomic potentials. Deep learning
+               methods in natural language processing generally become more
+               effective with larger datasets and bigger networks. But it is not
+               evident whether the same is true for more specialized domains
+               such as cheminformatics. Frey and colleagues provide empirical
+               explorations of chemistry models and find that neural-scaling
+               laws hold true even for the largest tested models and datasets.",
+  month     =  oct,
+  year      =  2023,
+  language  = "en"
+}
+
+
+@ARTICLE{Rackers2023-sb,
+  title     = "A recipe for cracking the quantum scaling limit with machine
+               learned electron densities",
+  author    = "Rackers, Joshua A and Tecot, Lucas and Geiger, Mario and Smidt,
+               Tess E",
+  journal   = "Mach. Learn.: Sci. Technol.",
+  publisher = "IOP Publishing",
+  volume    =  4,
+  number    =  1,
+  pages     =  015027,
+  abstract  = "A long-standing goal of science is to accurately simulate large
+               molecular systems using quantum mechanics. The poor scaling of
+               current quantum chemistry algorithms on classical computers,
+               however, imposes an effective limit of about a few dozen atoms on
+               traditional electronic structure calculations. We present a
+               machine learning (ML) method to break through this scaling limit
+               for electron densities. We show that Euclidean neural networks
+               can be trained to predict molecular electron densities from
+               limited data. By learning the electron density, the model can be
+               trained on small systems and make accurate predictions on large
+               ones. In the context of water clusters, we show that an ML model
+               trained on clusters of just 12 molecules contains all the
+               information needed to make accurate electron density predictions
+               on cluster sizes of 50 or more, beyond the scaling limit of
+               current quantum chemistry methods.",
+  month     =  feb,
+  year      =  2023,
+  language  = "en"
+}
+
+
+@article{gaunt,
+  title={Enabling Efficient Equivariant Operations in the Fourier Basis via Gaunt Tensor Products},
+  author={Luo, Shengjie and Chen, Tianlang and Krishnapriyan, Aditi S},
+  journal={arXiv preprint arXiv:2401.10216},
+  year={2024}
+}
+@article{nequip,
+	title        = {{E(3)-equivariant graph neural networks for data-efficient and accurate interatomic potentials}},
+	author       = {Batzner, Simon and Musaelian, Albert and Sun, Lixin and Geiger, Mario and Mailoa, Jonathan P. and Kornbluth, Mordechai and Molinari, Nicola and Smidt, Tess E. and Kozinsky, Boris},
+	year         = 2022,
+	month        = may,
+	publisher    = {Nature Communications},
+	volume       = 13,
+	url          = {https://doi.org/10.1038/s41467-022-29939-5},
+	issue        = 1
+}
+@article{beentjes2015quadrature,
+      title={Quadrature on a spherical surface},
+      author={Beentjes, Casper HL},
+      journal={Working note available on the website http://people. maths. ox. ac. uk/beentjes/Essays},
+      year={2015}
+}
+@article{mclaren1963optimal,
+  title={Optimal numerical integration on a sphere},
+  author={McLaren, Alexander D.},
+  journal={Mathematics of Computation},
+  volume={17},
+  number={84},
+  pages={361--383},
+  year={1963},
+  publisher={JSTOR}
+}
+@article{lebedev1976quadratures,
+  title={Quadratures on a sphere},
+  author={Lebedev, Vyacheslav Ivanovich},
+  journal={USSR Computational Mathematics and Mathematical Physics},
+  volume={16},
+  number={2},
+  pages={10--24},
+  year={1976},
+  publisher={Elsevier}
+}
+@misc{fu2024recipe,
+      title={A Recipe for Charge Density Prediction}, 
+      author={Xiang Fu and Andrew Rosen and Kyle Bystrom and Rui Wang and Albert Musaelian and Boris Kozinsky and Tess Smidt and Tommi Jaakkola},
+      year={2024},
+      eprint={2405.19276},
+      archivePrefix={arXiv},
+      primaryClass={physics.comp-ph}
+}
+
+@misc{edm,
+      title={Equivariant Diffusion for Molecule Generation in 3D}, 
+      author={Emiel Hoogeboom and Victor Garcia Satorras and Clément Vignac and Max Welling},
+      year={2022},
+      eprint={2203.17003},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+@article{alphafold,
+	author = {Jumper, John and Evans, Richard and Pritzel, Alexander and Green, Tim and Figurnov, Michael and Ronneberger, Olaf and Tunyasuvunakool, Kathryn and Bates, Russ and {\v Z}{\'\i}dek, Augustin and Potapenko, Anna and Bridgland, Alex and Meyer, Clemens and Kohl, Simon A. A. and Ballard, Andrew J. and Cowie, Andrew and Romera-Paredes, Bernardino and Nikolov, Stanislav and Jain, Rishub and Adler, Jonas and Back, Trevor and Petersen, Stig and Reiman, David and Clancy, Ellen and Zielinski, Michal and Steinegger, Martin and Pacholska, Michalina and Berghammer, Tamas and Bodenstein, Sebastian and Silver, David and Vinyals, Oriol and Senior, Andrew W. and Kavukcuoglu, Koray and Kohli, Pushmeet and Hassabis, Demis},
+	journal = {Nature},
+	number = {7873},
+	pages = {583--589},
+	title = {Highly accurate protein structure prediction with AlphaFold},
+	volume = {596},
+	year = {2021}}
+
+@article{equifold,
+	author = {Lee, Jae Hyeon and Yadollahpour, Payman and Watkins, Andrew and Frey, Nathan C. and Leaver-Fay, Andrew and Ra, Stephen and Cho, Kyunghyun and Gligorijevic, Vladimir and Regev, Aviv and Bonneau, Richard},
+	doi = {10.1101/2022.10.07.511322},
+	elocation-id = {2022.10.07.511322},
+	eprint = {https://www.biorxiv.org/content/early/2022/10/08/2022.10.07.511322.full.pdf},
+	journal = {bioRxiv},
+	publisher = {Cold Spring Harbor Laboratory},
+	title = {EquiFold: Protein Structure Prediction with a Novel Coarse-Grained Structure Representation},
+	url = {https://www.biorxiv.org/content/early/2022/10/08/2022.10.07.511322},
+	year = {2022},
+	bdsk-url-1 = {https://www.biorxiv.org/content/early/2022/10/08/2022.10.07.511322},
+	bdsk-url-2 = {https://doi.org/10.1101/2022.10.07.511322}}
+
+
+@inproceedings{
+equiformer,
+title={Equiformer: Equivariant Graph Attention Transformer for 3D Atomistic Graphs},
+author={Yi-Lun Liao and Tess Smidt},
+booktitle={The Eleventh International Conference on Learning Representations },
+year={2023},
+url={https://openreview.net/forum?id=KwmPfARgOTD}
+}
+
+@article{allegro,
+	author = {Musaelian, Albert and Batzner, Simon and Johansson, Anders and Sun, Lixin and Owen, Cameron J. and Kornbluth, Mordechai and Kozinsky, Boris},
+	journal = {Nature Communications},
+	number = {1},
+	pages = {579},
+	title = {Learning local equivariant representations for large-scale atomistic dynamics},
+	volume = {14},
+	year = {2023}}
+
+
+@inproceedings{mace,
+	title        = {{MACE: Higher Order Equivariant Message Passing Neural Networks for Fast and Accurate Force Fields}},
+	author       = {Ilyes Batatia and David Peter Kovacs and Gregor N. C. Simm and Christoph Ortner and Gabor Csanyi},
+	year         = 2022,
+	booktitle    = {Advances in Neural Information Processing Systems},
+	url          = {https://openreview.net/forum?id=YPpSngE-ZU},
+	editor       = {Alice H. Oh and Alekh Agarwal and Danielle Belgrave and Kyunghyun Cho}
+}
+
+@article{healy2003ffts,
+  title={{FFTs for the 2-sphere-improvements and variations}},
+  author={Healy, Dennis M and Rockmore, Daniel N and Kostelec, Peter J and Moore, Sean},
+  journal={Journal of Fourier analysis and applications},
+  volume={9},
+  pages={341--385},
+  year={2003},
+  publisher={Springer}
+}
+
+@book{varshalovich1988quantum,
+  title={Quantum theory of angular momentum},
+  author={Varshalovich, Dmitri{\u\i} Aleksandrovich and Moskalev, Anatol{\"\i} Nikolaevitch and Khersonskii, Valerij Kel'manovǐc},
+  year={1988},
+  publisher={World Scientific}
+}
+
+@article{unke2024e3x,
+  title={E3x: $\mathrm{E}(3)$-Equivariant Deep Learning Made Easy},
+  author={Unke, Oliver T and Maennel, Hartmut},
+  journal={arXiv preprint arXiv:2401.07595},
+  year={2024}
+}
+
+@inproceedings{escn,
+  title={Reducing so (3) convolutions to so (2) for efficient equivariant gnns},
+  author={Passaro, Saro and Zitnick, C Lawrence},
+  booktitle={International Conference on Machine Learning},
+  pages={27420--27438},
+  year={2023},
+  organization={PMLR}
+}
+@misc{jaxflops,
+ title        = {[xla:CPU] [xla:GPU] DotGeneral ignored in gethlocostanalysis flops · issue \#10479 · openxla/XLA},
+  url          = {https://github.com/openxla/xla/issues/10479},
+journal={GitHub},
+author={Openxla}
+}
+@misc{park2020accuratescalablemultielementgraph,
+      title={Accurate and scalable multi-element graph neural network force field and molecular dynamics with direct force architecture}, 
+      author={Cheol Woo Park and Mordechai Kornbluth and Jonathan Vandermause and Chris Wolverton and Boris Kozinsky and Jonathan P. Mailoa},
+      year={2020},
+      eprint={2007.14444},
+      archivePrefix={arXiv},
+      primaryClass={physics.comp-ph},
+      url={https://arxiv.org/abs/2007.14444}, 
+}
+
+@misc{thomas2018tensorfieldnetworksrotation,
+      title={Tensor field networks: Rotation- and translation-equivariant neural networks for 3D point clouds}, 
+      author={Nathaniel Thomas and Tess Smidt and Steven Kearnes and Lusann Yang and Li Li and Kai Kohlhoff and Patrick Riley},
+      year={2018},
+      eprint={1802.08219},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/1802.08219}, 
+}
+
+@misc{weiler20183dsteerablecnnslearning,
+      title={3D Steerable CNNs: Learning Rotationally Equivariant Features in Volumetric Data}, 
+      author={Maurice Weiler and Mario Geiger and Max Welling and Wouter Boomsma and Taco Cohen},
+      year={2018},
+      eprint={1807.02547},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/1807.02547}, 
+}
+
+@misc{kondor2018nbodynetworkscovarianthierarchical,
+      title={N-body Networks: a Covariant Hierarchical Neural Network Architecture for Learning Atomic Potentials}, 
+      author={Risi Kondor},
+      year={2018},
+      eprint={1803.01588},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/1803.01588}, 
+}
+
+@article{kondor2018clebschgordannetsfullyfourier,
+  title={Clebsch-gordan nets: a fully fourier space spherical convolutional neural network},
+  author={Kondor, Risi and Lin, Zhen and Trivedi, Shubhendu},
+  journal={Advances in Neural Information Processing Systems},
+  volume={31},
+  year={2018}
+}
+
+@misc{yang2020hierarchicalrooflineanalysiscollect,
+      title={Hierarchical Roofline Analysis: How to Collect Data using Performance Tools on Intel CPUs and NVIDIA GPUs}, 
+      author={Charlene Yang},
+      year={2020},
+      eprint={2009.02449},
+      archivePrefix={arXiv},
+      primaryClass={cs.DC},
+      url={https://arxiv.org/abs/2009.02449}, 
+}
+
+@techreport{nvidia_matrix_multiplication,
+  title        = {Matrix Multiplication Background User's Guide},
+  author       = {{NVIDIA}},
+  year         = {2024},
+  institution  = {NVIDIA},
+  url          = {https://docs.nvidia.com/deeplearning/performance/dl-performance-matrix-multiplication/index.html},
+  note         = {Accessed on July 13, 2024}
+}
+
+@inproceedings{cobbefficient,
+  title={Efficient Generalized Spherical CNNs},
+  author={Cobb, Oliver and Wallis, Christopher GR and Mavor-Parker, Augustine N and Marignier, Augustin and Price, Matthew A and d'Avezac, Mayeul and McEwen, Jason},
+  booktitle={International Conference on Learning Representations}
+}
+
+@inproceedings{ocamposcalable,
+  title={Scalable and Equivariant Spherical CNNs by Discrete-Continuous (DISCO) Convolutions},
+  author={Ocampo, Jeremy and Price, Matthew Alexander and McEwen, Jason},
+  booktitle={The Eleventh International Conference on Learning Representations}
+}
+
+@article{xin2021fast,
+  title={Fast and accurate spherical harmonics products.},
+  author={Xin, Hanggao and Zhou, Zhiqian and An, Di and Yan, Ling-Qi and Xu, Kun and Hu, Shi-Min and Yau, Shing-Tung},
+  journal={ACM Trans. Graph.},
+  volume={40},
+  number={6},
+  pages={280--1},
+  year={2021}
+}
+
+@article{heim2009some,
+  title={Some classes of ‘nontrivial zeroes’ of angular momentum addition coefficients},
+  author={Heim, TA and Hinze, J and Rau, ARP},
+  journal={Journal of Physics A: Mathematical and Theoretical},
+  volume={42},
+  number={17},
+  pages={175203},
+  year={2009},
+  publisher={IOP Publishing}
+}
+
+@article{maennel2024complete,
+  title={Complete and Efficient Covariants for 3D Point Configurations with Application to Learning Molecular Quantum Properties},
+  author={Maennel, Hartmut and Unke, Oliver T and M{\"u}ller, Klaus-Robert},
+  journal={arXiv preprint arXiv:2409.02730},
+  year={2024}
+}
+
+@book{dresselhaus2007group,
+  title={Group theory: application to the physics of condensed matter},
+  author={Dresselhaus, Mildred S and Dresselhaus, Gene and Jorio, Ado},
+  year={2007},
+  publisher={Springer Science \& Business Media}
+}
+
+@article{geiger2022e3nn,
+  title={e3nn: Euclidean neural networks},
+  author={Geiger, Mario and Smidt, Tess},
+  journal={arXiv preprint arXiv:2207.09453},
+  year={2022}
+}
+
+@software{jax2018github,
+  author = {James Bradbury and Roy Frostig and Peter Hawkins and Matthew James Johnson and Chris Leary and Dougal Maclaurin and George Necula and Adam Paszke and Jake Vander{P}las and Skye Wanderman-{M}ilne and Qiao Zhang},
+  title = {{JAX}: composable transformations of {P}ython+{N}um{P}y programs},
+  url = {http://github.com/jax-ml/jax},
+  version = {0.3.13},
+  year = {2018},
+}
+
+@article{brown2007classical,
+  title={Classical Electrodynamics Part II},
+  author={Brown, Robert G},
+  year={2007}
+}
+
+@article{gaunt1929iv,
+  title={IV. The triplets of helium},
+  author={Gaunt, J Arthur},
+  journal={Philosophical Transactions of the Royal Society of London. Series A, Containing Papers of a Mathematical or Physical Character},
+  volume={228},
+  number={659-669},
+  pages={151--196},
+  year={1929},
+  publisher={The Royal Society London}
+}
+
+@article{james1976new,
+  title={New tensor spherical harmonics, for application to the partial differential equations of mathematical physics},
+  author={James, Reginald William},
+  journal={Philosophical Transactions of the Royal Society of London. Series A, Mathematical and Physical Sciences},
+  volume={281},
+  number={1302},
+  pages={195--221},
+  year={1976},
+  publisher={The Royal Society London}
+}
+
+@misc{equivariancescale,
+      title={Does equivariance matter at scale?}, 
+      author={Johann Brehmer and Sönke Behrends and Pim de Haan and Taco Cohen},
+      year={2024},
+      eprint={2410.23179},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2410.23179}, 
+}
+
+@misc{fusionxlaanalysis,
+      title={Operator Fusion in XLA: Analysis and Evaluation}, 
+      author={Daniel Snider and Ruofan Liang},
+      year={2023},
+      eprint={2301.13062},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2301.13062}, 
+}
+
+@inproceedings{mlsysrut, author = {Barham, Paul and Isard, Michael}, title = {Machine Learning Systems are Stuck in a Rut}, year = {2019}, isbn = {9781450367271}, publisher = {Association for Computing Machinery}, address = {New York, NY, USA}, url = {https://doi.org/10.1145/3317550.3321441}, doi = {10.1145/3317550.3321441}, abstract = {In this paper we argue that systems for numerical computing are stuck in a local basin of performance and programmability. Systems researchers are doing an excellent job improving the performance of 5-year-old benchmarks, but gradually making it harder to explore innovative machine learning research ideas.We explain how the evolution of hardware accelerators favors compiler back ends that hyper-optimize large monolithic kernels, show how this reliance on high-performance but inflexible kernels reinforces the dominant style of programming model, and argue these programming abstractions lack expressiveness, maintainability, and modularity; all of which hinders research progress.We conclude by noting promising directions in the field, and advocate steps to advance progress towards high-performance general purpose numerical computing systems on modern accelerators.}, booktitle = {Proceedings of the Workshop on Hot Topics in Operating Systems}, pages = {177–183}, numpages = {7}, location = {Bertinoro, Italy}, series = {HotOS '19} }
+
+
+@inproceedings{fourcastnet, author = {Kurth, Thorsten and Subramanian, Shashank and Harrington, Peter and Pathak, Jaideep and Mardani, Morteza and Hall, David and Miele, Andrea and Kashinath, Karthik and Anandkumar, Anima}, title = {FourCastNet: Accelerating Global High-Resolution Weather Forecasting Using Adaptive Fourier Neural Operators}, year = {2023}, isbn = {9798400701900}, publisher = {Association for Computing Machinery}, address = {New York, NY, USA}, url = {https://doi.org/10.1145/3592979.3593412}, doi = {10.1145/3592979.3593412}, abstract = {Extreme weather amplified by climate change is causing increasingly devastating impacts across the globe. The current use of physics-based numerical weather prediction (NWP) limits accuracy and resolution due to high computational cost and strict time-to-solution limits.We report that a data-driven deep learning Earth system emulator, FourCastNet, can predict global weather and generate medium-range forecasts five orders-of-magnitude faster than NWP while approaching state-of-the-art accuracy. FourCastNet is optimized and scales efficiently on three supercomputing systems: Selene, Perlmutter, and JUWELS Booster up to 3,808 NVIDIA A100 GPUs, attaining 140.8 petaFLOPS in mixed precision (11.9\% of peak at that scale). The time-to-solution for training FourCastNet measured on JUWELS Booster on 3,072 GPUs is 67.4 minutes, resulting in an 80,000 times faster time-to-solution relative to state-of-the-art NWP, in inference.FourCastNet produces accurate instantaneous weather predictions for a week in advance and enables enormous ensembles that could be used to improve predictions of rare weather extremes.}, booktitle = {Proceedings of the Platform for Advanced Scientific Computing Conference}, articleno = {13}, numpages = {11}, keywords = {deep learning, fourier neural operator, transformer, extreme weather, climate change}, location = {Davos, Switzerland}, series = {PASC '23} }
+ 
+@misc{deephierarchicalrooflineperformanceanalysis,
+      title={Hierarchical Roofline Performance Analysis for Deep Learning Applications}, 
+      author={Charlene Yang and Yunsong Wang and Steven Farrell and Thorsten Kurth and Samuel Williams},
+      year={2020},
+      eprint={2009.05257},
+      archivePrefix={arXiv},
+      primaryClass={cs.DC},
+      url={https://arxiv.org/abs/2009.05257}, 
+}
+
+@online{throughputcomment,
+    author = {TensorCoreWeight},
+    title = {Why the compute throughputs value is different from the actual performance (peak performance)?},
+    year = {2023},
+    url = {https://forums.developer.nvidia.com/t/why-the-compute-throughputs-value-is-different-from-the-actual-performance-peak-performance/227563/5},
+    urldate = {2024-11-15},
+    organization = {NVIDIA Developer Forums}
+}
+
+@online{cuEquivariance,
+    author= {NVIDIA},
+    title={cuEquivariance},
+    year={2024},
+    url={https://docs.nvidia.com/cuda/cuequivariance/index.html},
+    urldate = {2025-1-30},
+}
+
+@misc{openEquivariance,
+      title={An Efficient Sparse Kernel Generator for O(3)-Equivariant Deep Networks}, 
+      author={Vivek Bharadwaj and Austin Glover and Aydin Buluc and James Demmel},
+      year={2025},
+      eprint={2501.13986},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2501.13986}, 
+}
+
+@misc{xla,title	= {XLA : Compiling Machine Learning for Peak Performance},author	= {Amit Sabne},year	= {2020}}
+
+@article{shao2024high,
+  title={High-Rank Irreducible Cartesian Tensor Decomposition and Bases of Equivariant Spaces},
+  author={Shao, Shihao and Li, Yikang and Lin, Zhouchen and Cui, Qinghua},
+  journal={arXiv preprint arXiv:2412.18263},
+  year={2024}
+}
+
+@inproceedings{zaverkinhigher,
+  title={Higher-Rank Irreducible Cartesian Tensors for Equivariant Message Passing},
+  author={Zaverkin, Viktor and Alesiani, Francesco and Maruyama, Takashi and Errica, Federico and Christiansen, Henrik and Takamoto, Makoto and Weber, Nicolas and Niepert, Mathias},
+  booktitle={The Thirty-eighth Annual Conference on Neural Information Processing Systems}
+}
+
+@misc{firoz2025optimizingdatadistributionkernel,
+      title={Optimizing Data Distribution and Kernel Performance for Efficient Training of Chemistry Foundation Models: A Case Study with MACE}, 
+      author={Jesun Firoz and Franco Pellegrini and Mario Geiger and Darren Hsu and Jenna A. Bilbrey and Han-Yi Chou and Maximilian Stadler and Markus Hoehnerbach and Tingyu Wang and Dejun Lin and Emine Kucukbenli and Henry W. Sprueill and Ilyes Batatia and Sotiris S. Xantheas and MalSoon Lee and Chris Mundy and Gabor Csanyi and Justin S. Smith and Ponnuswamy Sadayappan and Sutanay Choudhury},
+      year={2025},
+      eprint={2504.10700},
+      archivePrefix={arXiv},
+      primaryClass={cs.DC},
+      url={https://arxiv.org/abs/2504.10700}, 
+}
+
+@misc{tan2025highperformancetraininginferencedeep,
+      title={High-performance training and inference for deep equivariant interatomic potentials}, 
+      author={Chuin Wei Tan and Marc L. Descoteaux and Mit Kotak and Gabriel de Miranda Nascimento and Seán R. Kavanagh and Laura Zichi and Menghang Wang and Aadit Saluja and Yizhong R. Hu and Tess Smidt and Anders Johansson and William C. Witt and Boris Kozinsky and Albert Musaelian},
+      year={2025},
+      eprint={2504.16068},
+      archivePrefix={arXiv},
+      primaryClass={physics.comp-ph},
+      url={https://arxiv.org/abs/2504.16068}, 
+}
+
+@inproceedings{cenhigh,
+  title={Are High-Degree Representations Really Unnecessary in Equivariant Graph Neural Networks?},
+  author={Cen, Jiacheng and Li, Anyi and Lin, Ning and Ren, Yuxiang and Wang, Zihe and Huang, Wenbing},
+  booktitle={The Thirty-eighth Annual Conference on Neural Information Processing Systems}
+}
+
+@inproceedings{frank2022so3krates,
+  title={So3krates: Equivariant attention for interactions on arbitrary length-scales in molecular systems},
+  author={Frank, Thorben and Unke, Oliver Thorsten and Muller, Klaus Robert},
+  booktitle={Advances in Neural Information Processing Systems},
+  year={2022}
+}
+
+@inproceedings{aykentgotennet,
+  title={GotenNet: Rethinking Efficient 3D Equivariant Graph Neural Networks},
+  author={Aykent, Sarp and Xia, Tian},
+  booktitle={The Thirteenth International Conference on Learning Representations}
+}

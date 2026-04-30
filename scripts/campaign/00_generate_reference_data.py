@@ -65,6 +65,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.subprocess_support import child_env_with_repo_src_python
+
 # ---------------------------------------------------------------------------
 # System definitions — one entry per diagnostic case
 # ---------------------------------------------------------------------------
@@ -182,7 +184,7 @@ def _run_openmm_md(
         cmd += ["--frame-npz", str(frame_npz)]
 
     print(f"  [md] Command: {' '.join(cmd)}", flush=True)
-    result = subprocess.run(cmd, check=False)
+    result = subprocess.run(cmd, check=False, env=child_env_with_repo_src_python())
     if result.returncode != 0:
         raise RuntimeError(
             f"OpenMM OPES-MD failed with exit code {result.returncode}. "
@@ -256,14 +258,20 @@ def main() -> None:
         default="plumed",
         choices=["plumed", "observer"],
         help=(
-            "OPES mode for the OpenMM MD runner. 'plumed' applies real bias "
-            "forces through openmm-plumed; 'observer' preserves the legacy "
-            "Python-side reweighting-only path."
+            "OPES mode for the OpenMM MD runner. 'plumed' uses PLUMED OPES_METAD "
+            "(needs PLUMED built with --enable-modules=opes; stock conda-forge "
+            "plumed lacks this — use a custom kernel or --opes-mode observer). "
+            "'observer' is unbiased MD with Python OPESBias logging only."
         ),
     )
     parser.add_argument("--resume", action="store_true",
                         help="If final OPES outputs already exist, skip that system.")
     args = parser.parse_args()
+
+    if args.opes_mode == "plumed":
+        from genai_tps.simulation.plumed_kernel import assert_plumed_opes_metad_available
+
+        assert_plumed_opes_metad_available()
 
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
     out_root = args.out.expanduser().resolve()

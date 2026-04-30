@@ -13,6 +13,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.subprocess_support import child_env_with_repo_src_python
+
 
 def build_train_command(
     *,
@@ -172,7 +174,9 @@ def main() -> None:
             print(f"[atlas-finetune] {' '.join(cmd[:8])} ... loss={loss_type}")
             if not args.dry_run:
                 out_dir.mkdir(parents=True, exist_ok=True)
-                result = subprocess.run(cmd, check=False)
+                result = subprocess.run(
+                    cmd, check=False, env=child_env_with_repo_src_python()
+                )
                 if result.returncode != 0:
                     raise RuntimeError(f"train_weighted_dsm.py failed with exit code {result.returncode}.")
             log.append(
