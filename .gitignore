@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
+*.cursor*
 
 opes*case2/
 muhammad*/

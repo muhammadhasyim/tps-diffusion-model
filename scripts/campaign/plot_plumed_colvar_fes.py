@@ -107,10 +107,104 @@ def main() -> None:
         default=98.0,
         help="Cap 2D color scale at this percentile of finite FES values.",
     )
+    parser.add_argument(
+        "--triptych",
+        action="store_true",
+        help=(
+            "Write a 3-panel PNG (kernel density + centers, FES, COLVAR histogram). "
+            "Requires --fes, --kernels, --colvar, and --out."
+        ),
+    )
+    parser.add_argument(
+        "--kernels",
+        type=Path,
+        default=None,
+        help="OPES KERNELS path (--triptych only).",
+    )
+    parser.add_argument(
+        "--colvar",
+        type=Path,
+        default=None,
+        help="COLVAR path for the histogram (--triptych only).",
+    )
+    parser.add_argument(
+        "--triptych-cv",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated two CV names for COLVAR (--triptych); "
+            "default: names from the FES .dat FIELDS line."
+        ),
+    )
+    parser.add_argument(
+        "--triptych-skiprows",
+        type=int,
+        default=0,
+        help="COLVAR data rows to skip after header (--triptych).",
+    )
+    parser.add_argument(
+        "--triptych-grid-bins",
+        type=int,
+        default=100,
+        help="Square grid resolution for kernel-density panel (--triptych).",
+    )
+    parser.add_argument(
+        "--triptych-hist-bins",
+        type=int,
+        default=90,
+        help="Histogram bins per axis (--triptych).",
+    )
     args = parser.parse_args()
 
     from genai_tps.simulation.plumed_colvar_fes import run_fes_from_reweighting_script
-    from genai_tps.simulation.plumed_fes_plot import plot_fes_dat_to_png
+    from genai_tps.simulation.plumed_fes_plot import (
+        plot_fes_dat_to_png,
+        plot_opes_2d_fes_triptych,
+    )
+
+    if args.triptych:
+        if args.campaign is not None:
+            print("--triptych cannot be combined with --campaign.", file=sys.stderr)
+            sys.exit(2)
+        if args.fes is None or args.kernels is None or args.colvar is None or args.out is None:
+            print(
+                "--triptych requires --fes, --kernels, --colvar, and --out.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        fes_path = args.fes.expanduser().resolve()
+        kernels_path = args.kernels.expanduser().resolve()
+        colvar_path = args.colvar.expanduser().resolve()
+        out_png = args.out.expanduser().resolve()
+        for label, p in (
+            ("--fes", fes_path),
+            ("--kernels", kernels_path),
+            ("--colvar", colvar_path),
+        ):
+            if not p.is_file():
+                print(f"Not found ({label}): {p}", file=sys.stderr)
+                sys.exit(1)
+        cv_pair = None
+        if args.triptych_cv is not None:
+            parts = [c.strip() for c in args.triptych_cv.split(",")]
+            if len(parts) != 2:
+                print("--triptych-cv must be exactly two comma-separated names.", file=sys.stderr)
+                sys.exit(2)
+            cv_pair = (parts[0], parts[1])
+        plot_opes_2d_fes_triptych(
+            fes_path,
+            kernels_path,
+            colvar_path,
+            out_png,
+            colvar_cv_names=cv_pair,
+            dpi=150,
+            grid_bins=int(args.triptych_grid_bins),
+            hist_bins=int(args.triptych_hist_bins),
+            skiprows=int(args.triptych_skiprows),
+            vmax_percentile=float(args.vmax_percentile),
+        )
+        print(f"Wrote triptych {out_png}", flush=True)
+        return
 
     if args.campaign is not None:
         out_root = _resolve_campaign_out_root(args.campaign)
