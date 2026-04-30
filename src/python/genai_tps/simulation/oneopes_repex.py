@@ -28,6 +28,7 @@ rebuilds lightweight OpenMM contexts from a serialized system template (see
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import csv
 import json
 import math
@@ -46,7 +47,6 @@ from genai_tps.simulation.oneopes_upstream_reference import neighbor_hrex_pairs_
 ReplicaDevicePolicy = Literal["round-robin", "packed", "explicit"]
 EvaluatorPlacement = Literal["same-device", "dedicated", "serial"]
 OneOpesProtocolFlavor = Literal["legacy_boltz", "paper_host_guest"]
-PaperOneOpesReferenceCards = Literal["cb8", "temoa", "plumed_nest_23_011", "none"]
 
 # Febrer Martinez et al., bioRxiv 2024.08.23.609378 (OneOPES host–guest protocol).
 LITERATURE_EXCHANGE_ATTEMPT_STRIDE_STEPS = 1000
@@ -69,17 +69,6 @@ def register_oneopes_repex_arguments(parser: argparse.ArgumentParser) -> None:
         return tuple(parts)
 
     g = parser.add_argument_group("OneOPES Hamiltonian replica exchange (prototype)")
-    g.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Build solvated systems and PLUMED decks for each replica, then exit.",
-    )
-    g.add_argument(
-        "--dry-run-use-cpu",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="When --dry-run: force --platform CPU for deck generation (default: true).",
-    )
     g.add_argument(
         "--exchange-every",
         type=int,
@@ -150,13 +139,6 @@ def register_oneopes_repex_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     g.add_argument(
-        "--paper-oneopes-reference-cards",
-        type=str,
-        default="none",
-        choices=["cb8", "temoa", "plumed_nest_23_011", "none"],
-        help="Dry-run only: which reference fixture set to compare deck snippets against.",
-    )
-    g.add_argument(
         "--paper-oneopes-ligand-axis-p0-boltz",
         type=_parse_comma_int_list,
         default=None,
@@ -200,6 +182,15 @@ def register_oneopes_repex_arguments(parser: argparse.ArgumentParser) -> None:
         help="Comma-separated device ordinals (explicit policy; length must match replicas).",
     )
     g.add_argument(
+        "--replica-step-workers",
+        type=int,
+        default=0,
+        help=(
+            "Parallel workers used to advance replicas between exchange attempts. "
+            "Use 0 for one worker per replica."
+        ),
+    )
+    g.add_argument(
         "--max-active-contexts-per-device",
         type=int,
         default=4,
@@ -218,6 +209,8 @@ def validate_oneopes_repex_cli_args(args: argparse.Namespace, parser: argparse.A
     """Validate combined OpenMM-OPES + OneOPES-REX CLI arguments."""
     if args.bias_cv != "oneopes" or args.opes_mode != "plumed":
         parser.error("OneOPES REX requires --bias-cv oneopes and --opes-mode plumed.")
+    if str(getattr(args, "platform", "CUDA")) == "CPU":
+        parser.error("OneOPES REX requires a GPU OpenMM platform; use --platform CUDA or OpenCL.")
     if int(args.exchange_every) < 1:
         parser.error("--exchange-every must be >= 1.")
     proto = str(getattr(args, "oneopes_protocol", "legacy-boltz")).replace("-", "_")
@@ -225,13 +218,12 @@ def validate_oneopes_repex_cli_args(args: argparse.Namespace, parser: argparse.A
         parser.error(f"Unknown --oneopes-protocol {args.oneopes_protocol!r}.")
     if proto == "paper_host_guest" and int(args.n_replicas) != 8:
         parser.error("Paper host–guest protocol requires --n-replicas 8.")
-    if bool(getattr(args, "dry_run", False)):
-        if int(args.n_replicas) not in (2, 8):
-            parser.error("--dry-run supports --n-replicas 2 or 8.")
-    elif proto == "legacy_boltz" and int(args.n_replicas) != 2:
+    if proto == "legacy_boltz" and int(args.n_replicas) != 2:
         parser.error(
-            "Only --n-replicas 2 is supported for legacy-boltz dynamics (or use --dry-run)."
+            "Only --n-replicas 2 is supported for legacy-boltz dynamics."
         )
+    if int(getattr(args, "replica_step_workers", 0)) < 0:
+        parser.error("--replica-step-workers must be >= 0 (0 means one worker per replica).")
     if args.opes_expanded_temp_max is not None:
         if float(args.opes_expanded_temp_max) <= float(args.temperature):
             parser.error("--opes-expanded-temp-max must exceed --temperature.")
@@ -272,13 +264,49 @@ def _parse_devices_csv(value: str) -> list[int]:
     return [int(p) for p in parts]
 
 
+def resolve_replica_step_workers(worker_count: int | None, *, n_replicas: int) -> int:
+    """Resolve parallel workers for exchange-interval replica propagation.
+
+    ``None`` and ``0`` mean one worker per replica, matching the multi-rank
+    barrier model used by the GROMACS/PLUMED OneOPES reference workflows.
+    """
+    n_rep = int(n_replicas)
+    if n_rep < 1:
+        raise ValueError("n_replicas must be positive.")
+    if worker_count is None or int(worker_count) == 0:
+        return n_rep
+    resolved = int(worker_count)
+    if resolved < 1:
+        raise ValueError("--replica-step-workers must be positive, or 0 for auto.")
+    return resolved
+
+
+def step_replicas_parallel(
+    sims: Sequence[Any],
+    chunk: int,
+    *,
+    max_workers: int | None = None,
+) -> float:
+    """Advance independent OpenMM replicas concurrently for one exchange chunk."""
+    chunk_i = int(chunk)
+    if chunk_i < 1:
+        raise ValueError("chunk must be >= 1.")
+    sims_list = list(sims)
+    workers = resolve_replica_step_workers(max_workers, n_replicas=len(sims_list))
+    t0 = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(sim.step, chunk_i) for sim in sims_list]
+        for future in futures:
+            future.result()
+    return time.time() - t0
+
+
 __all__ = [
     "ExchangeAttempt",
     "OneOpesAuxiliaryCvSpec",
     "OneOpesProtocolFlavor",
     "OneOpesReplicaSpec",
     "PaperHostGuestReplicaStrat",
-    "PaperOneOpesReferenceCards",
     "ReplicaPlumedTuning",
     "ReplicaRuntimeState",
     "assign_replicas_to_devices",
@@ -300,8 +328,10 @@ __all__ = [
     "plan_evaluator_devices_for_neighbor_pair",
     "refresh_evaluator_context",
     "register_oneopes_repex_arguments",
+    "resolve_replica_step_workers",
     "run_multi_replica_neighbor_oneopes_hrex",
     "run_two_replica_oneopes_repex",
+    "step_replicas_parallel",
     "validate_oneopes_repex_cli_args",
     "write_repex_config_json",
 ]
@@ -1006,7 +1036,13 @@ def run_two_replica_oneopes_repex(
 
     exchange_log = out_root / "exchange_log.csv"
     exchange_log.parent.mkdir(parents=True, exist_ok=True)
+    barrier_log = out_root / "barrier_timing.jsonl"
+    barrier_log.write_text("", encoding="utf-8")
     n_steps = int(args.n_steps)
+    step_workers = resolve_replica_step_workers(
+        getattr(args, "replica_step_workers", 0),
+        n_replicas=2,
+    )
     step = 0
     t_run0 = time.time()
     with exchange_log.open("w", newline="", encoding="utf-8") as fcsv:
@@ -1021,18 +1057,24 @@ def run_two_replica_oneopes_repex(
                 "log_accept",
                 "accepted",
                 "rng_u",
+                "md_elapsed_s",
+                "exchange_elapsed_s",
                 "elapsed_s",
             ]
         )
 
         while step < n_steps:
             chunk = min(int(exchange_every), n_steps - step)
-            sim0.step(chunk)
-            sim1.step(chunk)
+            md_elapsed = step_replicas_parallel(
+                [sim0, sim1],
+                chunk,
+                max_workers=step_workers,
+            )
             step += chunk
 
-            st0 = sim0.context.getState(getPositions=True, getEnergy=True)
-            st1 = sim1.context.getState(getPositions=True, getEnergy=True)
+            t_exchange0 = time.time()
+            st0 = sim0.context.getState(getPositions=True, getVelocities=True, getEnergy=True)
+            st1 = sim1.context.getState(getPositions=True, getVelocities=True, getEnergy=True)
             pos0 = st0.getPositions()
             pos1 = st1.getPositions()
             bv0 = sim0.context.getState(getEnergy=True, groups={fg0}).getPotentialEnergy().value_in_unit(
@@ -1119,6 +1161,7 @@ def run_two_replica_oneopes_repex(
                 v1 = st1.getVelocities()
                 sim0.context.setVelocities(v1)
                 sim1.context.setVelocities(v0)
+            exchange_elapsed = time.time() - t_exchange0
 
             w.writerow(
                 [
@@ -1130,10 +1173,29 @@ def run_two_replica_oneopes_repex(
                     f"{log_a:.8g}",
                     int(accepted),
                     f"{ru:.8g}",
+                    f"{md_elapsed:.3f}",
+                    f"{exchange_elapsed:.3f}",
                     f"{time.time() - t_run0:.3f}",
                 ]
             )
             fcsv.flush()
+            with barrier_log.open("a", encoding="utf-8") as fbar:
+                fbar.write(
+                    json.dumps(
+                        {
+                            "md_step": int(step),
+                            "chunk_steps": int(chunk),
+                            "n_replicas": 2,
+                            "replica_step_workers": int(step_workers),
+                            "md_elapsed_s": round(float(md_elapsed), 6),
+                            "exchange_elapsed_s": round(float(exchange_elapsed), 6),
+                            "accepted": bool(accepted),
+                            "elapsed_s": round(float(time.time() - t_run0), 6),
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
 
 
 def run_multi_replica_neighbor_oneopes_hrex(
@@ -1198,7 +1260,13 @@ def run_multi_replica_neighbor_oneopes_hrex(
 
     exchange_log = out_root / "exchange_log.csv"
     exchange_log.parent.mkdir(parents=True, exist_ok=True)
+    barrier_log = out_root / "barrier_timing.jsonl"
+    barrier_log.write_text("", encoding="utf-8")
     n_steps = int(args.n_steps)
+    step_workers = resolve_replica_step_workers(
+        getattr(args, "replica_step_workers", 0),
+        n_replicas=n,
+    )
     step = 0
     t_run0 = time.time()
     with exchange_log.open("w", newline="", encoding="utf-8") as fcsv:
@@ -1216,22 +1284,38 @@ def run_multi_replica_neighbor_oneopes_hrex(
                 "log_accept",
                 "accepted",
                 "rng_u",
+                "md_elapsed_s",
+                "exchange_elapsed_s",
                 "elapsed_s",
             ]
         )
 
         while step < n_steps:
             chunk = min(int(exchange_every), n_steps - step)
-            for s in sims_list:
-                s.step(chunk)
+            md_elapsed = step_replicas_parallel(
+                sims_list,
+                chunk,
+                max_workers=step_workers,
+            )
             step += chunk
 
             phase = ((step // int(exchange_every)) - 1) % 2
             pairs = neighbor_hrex_pairs_for_phase(phase)
+            t_exchange0 = time.time()
+            accepted_count = 0
 
             for i, j in pairs:
-                st_i = sims_list[i].context.getState(getPositions=True, getEnergy=True)
-                st_j = sims_list[j].context.getState(getPositions=True, getEnergy=True)
+                t_pair0 = time.time()
+                st_i = sims_list[i].context.getState(
+                    getPositions=True,
+                    getVelocities=True,
+                    getEnergy=True,
+                )
+                st_j = sims_list[j].context.getState(
+                    getPositions=True,
+                    getVelocities=True,
+                    getEnergy=True,
+                )
                 pos_i = st_i.getPositions()
                 pos_j = st_j.getPositions()
                 bv_i = (
@@ -1325,12 +1409,14 @@ def run_multi_replica_neighbor_oneopes_hrex(
                     u_ii, u_ij, u_ji, u_jj, rng
                 )
                 if accepted:
+                    accepted_count += 1
                     sims_list[i].context.setPositions(pos_j)
                     sims_list[j].context.setPositions(pos_i)
                     vi = st_i.getVelocities()
                     vj = st_j.getVelocities()
                     sims_list[i].context.setVelocities(vj)
                     sims_list[j].context.setVelocities(vi)
+                pair_elapsed = time.time() - t_pair0
 
                 w.writerow(
                     [
@@ -1345,7 +1431,29 @@ def run_multi_replica_neighbor_oneopes_hrex(
                         f"{log_a:.8g}",
                         int(accepted),
                         f"{ru:.8g}",
+                        f"{md_elapsed:.3f}",
+                        f"{pair_elapsed:.3f}",
                         f"{time.time() - t_run0:.3f}",
                     ]
                 )
                 fcsv.flush()
+            exchange_elapsed = time.time() - t_exchange0
+            with barrier_log.open("a", encoding="utf-8") as fbar:
+                fbar.write(
+                    json.dumps(
+                        {
+                            "md_step": int(step),
+                            "chunk_steps": int(chunk),
+                            "n_replicas": int(n),
+                            "phase_mod_2": int(phase),
+                            "n_pairs": int(len(pairs)),
+                            "accepted": int(accepted_count),
+                            "replica_step_workers": int(step_workers),
+                            "md_elapsed_s": round(float(md_elapsed), 6),
+                            "exchange_elapsed_s": round(float(exchange_elapsed), 6),
+                            "elapsed_s": round(float(time.time() - t_run0), 6),
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )

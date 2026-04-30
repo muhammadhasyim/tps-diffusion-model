@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -23,7 +26,11 @@ from genai_tps.simulation.oneopes_repex import (
     plan_evaluator_device_assignments,
     plan_evaluator_devices_for_neighbor_pair,
     prepare_evaluator_scratch_tree,
+    register_oneopes_repex_arguments,
     relocate_plumed_deck_paths,
+    resolve_replica_step_workers,
+    step_replicas_parallel,
+    validate_oneopes_repex_cli_args,
 )
 from genai_tps.simulation.oneopes_upstream_reference import (
     PEFEMA_AUXILIARY_CV_LABELS,
@@ -40,6 +47,36 @@ def test_literature_two_replica_specs() -> None:
     assert len(specs) == 2
     assert specs[0].force_empty_oneopes_hydration is True
     assert specs[1].oneopes_hydration_site_cap == 1
+
+
+@pytest.mark.parametrize("flag", ["--dry-run", "--dry-run-use-cpu", "--no-dry-run-use-cpu"])
+def test_oneopes_repex_cli_rejects_dry_run_flags(flag: str) -> None:
+    parser = argparse.ArgumentParser()
+    register_oneopes_repex_arguments(parser)
+
+    with pytest.raises(SystemExit):
+        parser.parse_args([flag])
+
+
+def test_oneopes_repex_requires_gpu_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    import genai_tps.simulation.plumed_kernel as plumed_kernel
+
+    monkeypatch.setattr(plumed_kernel, "assert_plumed_opes_metad_available", lambda: None)
+    parser = argparse.ArgumentParser()
+    args = argparse.Namespace(
+        bias_cv="oneopes",
+        opes_mode="plumed",
+        exchange_every=1,
+        oneopes_protocol="legacy-boltz",
+        n_replicas=2,
+        platform="CPU",
+        opes_expanded_temp_max=None,
+        temperature=300.0,
+        oneopes_hydration_max_sites=1,
+    )
+
+    with pytest.raises(SystemExit):
+        validate_oneopes_repex_cli_args(args, parser)
 
 
 def test_literature_eight_replica_multithermal_flags() -> None:
@@ -80,6 +117,55 @@ def test_count_active_contexts() -> None:
     c = count_active_contexts_per_device([0, 1], [0, None])
     assert c[0] == 2
     assert c[1] == 1
+
+
+def test_resolve_replica_step_workers_auto_and_explicit() -> None:
+    assert resolve_replica_step_workers(0, n_replicas=8) == 8
+    assert resolve_replica_step_workers(None, n_replicas=8) == 8
+    assert resolve_replica_step_workers(3, n_replicas=8) == 3
+    with pytest.raises(ValueError, match="positive"):
+        resolve_replica_step_workers(-1, n_replicas=8)
+
+
+def test_step_replicas_parallel_runs_concurrently() -> None:
+    class _FakeSimulation:
+        def __init__(self) -> None:
+            self.calls: list[int] = []
+
+        def step(self, chunk: int) -> None:
+            time.sleep(0.05)
+            self.calls.append(chunk)
+
+    sims = [_FakeSimulation() for _ in range(8)]
+    t0 = time.perf_counter()
+    elapsed = step_replicas_parallel(sims, 17, max_workers=8)
+    wall = time.perf_counter() - t0
+
+    assert all(sim.calls == [17] for sim in sims)
+    assert elapsed <= wall
+    assert wall < 0.20
+
+
+def test_step_replicas_parallel_propagates_failures() -> None:
+    started: set[int] = set()
+    lock = threading.Lock()
+
+    class _FakeSimulation:
+        def __init__(self, replica_index: int) -> None:
+            self.replica_index = replica_index
+
+        def step(self, chunk: int) -> None:
+            del chunk
+            with lock:
+                started.add(self.replica_index)
+            if self.replica_index == 3:
+                raise RuntimeError("replica failed")
+            time.sleep(0.01)
+
+    sims = [_FakeSimulation(i) for i in range(8)]
+    with pytest.raises(RuntimeError, match="replica failed"):
+        step_replicas_parallel(sims, 5, max_workers=8)
+    assert started == set(range(8))
 
 
 def test_plan_evaluator_devices() -> None:

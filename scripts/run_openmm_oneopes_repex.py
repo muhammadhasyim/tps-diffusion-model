@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import csv
 import random
 import sys
 from pathlib import Path
@@ -23,6 +22,7 @@ from genai_tps.simulation.oneopes_repex import (
     count_active_contexts_per_device,
     plan_evaluator_device_assignments,
     register_oneopes_repex_arguments,
+    resolve_replica_step_workers,
     run_multi_replica_neighbor_oneopes_hrex,
     run_two_replica_oneopes_repex,
     validate_oneopes_repex_cli_args,
@@ -69,6 +69,10 @@ def main() -> None:
         placement=args.evaluator_placement,  # type: ignore[arg-type]
     )
     eval_budget = [None] * int(args.n_replicas) if int(args.n_replicas) > 2 else eval_devs
+    resolved_step_workers = resolve_replica_step_workers(
+        int(getattr(args, "replica_step_workers", 0)),
+        n_replicas=int(args.n_replicas),
+    )
     assert_context_budget(
         count_active_contexts_per_device(rep_devs, eval_budget),
         max_active_contexts_per_device=int(args.max_active_contexts_per_device),
@@ -86,77 +90,12 @@ def main() -> None:
         exchange_every=int(args.exchange_every),
         n_replicas=int(args.n_replicas),
         extra={
-            "dry_run": bool(args.dry_run),
             "devices": devices,
             "replica_device_map": str(args.replica_device_map),
+            "replica_step_workers": resolved_step_workers,
             "oneopes_protocol": proto,
         },
     )
-
-    if args.dry_run:
-        if bool(args.dry_run_use_cpu):
-            args.platform = "CPU"
-            args.openmm_device_index = None
-        for rep in range(int(args.n_replicas)):
-            rdir = out_root / f"rep{rep:03d}"
-            strat = build_stratified_replica_plumed_kwargs(
-                rep,
-                n_replicas=int(args.n_replicas),
-                user_expanded_temp_max=user_tm,
-                user_expanded_pace=args.opes_expanded_pace,
-                thermostat_temperature_k=float(args.temperature),
-                oneopes_protocol=proto,  # type: ignore[arg-type]
-                paper_multithermal_pace=int(getattr(args, "paper_oneopes_multithermal_pace", 100)),
-            )
-            run_opes_md(
-                args,
-                md_out_dir=rdir,
-                plumed_factory_extra_kwargs=strat,
-                stop_after_initialization=True,
-            )
-        log_path = out_root / "exchange_log.csv"
-        with log_path.open("w", newline="", encoding="utf-8") as f:
-            w = csv.writer(f)
-            if int(args.n_replicas) == 8:
-                w.writerow(
-                    [
-                        "md_step",
-                        "phase_mod_2",
-                        "pair_i",
-                        "pair_j",
-                        "u_ii",
-                        "u_jj",
-                        "u_ij",
-                        "u_ji",
-                        "log_accept",
-                        "accepted",
-                        "rng_u",
-                        "elapsed_s",
-                    ]
-                )
-            else:
-                w.writerow(
-                    [
-                        "md_step",
-                        "u00",
-                        "u01",
-                        "u10",
-                        "u11",
-                        "log_accept",
-                        "accepted",
-                        "rng_u",
-                        "elapsed_s",
-                    ]
-                )
-        if proto == "paper_host_guest" and str(args.paper_oneopes_reference_cards) != "none":
-            deck0 = (out_root / "rep000" / "plumed_opes.dat").read_text(encoding="utf-8")
-            if "cyl_z" not in deck0 or "cosang" not in deck0:
-                raise RuntimeError(
-                    "Paper dry-run deck missing expected main CVs (cyl_z, cosang); "
-                    "check PLUMED generation / --paper-oneopes-reference-cards."
-                )
-        print(f"[ONEOPES-REX] dry-run complete: decks under {out_root}/rep*/", flush=True)
-        return
 
     rng = random.Random(0)
     n_rep = int(args.n_replicas)

@@ -52,9 +52,13 @@ submodule (see ``scripts/build_plumed_opes.sh``), pass ``--plumed-colvar-heavy-f
 
 Example::
 
+    # Set SCRATCH or BOLTZ_CACHE so checkpoints/molecule data land on scratch, not HOME.
     # Quick test (100 k MD steps per system; Boltz + OpenMM default to GPU):
     python scripts/campaign/00_generate_reference_data.py \
         --n-steps 100000 --out outputs/campaign
+
+    # Or pass an explicit cache root:
+    #   --cache /scratch/$USER/.boltz
 
     # Production (5 M MD steps):
     python scripts/campaign/00_generate_reference_data.py \
@@ -79,6 +83,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 from genai_tps.simulation.openmm_md_runner import (
     _parse_comma_int_list,
     _parse_oneopes_contact_pairs_boltz,
@@ -362,6 +367,186 @@ def _run_openmm_md(
         )
 
 
+def _run_openmm_oneopes_repex(
+    *,
+    topo_npz: Path,
+    frame_npz: Path | None,
+    mol_dir: Path,
+    out_dir: Path,
+    n_steps: int,
+    save_every: int,
+    deposit_pace: int,
+    opes_barrier: float,
+    opes_biasfactor: float,
+    opes_sigma: str,
+    temperature: float,
+    pocket_radius: float,
+    platform: str,
+    minimize_steps: int,
+    progress_every: int,
+    save_opes_every: int,
+    opes_mode: str,
+    opes_kernel_cutoff: float | None,
+    opes_nlist_parameters: tuple[float, float] | None,
+    plumed_colvar_heavy_flush: bool,
+    log_gpu_util: bool,
+    gpu_util_interval: float,
+    bias_cv: str,
+    opes_explore: bool,
+    opes_wall_dist: float | None,
+    opes_wall_kappa: float,
+    coordination_r0: float,
+    opes_expanded_temp_max: float | None,
+    opes_expanded_pace: int,
+    oneopes_axis_p0_boltz: list[int] | None,
+    oneopes_axis_p1_boltz: list[int] | None,
+    oneopes_contact_pairs_boltz: list[tuple[int, int]] | None,
+    oneopes_hydration_boltz: list[int] | None,
+    oneopes_water_oxygen_plumed: list[int] | None,
+    oneopes_water_pace: int,
+    oneopes_water_barrier: float,
+    oneopes_water_biasfactor: float,
+    oneopes_water_sigma: float,
+    oneopes_auto_hydration: bool,
+    oneopes_hydration_max_sites: int,
+    oneopes_hydration_use_3drism: bool,
+    oneopes_hydration_min_density: float,
+    n_replicas: int,
+    oneopes_protocol: str,
+    devices: str,
+    replica_device_map: str,
+    replica_devices: str | None,
+    replica_step_workers: int,
+    max_active_contexts_per_device: int,
+    evaluator_placement: str,
+    paper_oneopes_ligand_axis_p0_boltz: str | None,
+    paper_oneopes_ligand_axis_p1_boltz: str | None,
+    paper_oneopes_aux_guest_boltz: str | None,
+) -> None:
+    """Invoke the GPU-only OneOPES HREX driver via subprocess."""
+    md_script = _REPO_ROOT / "scripts" / "run_openmm_oneopes_repex.py"
+    cmd = [
+        sys.executable, str(md_script),
+        "--topo-npz", str(topo_npz),
+        "--out", str(out_dir),
+        "--n-steps", str(n_steps),
+        "--save-every", str(save_every),
+        "--deposit-pace", str(deposit_pace),
+        "--opes-barrier", str(opes_barrier),
+        "--opes-biasfactor", str(opes_biasfactor),
+        "--opes-sigma", opes_sigma,
+        "--temperature", str(temperature),
+        "--pocket-radius", str(pocket_radius),
+        "--platform", platform,
+        "--minimize-steps", str(minimize_steps),
+        "--progress-every", str(progress_every),
+        "--save-opes-every", str(save_opes_every),
+        "--opes-mode", opes_mode,
+        "--mol-dir", str(mol_dir),
+        "--bias-cv", str(bias_cv),
+        "--n-replicas", str(int(n_replicas)),
+        "--oneopes-protocol", str(oneopes_protocol),
+        "--devices", str(devices),
+        "--replica-device-map", str(replica_device_map),
+        "--replica-step-workers", str(int(replica_step_workers)),
+        "--max-active-contexts-per-device", str(int(max_active_contexts_per_device)),
+        "--evaluator-placement", str(evaluator_placement),
+    ]
+    if replica_devices is not None:
+        cmd += ["--replica-devices", replica_devices]
+    if opes_explore:
+        cmd.append("--opes-explore")
+    if opes_wall_dist is not None:
+        cmd += ["--opes-wall-dist", str(float(opes_wall_dist))]
+        cmd += ["--opes-wall-kappa", str(float(opes_wall_kappa))]
+    cmd += ["--coordination-r0", str(float(coordination_r0))]
+    if opes_expanded_temp_max is not None:
+        cmd += [
+            "--opes-expanded-temp-max",
+            str(float(opes_expanded_temp_max)),
+            "--opes-expanded-pace",
+            str(int(opes_expanded_pace)),
+        ]
+    if opes_kernel_cutoff is not None:
+        cmd += ["--opes-kernel-cutoff", str(opes_kernel_cutoff)]
+    if opes_nlist_parameters is not None:
+        a, b = opes_nlist_parameters
+        cmd += ["--opes-nlist-parameters", f"{a},{b}"]
+    if frame_npz is not None:
+        cmd += ["--frame-npz", str(frame_npz)]
+    if plumed_colvar_heavy_flush:
+        cmd += ["--plumed-colvar-heavy-flush"]
+    if log_gpu_util:
+        cmd.append("--log-gpu-util")
+        cmd += ["--gpu-util-interval", str(float(gpu_util_interval))]
+
+    if oneopes_axis_p0_boltz is not None:
+        cmd += [
+            "--oneopes-axis-p0-boltz",
+            ",".join(str(int(x)) for x in oneopes_axis_p0_boltz),
+        ]
+    if oneopes_axis_p1_boltz is not None:
+        cmd += [
+            "--oneopes-axis-p1-boltz",
+            ",".join(str(int(x)) for x in oneopes_axis_p1_boltz),
+        ]
+    if oneopes_contact_pairs_boltz is not None:
+        pair_str = ",".join(f"{int(p)}-{int(l)}" for p, l in oneopes_contact_pairs_boltz)
+        cmd += ["--oneopes-contact-pairs-boltz", pair_str]
+    if oneopes_hydration_boltz is not None and len(oneopes_hydration_boltz) > 0:
+        cmd += [
+            "--oneopes-hydration-boltz",
+            ",".join(str(int(x)) for x in oneopes_hydration_boltz),
+        ]
+    if oneopes_water_oxygen_plumed is not None and len(oneopes_water_oxygen_plumed) > 0:
+        cmd += [
+            "--oneopes-water-oxygen-plumed",
+            ",".join(str(int(x)) for x in oneopes_water_oxygen_plumed),
+        ]
+    cmd += [
+        "--oneopes-water-pace",
+        str(int(oneopes_water_pace)),
+        "--oneopes-water-barrier",
+        str(float(oneopes_water_barrier)),
+        "--oneopes-water-biasfactor",
+        str(float(oneopes_water_biasfactor)),
+        "--oneopes-water-sigma",
+        str(float(oneopes_water_sigma)),
+        "--oneopes-hydration-max-sites",
+        str(int(oneopes_hydration_max_sites)),
+        "--oneopes-hydration-min-density",
+        str(float(oneopes_hydration_min_density)),
+    ]
+    if not oneopes_auto_hydration:
+        cmd.append("--no-oneopes-auto-hydration")
+    if not oneopes_hydration_use_3drism:
+        cmd.append("--no-oneopes-hydration-use-3drism")
+
+    if str(oneopes_protocol).replace("-", "_") == "paper_host_guest":
+        if paper_oneopes_ligand_axis_p0_boltz is None:
+            raise RuntimeError("--paper-oneopes-ligand-axis-p0-boltz is required for paper OneOPES REPEX.")
+        if paper_oneopes_ligand_axis_p1_boltz is None:
+            raise RuntimeError("--paper-oneopes-ligand-axis-p1-boltz is required for paper OneOPES REPEX.")
+        if paper_oneopes_aux_guest_boltz is None:
+            raise RuntimeError("--paper-oneopes-aux-guest-boltz is required for paper OneOPES REPEX.")
+        cmd += [
+            "--paper-oneopes-ligand-axis-p0-boltz",
+            paper_oneopes_ligand_axis_p0_boltz,
+            "--paper-oneopes-ligand-axis-p1-boltz",
+            paper_oneopes_ligand_axis_p1_boltz,
+            "--paper-oneopes-aux-guest-boltz",
+            paper_oneopes_aux_guest_boltz,
+        ]
+
+    print(f"  [md] Command: {' '.join(cmd)}", flush=True)
+    result = subprocess.run(cmd, check=False, env=child_env_with_repo_src_python())
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"OpenMM OneOPES REPEX failed with exit code {result.returncode}. "
+            "See stderr above for details."
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Stage 0: Run OpenMM OPES-MD reference simulations for all 3 diagnostic systems.",
@@ -372,10 +557,12 @@ def main() -> None:
     parser.add_argument(
         "--cache",
         type=Path,
-        default=Path.home() / ".boltz",
+        default=None,
         help=(
             "Boltz model cache directory (checkpoints, mols/). "
-            "Default: ~/.boltz. Override if your cache lives elsewhere."
+            "If omitted, uses ``BOLTZ_CACHE`` or ``SCRATCH/.boltz`` (same rules as "
+            "other campaign scripts — no home-directory default). "
+            "Set SCRATCH or BOLTZ_CACHE for cluster scratch storage."
         ),
     )
     parser.add_argument(
@@ -431,6 +618,84 @@ def main() -> None:
             "2d drops coordination; oneopes = PROJECTION_ON_AXIS + CONTACTMAP, "
             "requires --opes-mode plumed)."
         ),
+    )
+    parser.add_argument(
+        "--oneopes-repex",
+        action="store_true",
+        help=(
+            "Run Stage 00 through scripts/run_openmm_oneopes_repex.py instead of the "
+            "single-replica OPES-MD driver. Requires --bias-cv oneopes and a GPU platform."
+        ),
+    )
+    parser.add_argument(
+        "--repex-n-replicas",
+        type=int,
+        default=8,
+        choices=[2, 8],
+        help="Replica count forwarded to the OneOPES REPEX driver.",
+    )
+    parser.add_argument(
+        "--oneopes-protocol",
+        type=str,
+        default="paper-host-guest",
+        choices=["legacy-boltz", "paper-host-guest"],
+        help="OneOPES REPEX protocol forwarded to the replica-exchange driver.",
+    )
+    parser.add_argument(
+        "--devices",
+        type=str,
+        default="0,1",
+        help="Comma-separated OpenMM GPU ordinals for OneOPES REPEX, e.g. '0,1'.",
+    )
+    parser.add_argument(
+        "--replica-device-map",
+        type=str,
+        default="round-robin",
+        choices=["round-robin", "packed", "explicit"],
+        help="Replica-to-GPU placement policy for OneOPES REPEX.",
+    )
+    parser.add_argument(
+        "--replica-devices",
+        type=str,
+        default=None,
+        help="Explicit comma-separated replica device list when --replica-device-map explicit.",
+    )
+    parser.add_argument(
+        "--replica-step-workers",
+        type=int,
+        default=8,
+        help="Parallel replica propagation workers for OneOPES REPEX (0 = one per replica).",
+    )
+    parser.add_argument(
+        "--max-active-contexts-per-device",
+        type=int,
+        default=4,
+        help="Maximum active OpenMM contexts per GPU accepted by the REPEX driver.",
+    )
+    parser.add_argument(
+        "--evaluator-placement",
+        type=str,
+        default="same-device",
+        choices=["same-device", "dedicated", "serial"],
+        help="Cross-Hamiltonian evaluator placement policy for OneOPES REPEX.",
+    )
+    parser.add_argument(
+        "--paper-oneopes-ligand-axis-p0-boltz",
+        type=str,
+        default=None,
+        help="Paper OneOPES: comma-separated Boltz indices for one ligand-axis anchor.",
+    )
+    parser.add_argument(
+        "--paper-oneopes-ligand-axis-p1-boltz",
+        type=str,
+        default=None,
+        help="Paper OneOPES: comma-separated Boltz indices for the other ligand-axis anchor.",
+    )
+    parser.add_argument(
+        "--paper-oneopes-aux-guest-boltz",
+        type=str,
+        default=None,
+        help="Paper OneOPES: seven comma-separated guest Boltz indices in L4,V6,L1,V8,V4,V10,V2 order.",
     )
     parser.add_argument(
         "--opes-bias-style",
@@ -639,6 +904,22 @@ def main() -> None:
         parser.error("--bias-cv oneopes requires exactly two comma-separated values in --opes-sigma")
     if args.bias_cv == "oneopes" and args.opes_mode != "plumed":
         parser.error("--bias-cv oneopes requires --opes-mode plumed")
+    if args.oneopes_repex:
+        if args.bias_cv != "oneopes":
+            parser.error("--oneopes-repex requires --bias-cv oneopes")
+        if args.platform == "CPU":
+            parser.error("--oneopes-repex requires --platform CUDA or OpenCL")
+        if args.oneopes_protocol == "paper-host-guest" and int(args.repex_n_replicas) != 8:
+            parser.error("--oneopes-protocol paper-host-guest requires --repex-n-replicas 8")
+        if int(args.replica_step_workers) < 0:
+            parser.error("--replica-step-workers must be >= 0")
+        if args.oneopes_protocol == "paper-host-guest":
+            if args.paper_oneopes_ligand_axis_p0_boltz is None:
+                parser.error("--oneopes-repex paper-host-guest requires --paper-oneopes-ligand-axis-p0-boltz")
+            if args.paper_oneopes_ligand_axis_p1_boltz is None:
+                parser.error("--oneopes-repex paper-host-guest requires --paper-oneopes-ligand-axis-p1-boltz")
+            if args.paper_oneopes_aux_guest_boltz is None:
+                parser.error("--oneopes-repex paper-host-guest requires --paper-oneopes-aux-guest-boltz")
     if int(args.oneopes_hydration_max_sites) < 1:
         parser.error("--oneopes-hydration-max-sites must be >= 1")
 
@@ -668,7 +949,11 @@ def main() -> None:
 
         assert_plumed_opes_metad_available()
 
-    cache = Path(args.cache).expanduser().resolve()
+    cache = (
+        Path(args.cache).expanduser().resolve()
+        if args.cache is not None
+        else default_boltz_cache_dir()
+    )
     out_root = args.out.expanduser().resolve()
     out_root.mkdir(parents=True, exist_ok=True)
 
@@ -685,14 +970,19 @@ def main() -> None:
         print(f"  System {idx}/3: {sys_def['description']}")
         print(f"{'='*60}", flush=True)
 
-        system_out = out_root / sys_def["name"] / "openmm_opes_md"
+        run_subdir = "openmm_oneopes_repex" if args.oneopes_repex else "openmm_opes_md"
+        system_out = out_root / sys_def["name"] / run_subdir
         system_out.mkdir(parents=True, exist_ok=True)
 
         # Check for existing OPES state (resume logic)
         final_state = (
+            system_out / "exchange_log.csv"
+            if args.oneopes_repex
+            else (
             system_out / "opes_states" / "STATE"
             if args.opes_mode == "plumed"
             else system_out / "opes_state_final.json"
+            )
         )
         if args.resume and final_state.is_file():
             print(f"  [00] Found existing OPES state at {final_state}; skipping.", flush=True)
@@ -742,61 +1032,129 @@ def main() -> None:
             opes_restart = restart_path
             print(f"  [00] Resuming OPES from {opes_restart}", flush=True)
 
-        print(f"  [00] Running OpenMM OPES-MD ({args.n_steps:,} steps)...", flush=True)
-        _run_openmm_md(
-            topo_npz=topo_npz,
-            frame_npz=frame_npz,
-            mol_dir=cache / "mols",
-            out_dir=system_out,
-            n_steps=args.n_steps,
-            save_every=args.save_every,
-            deposit_pace=args.deposit_pace,
-            opes_barrier=args.opes_barrier,
-            opes_biasfactor=args.opes_biasfactor,
-            opes_sigma=args.opes_sigma,
-            temperature=args.temperature,
-            pocket_radius=args.pocket_radius,
-            platform=args.platform,
-            minimize_steps=args.minimize_steps,
-            progress_every=args.progress_every,
-            save_opes_every=args.save_opes_every,
-            opes_restart=opes_restart,
-            opes_mode=args.opes_mode,
-            opes_kernel_cutoff=args.opes_kernel_cutoff,
-            opes_nlist_parameters=args.opes_nlist_parameters,
-            plumed_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
-            openmm_device_index=openmm_gpu_index,
-            log_gpu_util=bool(args.log_gpu_util),
-            gpu_util_interval=float(args.gpu_util_interval),
-            gpu_util_out=(
-                args.gpu_util_out.expanduser().resolve()
-                if args.gpu_util_out is not None
-                else None
-            ),
-            bias_cv=str(args.bias_cv),
-            opes_explore=(str(args.opes_bias_style) == "explore"),
-            opes_wall_dist=args.opes_wall_dist,
-            opes_wall_kappa=float(args.opes_wall_kappa),
-            coordination_r0=float(args.coordination_r0),
-            opes_expanded_temp_max=args.opes_expanded_temp_max,
-            opes_expanded_pace=int(args.opes_expanded_pace),
-            oneopes_axis_p0_boltz=args.oneopes_axis_p0_boltz,
-            oneopes_axis_p1_boltz=args.oneopes_axis_p1_boltz,
-            oneopes_contact_pairs_boltz=args.oneopes_contact_pairs_boltz,
-            oneopes_hydration_boltz=args.oneopes_hydration_boltz,
-            oneopes_water_oxygen_plumed=args.oneopes_water_oxygen_plumed,
-            oneopes_water_pace=int(args.oneopes_water_pace),
-            oneopes_water_barrier=float(args.oneopes_water_barrier),
-            oneopes_water_biasfactor=float(args.oneopes_water_biasfactor),
-            oneopes_water_sigma=float(args.oneopes_water_sigma),
-            oneopes_auto_hydration=bool(args.oneopes_auto_hydration),
-            oneopes_hydration_max_sites=int(args.oneopes_hydration_max_sites),
-            oneopes_hydration_use_3drism=bool(args.oneopes_hydration_use_3drism),
-            oneopes_hydration_min_density=float(args.oneopes_hydration_min_density),
-        )
+        if args.oneopes_repex:
+            print(
+                f"  [00] Running OpenMM OneOPES REPEX "
+                f"({args.repex_n_replicas} replicas, {args.n_steps:,} steps, GPUs {args.devices})...",
+                flush=True,
+            )
+            _run_openmm_oneopes_repex(
+                topo_npz=topo_npz,
+                frame_npz=frame_npz,
+                mol_dir=cache / "mols",
+                out_dir=system_out,
+                n_steps=args.n_steps,
+                save_every=args.save_every,
+                deposit_pace=args.deposit_pace,
+                opes_barrier=args.opes_barrier,
+                opes_biasfactor=args.opes_biasfactor,
+                opes_sigma=args.opes_sigma,
+                temperature=args.temperature,
+                pocket_radius=args.pocket_radius,
+                platform=args.platform,
+                minimize_steps=args.minimize_steps,
+                progress_every=args.progress_every,
+                save_opes_every=args.save_opes_every,
+                opes_mode=args.opes_mode,
+                opes_kernel_cutoff=args.opes_kernel_cutoff,
+                opes_nlist_parameters=args.opes_nlist_parameters,
+                plumed_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
+                log_gpu_util=bool(args.log_gpu_util),
+                gpu_util_interval=float(args.gpu_util_interval),
+                bias_cv=str(args.bias_cv),
+                opes_explore=(str(args.opes_bias_style) == "explore"),
+                opes_wall_dist=args.opes_wall_dist,
+                opes_wall_kappa=float(args.opes_wall_kappa),
+                coordination_r0=float(args.coordination_r0),
+                opes_expanded_temp_max=args.opes_expanded_temp_max,
+                opes_expanded_pace=int(args.opes_expanded_pace),
+                oneopes_axis_p0_boltz=args.oneopes_axis_p0_boltz,
+                oneopes_axis_p1_boltz=args.oneopes_axis_p1_boltz,
+                oneopes_contact_pairs_boltz=args.oneopes_contact_pairs_boltz,
+                oneopes_hydration_boltz=args.oneopes_hydration_boltz,
+                oneopes_water_oxygen_plumed=args.oneopes_water_oxygen_plumed,
+                oneopes_water_pace=int(args.oneopes_water_pace),
+                oneopes_water_barrier=float(args.oneopes_water_barrier),
+                oneopes_water_biasfactor=float(args.oneopes_water_biasfactor),
+                oneopes_water_sigma=float(args.oneopes_water_sigma),
+                oneopes_auto_hydration=bool(args.oneopes_auto_hydration),
+                oneopes_hydration_max_sites=int(args.oneopes_hydration_max_sites),
+                oneopes_hydration_use_3drism=bool(args.oneopes_hydration_use_3drism),
+                oneopes_hydration_min_density=float(args.oneopes_hydration_min_density),
+                n_replicas=int(args.repex_n_replicas),
+                oneopes_protocol=str(args.oneopes_protocol),
+                devices=str(args.devices),
+                replica_device_map=str(args.replica_device_map),
+                replica_devices=args.replica_devices,
+                replica_step_workers=int(args.replica_step_workers),
+                max_active_contexts_per_device=int(args.max_active_contexts_per_device),
+                evaluator_placement=str(args.evaluator_placement),
+                paper_oneopes_ligand_axis_p0_boltz=args.paper_oneopes_ligand_axis_p0_boltz,
+                paper_oneopes_ligand_axis_p1_boltz=args.paper_oneopes_ligand_axis_p1_boltz,
+                paper_oneopes_aux_guest_boltz=args.paper_oneopes_aux_guest_boltz,
+            )
+        else:
+            print(f"  [00] Running OpenMM OPES-MD ({args.n_steps:,} steps)...", flush=True)
+            _run_openmm_md(
+                topo_npz=topo_npz,
+                frame_npz=frame_npz,
+                mol_dir=cache / "mols",
+                out_dir=system_out,
+                n_steps=args.n_steps,
+                save_every=args.save_every,
+                deposit_pace=args.deposit_pace,
+                opes_barrier=args.opes_barrier,
+                opes_biasfactor=args.opes_biasfactor,
+                opes_sigma=args.opes_sigma,
+                temperature=args.temperature,
+                pocket_radius=args.pocket_radius,
+                platform=args.platform,
+                minimize_steps=args.minimize_steps,
+                progress_every=args.progress_every,
+                save_opes_every=args.save_opes_every,
+                opes_restart=opes_restart,
+                opes_mode=args.opes_mode,
+                opes_kernel_cutoff=args.opes_kernel_cutoff,
+                opes_nlist_parameters=args.opes_nlist_parameters,
+                plumed_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
+                openmm_device_index=openmm_gpu_index,
+                log_gpu_util=bool(args.log_gpu_util),
+                gpu_util_interval=float(args.gpu_util_interval),
+                gpu_util_out=(
+                    args.gpu_util_out.expanduser().resolve()
+                    if args.gpu_util_out is not None
+                    else None
+                ),
+                bias_cv=str(args.bias_cv),
+                opes_explore=(str(args.opes_bias_style) == "explore"),
+                opes_wall_dist=args.opes_wall_dist,
+                opes_wall_kappa=float(args.opes_wall_kappa),
+                coordination_r0=float(args.coordination_r0),
+                opes_expanded_temp_max=args.opes_expanded_temp_max,
+                opes_expanded_pace=int(args.opes_expanded_pace),
+                oneopes_axis_p0_boltz=args.oneopes_axis_p0_boltz,
+                oneopes_axis_p1_boltz=args.oneopes_axis_p1_boltz,
+                oneopes_contact_pairs_boltz=args.oneopes_contact_pairs_boltz,
+                oneopes_hydration_boltz=args.oneopes_hydration_boltz,
+                oneopes_water_oxygen_plumed=args.oneopes_water_oxygen_plumed,
+                oneopes_water_pace=int(args.oneopes_water_pace),
+                oneopes_water_barrier=float(args.oneopes_water_barrier),
+                oneopes_water_biasfactor=float(args.oneopes_water_biasfactor),
+                oneopes_water_sigma=float(args.oneopes_water_sigma),
+                oneopes_auto_hydration=bool(args.oneopes_auto_hydration),
+                oneopes_hydration_max_sites=int(args.oneopes_hydration_max_sites),
+                oneopes_hydration_use_3drism=bool(args.oneopes_hydration_use_3drism),
+                oneopes_hydration_min_density=float(args.oneopes_hydration_min_density),
+            )
 
         # Count output shards
-        shard_count = len(list((system_out / "wdsm_samples").glob("wdsm_step_*.npz")))
+        if args.oneopes_repex:
+            shard_count = sum(
+                len(list(rep_dir.glob("wdsm_samples/wdsm_step_*.npz")))
+                for rep_dir in system_out.glob("rep[0-9][0-9][0-9]")
+            )
+        else:
+            shard_count = len(list((system_out / "wdsm_samples").glob("wdsm_step_*.npz")))
         print(f"  [00] Done. {shard_count} shards written to {system_out / 'wdsm_samples'}", flush=True)
         campaign_log.append({
             "case": sys_def["name"],
