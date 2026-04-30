@@ -697,9 +697,11 @@ def test_paper_host_guest_plumed_deck_main_and_aux_paces(tmp_path: Path) -> None
     assert "ARG=cyl_z,cosang" in script
     assert "PACE=10000" in script
     assert "BARRIER=100" in script
+    assert "STATE_WSTRIDE=10000" in script
     assert "opes_aux_L4:" in script
     assert "PACE=20000" in script
     assert "BARRIER=3" in script
+    assert "STATE_WSTRIDE=20000" in script
     assert "opes_ecv: ECV_MULTITHERMAL" in script
     assert "TEMP_MAX=370" in script
     assert "opes_expanded: OPES_EXPANDED" in script

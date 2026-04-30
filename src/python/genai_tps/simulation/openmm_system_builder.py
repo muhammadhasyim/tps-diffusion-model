@@ -593,8 +593,36 @@ def _register_ligand_params(
             )
 
     if molecules:
-        gaff = GAFFTemplateGenerator(molecules=molecules, forcefield="gaff-2.11")
+        cache_path = _gaff_template_cache_path()
+        gaff = GAFFTemplateGenerator(
+            molecules=molecules,
+            forcefield="gaff-2.11",
+            cache=str(cache_path) if cache_path is not None else None,
+        )
         ff.registerTemplateGenerator(gaff.generator)
+
+
+def _gaff_template_cache_path() -> Path | None:
+    """Return a shared GAFF template cache path for OpenFF/AmberTools output.
+
+    OpenFF's GAFF generator shells out to AmberTools for AM1-BCC charges.  A
+    persistent cache avoids repeating that CPU-heavy parameterization for each
+    OneOPES replica and across reruns on the same scratch cache.
+    """
+    explicit = os.environ.get("GENAI_TPS_GAFF_TEMPLATE_CACHE")
+    if explicit:
+        path = Path(explicit).expanduser()
+    else:
+        root_env = os.environ.get("BOLTZ_CACHE") or os.environ.get("SCRATCH")
+        if not root_env:
+            return None
+        root = Path(root_env).expanduser()
+        if root.name == ".boltz":
+            path = root / "openmmforcefields" / "gaff-2.11-template-cache.json"
+        else:
+            path = root / ".boltz" / "openmmforcefields" / "gaff-2.11-template-cache.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 # ---------------------------------------------------------------------------

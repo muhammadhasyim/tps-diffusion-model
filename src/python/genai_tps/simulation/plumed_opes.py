@@ -1148,6 +1148,10 @@ def generate_paper_host_guest_plumed_opes_script_from_config(
     if use_expanded:
         print_cv_str += ",ene,opes_expanded.bias"
 
+    main_wstride = _state_wstride_at_least_pace(
+        save_stride=int(cfg.save_opes_every),
+        pace=int(cfg.main_pace),
+    )
     opes_lines = [
         "opes: OPES_METAD_EXPLORE ...",
         f"  ARG={','.join(cv_names)}",
@@ -1159,7 +1163,7 @@ def generate_paper_host_guest_plumed_opes_script_from_config(
         f"  KERNEL_CUTOFF={_format_float(kernel_cutoff_resolved)}",
         f"  FILE={kernels_path}",
         f"  STATE_WFILE={state_path}",
-        f"  STATE_WSTRIDE={int(cfg.save_opes_every)}",
+        f"  STATE_WSTRIDE={int(main_wstride)}",
         "  NLIST",
     ]
     lines.extend(opes_lines)
@@ -1179,6 +1183,10 @@ def generate_paper_host_guest_plumed_opes_script_from_config(
         w_sig = _format_float(0.05)
         w_kernels = out / f"KERNELS_AUX_{label}"
         w_state = out / f"STATE_AUX_{label}"
+        aux_wstride = _state_wstride_at_least_pace(
+            save_stride=int(cfg.save_opes_every),
+            pace=int(cfg.auxiliary_pace),
+        )
         lines.extend(
             [
                 f"# Auxiliary OPES (paper ladder): {label}",
@@ -1192,7 +1200,7 @@ def generate_paper_host_guest_plumed_opes_script_from_config(
                 f"  KERNEL_CUTOFF={_format_float(w_kernel_cut)}",
                 f"  FILE={w_kernels}",
                 f"  STATE_WFILE={w_state}",
-                f"  STATE_WSTRIDE={int(cfg.save_opes_every)}",
+                f"  STATE_WSTRIDE={int(aux_wstride)}",
                 "  NLIST",
                 "...",
                 "",
@@ -1240,6 +1248,20 @@ def generate_paper_host_guest_plumed_opes_script_from_config(
         ]
     )
     return "\n".join(lines)
+
+
+def _state_wstride_at_least_pace(*, save_stride: int, pace: int) -> int:
+    """Return a PLUMED STATE_WSTRIDE that is a positive multiple of *pace*."""
+    save_i = int(save_stride)
+    pace_i = int(pace)
+    if save_i <= 0:
+        raise ValueError("PLUMED STATE_WSTRIDE must be positive.")
+    if pace_i <= 0:
+        raise ValueError("PLUMED PACE must be positive.")
+    wstride = max(pace_i, (save_i // pace_i) * pace_i)
+    if wstride < save_i:
+        wstride += pace_i
+    return wstride
 
 
 def generate_plumed_opes_script(**kwargs: Any) -> str:
