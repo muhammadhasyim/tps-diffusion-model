@@ -714,6 +714,55 @@ def _kabsch_rotation(
     return R, c_mob, c_ref
 
 
+def _binding_site_touching_protein_atoms(
+    ref: np.ndarray,
+    ligand_idx: np.ndarray,
+    protein_idx: np.ndarray,
+    *,
+    cutoff_angstrom: float,
+) -> np.ndarray:
+    """Return sorted global indices of protein atoms within *cutoff* of any ligand atom.
+
+    The binding envelope is residue-centric in downstream use: residues that touch
+    the ligand (minimum protein–ligand atom distance ``≤ cutoff``) define the lining
+    of the pocket. This matches docking-school definitions where “active/passive”
+    residues satisfy **heavy-atom proximity** between receptor and ligand (see e.g.
+    HADDOCK / Bonvin‑lab docking tutorials citing **~3.5 Å** cutoffs); *cutoff* here
+    is left as an explicit Å parameter so MD workflows may use coordination-shell
+    choices such as ~6 Å (Colvars coordination-style cutoffs).
+
+    Raises
+    ------
+    ValueError
+        When *cutoff_angstrom* is not finite or not positive.
+
+    References
+    ----------
+    Bonvin *et al.* biomolecular docking tutorials defining binding-site residues via
+    **any atom–atom distance** thresholds; PDB‑LIG / pocket centroid literature using
+    **5–8 Å** merges for clustered ligand geometries (Nature Communications‑style pocket
+    sets cited in PocketVec / PDB‑LIG analyses).
+    """
+    r = float(cutoff_angstrom)
+    if not math.isfinite(r) or r <= 0:
+        raise ValueError("Binding-site cutoff must be a finite positive Å length.")
+
+    lg = np.asarray(ligand_idx, dtype=np.int64)
+    pr = np.asarray(protein_idx, dtype=np.int64)
+    if lg.size == 0 or pr.size == 0:
+        return np.array([], dtype=np.int64)
+
+    lig = np.asarray(ref[lg], dtype=np.float64)
+    pcs = np.asarray(ref[pr], dtype=np.float64)
+    cutoff2 = r * r
+
+    diff = pcs[:, np.newaxis, :] - lig[np.newaxis, :, :]
+    d2_ij = np.einsum("ijk,ijk->ij", diff, diff, optimize=True)
+    d2_closest = np.min(d2_ij, axis=1)
+    hit = d2_closest <= cutoff2
+    return np.sort(pr[np.nonzero(hit)[0]]).astype(np.int64)
+
+
 class PoseCVIndexer:
     """Pre-computes atom index arrays from a Boltz StructureV2 topology.
 
@@ -724,9 +773,14 @@ class PoseCVIndexer:
     Scientific conventions
     ----------------------
     - *Ligand*: all atoms in chains with ``mol_type == NONPOLYMER (3)``.
-    - *Pocket*: protein Cα atoms (name "CA") within ``pocket_radius`` of the
-      initial ligand centre-of-mass; **also** all protein heavy atoms within
-      the same radius (used for contact counting).
+    - *Pocket*: protein residues that **touch** the ligand at the reference
+      coordinates: any protein atom lies within ``pocket_radius`` Å of **any**
+      ligand atom (minimum distance test).  This follows receptor–ligand **active
+      residue** shells from docking tutorials (see class doc ref: Bonvin lab /
+      HADDOCK distance-to-ligand rules) and coordination-style cutoffs used in
+      Colvars / pocket-centroid literature.  All protein atoms in each touching
+      residue are recorded as ``pocket_heavy_idx``; ``pocket_ca_idx`` lists the
+      corresponding Cα atoms for alignment and COM-based pocket distance CVs.
     - *H-bond proxies*: atoms whose PDB name (stripped) starts with "N" or "O",
       following the standard that nitrogen and oxygen are the biologically
       relevant donors/acceptors (MDAnalysis / GROMACS convention).
@@ -739,8 +793,8 @@ class PoseCVIndexer:
         (N_atoms, 3) Ångström coordinates of the first TPS snapshot — used as
         the RMSD reference pose and to define the binding pocket.
     pocket_radius:
-        Protein heavy atoms and Cα atoms within this radius (Å) of the initial
-        ligand COM form the pocket definition (default 6.0 Å).
+        Maximum protein–ligand atom–atom distance (Å) for a residue to count as
+        binding-site lining at the reference pose (default 6.0 Å).
     """
 
     def __init__(
@@ -778,26 +832,51 @@ class PoseCVIndexer:
         else:
             self.protein_ca_idx = np.array([], dtype=np.int64)
 
-        # Pocket: protein atoms within pocket_radius of initial ligand COM
+        # Ligand COM (diagnostics / legacy consumers)
         if len(self.ligand_idx) > 0:
             ligand_com = ref[self.ligand_idx].mean(axis=0)
         else:
             ligand_com = np.zeros(3)
         self._ligand_com_ref: np.ndarray = ligand_com
 
-        if len(self.protein_ca_idx) > 0:
-            ca_coords = ref[self.protein_ca_idx]
-            ca_dists = np.linalg.norm(ca_coords - ligand_com, axis=1)
-            self.pocket_ca_idx: np.ndarray = self.protein_ca_idx[ca_dists <= pocket_radius]
-        else:
-            self.pocket_ca_idx = np.array([], dtype=np.int64)
+        # Map each global atom index → protein residue id (-1 if not protein)
+        atom_residue = np.full(ref.shape[0], -1, dtype=np.int32)
+        residues = structure.residues
+        for chain in chains:
+            if int(chain["mol_type"]) != _PROTEIN_MOL_TYPE:
+                continue
+            r0 = int(chain["res_idx"])
+            rn = int(chain["res_num"])
+            for rid in range(r0, r0 + rn):
+                res = residues[rid]
+                a0 = int(res["atom_idx"])
+                ana = int(res["atom_num"])
+                atom_residue[a0 : a0 + ana] = rid
 
-        if len(self.protein_idx) > 0:
-            prot_coords = ref[self.protein_idx]
-            prot_dists = np.linalg.norm(prot_coords - ligand_com, axis=1)
-            self.pocket_heavy_idx: np.ndarray = self.protein_idx[prot_dists <= pocket_radius]
-        else:
-            self.pocket_heavy_idx = np.array([], dtype=np.int64)
+        touching = _binding_site_touching_protein_atoms(
+            ref,
+            self.ligand_idx,
+            self.protein_idx,
+            cutoff_angstrom=float(pocket_radius),
+        )
+        pocket_res_ids = sorted(
+            {int(atom_residue[i]) for i in touching.tolist() if atom_residue[i] >= 0}
+        )
+
+        pocket_ca_list: list[int] = []
+        pocket_heavy_list: list[int] = []
+        for rid in pocket_res_ids:
+            res = residues[rid]
+            a0 = int(res["atom_idx"])
+            ana = int(res["atom_num"])
+            for kk in range(ana):
+                ai = a0 + kk
+                pocket_heavy_list.append(ai)
+                if str(atoms[ai]["name"]).strip() == "CA":
+                    pocket_ca_list.append(ai)
+
+        self.pocket_ca_idx = np.asarray(pocket_ca_list, dtype=np.int64)
+        self.pocket_heavy_idx = np.asarray(pocket_heavy_list, dtype=np.int64)
 
         # H-bond proxy: N/O atoms on ligand and pocket protein
         def _no_mask(idx_arr: np.ndarray) -> np.ndarray:
@@ -904,12 +983,13 @@ def _ligand_pose_rmsd_callable(snap, indexer: PoseCVIndexer) -> float:
 def ligand_pocket_distance(snapshot, indexer: PoseCVIndexer) -> float:
     """Euclidean distance between the ligand COM and the pocket Cα COM.
 
-    The pocket is defined at construction time as the protein Cα atoms within
-    ``pocket_radius`` of the initial ligand centre-of-mass.  Both COMs are
-    recomputed from the current snapshot coordinates at each call, so the
-    distance tracks the instantaneous ligand position relative to the binding
-    site without requiring explicit alignment.  This is conceptually analogous
-    to the ``fps.lp`` projection in PLUMED's ``FUNNEL_PS`` colvar.
+    The pocket residue set is fixed at construction from **protein residues that
+    touch the ligand** at the reference pose (minimum protein–ligand atom distance
+    ``≤ pocket_radius``, then full residue shells). Pocket COM uses the pocket Cα
+    subset only. Both COMs are recomputed from the current snapshot coordinates
+    at each call, so the distance tracks the instantaneous ligand position relative
+    to the binding site without requiring explicit alignment.  This is conceptually
+    analogous to the ``fps.lp`` projection in PLUMED's ``FUNNEL_PS`` colvar.
 
     Parameters
     ----------

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
 
 
@@ -22,9 +24,9 @@ def test_default_boltz_cache_dir_uses_scratch_without_boltz_cache(
     assert default_boltz_cache_dir() == (tmp_path / ".boltz").resolve()
 
 
-def test_default_boltz_cache_dir_falls_back_to_home(monkeypatch) -> None:
+def test_default_boltz_cache_dir_raises_when_unconfigured(monkeypatch) -> None:
     monkeypatch.delenv("BOLTZ_CACHE", raising=False)
     monkeypatch.delenv("SCRATCH", raising=False)
-    fake_home = Path("/tmp/genai_tps_fakehome_boltz_cache_test")
-    monkeypatch.setenv("HOME", str(fake_home))
-    assert default_boltz_cache_dir() == fake_home / ".boltz"
+    monkeypatch.setenv("HOME", "/tmp/genai_tps_fakehome_should_not_be_used")
+    with pytest.raises(RuntimeError, match="BOLTZ_CACHE"):
+        default_boltz_cache_dir()

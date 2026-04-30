@@ -326,7 +326,12 @@ def main() -> None:
         default=Path("artifacts/cofolding/cofolding_tps_out"),
         help="Output directory for work and artifacts",
     )
-    parser.add_argument("--cache", type=Path, default=None, help="Boltz cache (~/.boltz)")
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        default=None,
+        help="Boltz cache ($BOLTZ_CACHE or $SCRATCH/.boltz by default; required if unset).",
+    )
     parser.add_argument(
         "--device",
         type=str,

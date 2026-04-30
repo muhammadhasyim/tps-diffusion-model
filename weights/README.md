@@ -14,7 +14,7 @@ export BOLTZ_CACHE="$(pwd)/weights/boltz"
 ```
 
 If `BOLTZ_CACHE` is unset, project scripts default to `$SCRATCH/.boltz` when `SCRATCH`
-is defined (typical HPC), otherwise `~/.boltz`.
+is defined (typical HPC). There is no home-directory fallback—set one of those variables or pass `--cache`.
 
 Or pass `--cache /path/to/.../weights/boltz` to scripts that support it.
 

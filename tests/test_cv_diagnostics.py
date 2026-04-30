@@ -361,18 +361,24 @@ def _make_mock_indexer(
     indexer.ligand_idx = np.arange(M, M + L, dtype=np.int64)
     indexer.protein_ca_idx = np.arange(M, dtype=np.int64)  # all protein = Cα
 
-    # Pocket: protein atoms within pocket_radius of ligand COM
+    # Pocket: residues with any protein atom within pocket_radius of any ligand atom
+    # (mock topology: one CA per residue, indices 0..M-1).
     if L > 0:
         lig_com = ligand_coords.mean(axis=0)
     else:
         lig_com = np.zeros(3)
     indexer._ligand_com_ref = lig_com
 
-    if M > 0:
-        dists = np.linalg.norm(protein_ca_coords - lig_com, axis=1)
-        pocket_mask = dists <= pocket_radius
+    if M > 0 and L > 0:
+        diff = protein_ca_coords[:, np.newaxis, :] - ligand_coords[np.newaxis, :, :]
+        d2_ij = np.sum(diff * diff, axis=-1)
+        mind2_per_res = np.min(d2_ij, axis=1)
+        pocket_mask = mind2_per_res <= pocket_radius ** 2
         indexer.pocket_ca_idx = indexer.protein_ca_idx[pocket_mask]
-        indexer.pocket_heavy_idx = indexer.protein_ca_idx[pocket_mask]
+        indexer.pocket_heavy_idx = indexer.pocket_ca_idx.copy()
+    elif M > 0:
+        indexer.pocket_ca_idx = np.array([], dtype=np.int64)
+        indexer.pocket_heavy_idx = np.array([], dtype=np.int64)
     else:
         indexer.pocket_ca_idx = np.array([], dtype=np.int64)
         indexer.pocket_heavy_idx = np.array([], dtype=np.int64)

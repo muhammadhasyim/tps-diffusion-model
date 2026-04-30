@@ -59,7 +59,12 @@ def main() -> None:
     _exit_if_rl_excluded()
     parser = argparse.ArgumentParser(description="FES-guided RL (OpenMM+OPES teacher, Boltz student).")
     parser.add_argument("--yaml", type=Path, default=None, help="Boltz input YAML (co-folding).")
-    parser.add_argument("--cache", type=Path, default=None, help="Boltz cache dir (default ~/.boltz).")
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        default=None,
+        help="Boltz cache dir (default: $BOLTZ_CACHE or $SCRATCH/.boltz; required if unset).",
+    )
     parser.add_argument("--out", type=Path, required=True, help="Output directory.")
     parser.add_argument(
         "--device",

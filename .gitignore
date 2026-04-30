@@ -8,11 +8,13 @@ __pycache__/
 opes*case2/
 muhammad*/
 openmm-plumed*
+
 # plumed2/ is a tracked git submodule (PLUMED v2.9.x + OPES overlay build).
 
 # ── Python packaging / build artifacts ────────────────────────────────────────
-*.egg-info/
-*.egg
+*.egg-info/*
+*.egg*
+
 dist/
 build/
 .eggs/

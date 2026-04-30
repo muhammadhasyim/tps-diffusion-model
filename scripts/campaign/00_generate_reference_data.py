@@ -113,6 +113,54 @@ _SYSTEMS = [
 ]
 
 
+def _write_merged_campaign_log(out_root: Path, new_entries: list) -> None:
+    """Merge *new_entries* into ``00_reference_data_log.json`` (locked, multi-process safe).
+
+    Parallel ``--cases N`` runs share the same ``--out`` root; each process merges
+    completed rows without clobbering siblings.
+    """
+    import fcntl
+
+    log_path = out_root / "00_reference_data_log.json"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(log_path, "a+", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            fh.seek(0)
+            raw = fh.read()
+            prev: list = []
+            if raw.strip():
+                try:
+                    loaded = json.loads(raw)
+                    if isinstance(loaded, list):
+                        prev = loaded
+                except json.JSONDecodeError:
+                    prev = []
+
+            by_case: dict[str, dict] = {}
+            for e in prev:
+                if isinstance(e, dict) and isinstance(e.get("case"), str):
+                    by_case[e["case"]] = e
+            for e in new_entries:
+                if isinstance(e, dict) and isinstance(e.get("case"), str):
+                    by_case[e["case"]] = e
+
+            ordered: list = []
+            for sys_def in _SYSTEMS:
+                name = sys_def["name"]
+                if name in by_case:
+                    ordered.append(by_case[name])
+
+            payload = json.dumps(ordered, indent=2) + "\n"
+            fh.seek(0)
+            fh.truncate()
+            fh.write(payload)
+            fh.flush()
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
 def _boltz_prep_for_openmm(
     yaml_path: Path,
     out_dir: Path,
@@ -231,7 +279,7 @@ def main() -> None:
                         help="Root campaign output directory.")
     parser.add_argument("--cache", type=Path, default=None,
                         help="Boltz model cache directory (default: $BOLTZ_CACHE, "
-                        "else $SCRATCH/.boltz, else ~/.boltz).")
+                        "else $SCRATCH/.boltz; required if neither is set).")
     parser.add_argument(
         "--device",
         type=str,
@@ -465,11 +513,9 @@ def main() -> None:
             "frame_npz": str(frame_npz),
         })
 
-    # Write campaign log
     log_path = out_root / "00_reference_data_log.json"
-    with open(log_path, "w") as fh:
-        json.dump(campaign_log, fh, indent=2)
-    print(f"\n[00] Campaign log: {log_path}", flush=True)
+    _write_merged_campaign_log(out_root, campaign_log)
+    print(f"\n[00] Campaign log (merged): {log_path}", flush=True)
     print("[00] Stage 0 complete. Run 01_assemble_datasets.py next.", flush=True)
 
 

@@ -10,10 +10,14 @@ matplotlib
 ujson>=4.0.2
 dill
 sqlalchemy>=1.4.1
+requests>=2.32
+tqdm>=4.66
 mdtraj
 
 [analysis]
 prody>=2.0
+prolif>=2.0
+rdkit>=2024.3.2
 
 [boltz]
 torch>=2.2
@@ -31,11 +35,13 @@ hypothesis>=6
 [full]
 pymol-open-source>=3.2.0a0
 prody>=2.0
+prolif>=2.0
+rdkit>=2024.3.2
 pymbar>=4.0
 openmm>=8.0
 pdbfixer>=1.9
 openmmforcefields>=0.14
-openff-toolkit<0.18,>=0.14.0
+openff-toolkit>=0.14.0
 posebusters==0.6.5
 
 [sampling]
@@ -43,7 +49,7 @@ pymbar>=4.0
 openmm>=8.0
 pdbfixer>=1.9
 openmmforcefields>=0.14
-openff-toolkit<0.18,>=0.14.0
+openff-toolkit>=0.14.0
 posebusters==0.6.5
 
 [viz]

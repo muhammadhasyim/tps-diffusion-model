@@ -16,6 +16,8 @@ Requires-Dist: matplotlib
 Requires-Dist: ujson>=4.0.2
 Requires-Dist: dill
 Requires-Dist: sqlalchemy>=1.4.1
+Requires-Dist: requests>=2.32
+Requires-Dist: tqdm>=4.66
 Requires-Dist: mdtraj
 Provides-Extra: boltz
 Requires-Dist: torch>=2.2; extra == "boltz"
@@ -27,21 +29,25 @@ Provides-Extra: viz
 Requires-Dist: pymol-open-source>=3.2.0a0; extra == "viz"
 Provides-Extra: analysis
 Requires-Dist: prody>=2.0; extra == "analysis"
+Requires-Dist: prolif>=2.0; extra == "analysis"
+Requires-Dist: rdkit>=2024.3.2; extra == "analysis"
 Provides-Extra: sampling
 Requires-Dist: pymbar>=4.0; extra == "sampling"
 Requires-Dist: openmm>=8.0; extra == "sampling"
 Requires-Dist: pdbfixer>=1.9; extra == "sampling"
 Requires-Dist: openmmforcefields>=0.14; extra == "sampling"
-Requires-Dist: openff-toolkit<0.18,>=0.14.0; extra == "sampling"
+Requires-Dist: openff-toolkit>=0.14.0; extra == "sampling"
 Requires-Dist: posebusters==0.6.5; extra == "sampling"
 Provides-Extra: full
 Requires-Dist: pymol-open-source>=3.2.0a0; extra == "full"
 Requires-Dist: prody>=2.0; extra == "full"
+Requires-Dist: prolif>=2.0; extra == "full"
+Requires-Dist: rdkit>=2024.3.2; extra == "full"
 Requires-Dist: pymbar>=4.0; extra == "full"
 Requires-Dist: openmm>=8.0; extra == "full"
 Requires-Dist: pdbfixer>=1.9; extra == "full"
 Requires-Dist: openmmforcefields>=0.14; extra == "full"
-Requires-Dist: openff-toolkit<0.18,>=0.14.0; extra == "full"
+Requires-Dist: openff-toolkit>=0.14.0; extra == "full"
 Requires-Dist: posebusters==0.6.5; extra == "full"
 Provides-Extra: cli
 Requires-Dist: typer>=0.12; extra == "cli"
