@@ -290,6 +290,28 @@ def main() -> None:
         help="Histogram bins per axis (--triptych / --triptych-3d).",
     )
     parser.add_argument(
+        "--triptych-opes-hexbin-gridsize",
+        type=int,
+        default=14,
+        help=(
+            "matplotlib hexbin gridsize for --triptych-opes-style (right panel). "
+            "Lower = larger hex cells and higher counts per cell (default 14; clamped 8–90). "
+            "Does not apply to --triptych / --triptych-3d (those use --triptych-hist-bins)."
+        ),
+    )
+    parser.add_argument(
+        "--triptych-opes-hexbin-log",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="2D OPES-style triptych: log color scale for hex counts (default: on).",
+    )
+    parser.add_argument(
+        "--triptych-opes-colvar-scatter",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="2D OPES-style triptych: faint scatter of raw COLVAR samples under hexbin.",
+    )
+    parser.add_argument(
         "--triptych-cv-3d",
         type=str,
         default=None,
@@ -423,6 +445,7 @@ def main() -> None:
                 print("--triptych-cv must be exactly two comma-separated names.", file=sys.stderr)
                 sys.exit(2)
             cv_pair = (parts[0], parts[1])
+        hex_gs = int(np.clip(int(args.triptych_opes_hexbin_gridsize), 8, 90))
         plot_opes_2d_fes_triptych_opes_style(
             fes_path,
             kernels_path,
@@ -431,7 +454,9 @@ def main() -> None:
             colvar_cv_names=cv_pair,
             dpi=150,
             grid_bins=int(args.triptych_grid_bins),
-            hexbin_gridsize=int(np.clip(int(args.triptych_hist_bins), 12, 90)),
+            hexbin_gridsize=hex_gs,
+            hexbin_bins_log=bool(args.triptych_opes_hexbin_log),
+            colvar_scatter_overlay=bool(args.triptych_opes_colvar_scatter),
             skiprows=int(args.triptych_skiprows),
             temperature_k=float(args.temperature),
         )

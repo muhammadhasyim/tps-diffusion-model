@@ -48,7 +48,29 @@ def test_reweighting_kwargs_falls_back_sigma_for_oneopes(tmp_path: Path) -> None
     )
     kw = reweighting_kwargs_from_colvar_path(colvar, sigma_arg="0.3,0.5,1.0")
     assert kw["cv_names"] == "pp.proj,cmap"
-    assert kw["sigma"] == "0.3,0.5"
+    assert kw["sigma"] == "0.09,0.16"
+
+
+def test_reweighting_kwargs_oneopes_sigma_from_kernels_mean(tmp_path: Path) -> None:
+    from genai_tps.simulation.plumed_colvar_fes import reweighting_kwargs_from_colvar_path
+
+    opes_dir = tmp_path / "opes_states"
+    opes_dir.mkdir(parents=True)
+    colvar = opes_dir / "COLVAR"
+    colvar.write_text(
+        "#! FIELDS time lig_rmsd lig_dist pp.proj cmap opes.bias\n0 1 2 0 0 0\n",
+        encoding="utf-8",
+    )
+    kernels = opes_dir / "KERNELS"
+    kernels.write_text(
+        "#! FIELDS time pp.proj cmap sigma_pp.proj sigma_cmap height logweight\n"
+        "1 1.0 1.0 0.2 0.4 1.0 0.0\n"
+        "2 1.1 1.1 0.4 0.8 1.0 0.0\n",
+        encoding="utf-8",
+    )
+    kw = reweighting_kwargs_from_colvar_path(colvar, sigma_arg="0.3,0.5,1.0")
+    assert kw["cv_names"] == "pp.proj,cmap"
+    assert kw["sigma"] == "0.3,0.6"
 
 
 def test_run_fes_from_reweighting_script_synthetic_colvar(tmp_path: Path) -> None:

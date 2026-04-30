@@ -415,7 +415,9 @@ def plot_opes_2d_fes_triptych_opes_style(
     colvar_cv_names: tuple[str, str] | None = None,
     dpi: int = 150,
     grid_bins: int = 96,
-    hexbin_gridsize: int = 48,
+    hexbin_gridsize: int = 14,
+    hexbin_bins_log: bool = True,
+    colvar_scatter_overlay: bool = True,
     skiprows: int = 0,
     ln_rho_n_levels: int = 42,
     ln_rho_cap_percentile: float = 92.0,
@@ -429,19 +431,27 @@ def plot_opes_2d_fes_triptych_opes_style(
     (same trapezoid rule as ``scripts/plot_opes_fes.py``).  Kernel centers as orange-edge
     scatter markers.
 
-    **Middle:** :math:`-\\ln(\\hat{\\rho}/\\hat{\\rho}_{\\mathrm{max}})` from the reweighted
-    FES grid: Boltzmann weights :math:`\\propto \\exp(-F/k_{\\mathrm{B}}T)` on the same mesh,
-    then the relative ``-ln ρ`` map (filled contours + light black line contours).
+    **Middle:** :math:`-\\ln(\\hat{\\rho}/\\hat{\\rho}_{\\mathrm{max}})` from the **same**
+    normalized OPES kernel mixture :math:`\\hat{P}` as the left panel (not from the
+    reweighted ``.dat`` KDE, which can be far smoother if ``sigma`` in
+    ``FES_from_Reweighting.py`` is much larger than kernel widths).  This matches the
+    diagnostic intent of ``scripts/plot_opes_fes.py`` (structure at kernel resolution).
 
-    **Right:** ``hexbin`` of COLVAR samples with ``bins='log'``, plus **blue** contours of the
-    interpolated reweighted *F* (kJ mol⁻¹) with inline labels — same information design as the
-    internal OPES-TPS 2D figure.
+    **Right:** ``hexbin`` of COLVAR samples (default ``bins='log'``; set *hexbin_bins_log*
+    false for linear counts).  With the default **coarser** *hexbin_gridsize* (~14), each
+    visible cell aggregates more PRINT-stride samples than a very fine grid (e.g. 90),
+    which reads more solidly for short COLVARs.  Optional *colvar_scatter_overlay* draws
+    every COLVAR point faintly under the hex layer so raw coverage is visible.  Plus **blue**
+    contours of the interpolated reweighted *F* (kJ mol⁻¹) with inline labels.
     """
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from scipy.interpolate import griddata
+
+    if float(temperature_k) <= 0.0:
+        raise ValueError("temperature_k must be positive (Kelvin).")
 
     dim, cv_names_fes, xf, yf, zf, fes = load_plumed_fes_dat(fes_dat)
     if dim != 2 or zf.size != 0:
@@ -473,7 +483,6 @@ def plot_opes_2d_fes_triptych_opes_style(
     p_kernel = rho_ij.T.astype(np.float64)
     p_hat = pdf_on_mesh_2d(p_kernel, gx, gy)
 
-    kbt_kjmol = 0.0083144621 * float(temperature_k)
     F_grid = griddata(
         (xf, yf),
         fes,
@@ -484,18 +493,20 @@ def plot_opes_2d_fes_triptych_opes_style(
     fin_f = F_grid[np.isfinite(F_grid)]
     if fin_f.size == 0:
         raise ValueError("No finite interpolated FES on the plot mesh.")
-    f_min = float(np.nanmin(fin_f))
-    rho_f = np.exp(-(F_grid - f_min) / kbt_kjmol)
-    rho_f[~np.isfinite(F_grid)] = np.nan
-    z_ln = np.full_like(F_grid, np.nan, dtype=np.float64)
-    vm = np.nanmax(rho_f)
-    if np.isfinite(vm) and vm > 0:
-        m = np.isfinite(rho_f) & (rho_f > 0)
-        z_ln[m] = -np.log(rho_f[m] / vm)
+
+    # Middle panel: -ln(P/P_max) from the normalized kernel mixture (same mesh as left).
+    # Reweighted F from the .dat file uses a separate KDE bandwidth and can look like a
+    # smooth ellipsoid even when kernels show rich structure.
+    z_ln = np.full_like(p_hat, np.nan, dtype=np.float64)
+    vm_p = float(np.nanmax(p_hat))
+    if not (np.isfinite(vm_p) and vm_p > 0.0):
+        raise ValueError("Kernel mixture PDF has no positive values on the plot mesh.")
+    m_pos = p_hat > 0.0
+    z_ln[m_pos] = -np.log(p_hat[m_pos] / vm_p)
 
     fin_ln = z_ln[np.isfinite(z_ln)]
     if fin_ln.size == 0:
-        raise ValueError("Could not build -ln(ρ/ρ_max) map from FES.")
+        raise ValueError("Could not build -ln(ρ/ρ_max) map from kernel mixture.")
 
     out_png = Path(out_png)
     out_png.parent.mkdir(parents=True, exist_ok=True)
@@ -576,15 +587,27 @@ def plot_opes_2d_fes_triptych_opes_style(
     cbar1.set_label(r"$-\ln\left(\hat{\rho}/\hat{\rho}_{\mathrm{max}}\right)$")
 
     ax2 = axes[2]
-    gsz = int(max(12, min(90, hexbin_gridsize)))
+    gsz = int(max(8, min(90, hexbin_gridsize)))
+    if colvar_scatter_overlay and xc.size > 0:
+        ax2.scatter(
+            xc,
+            yc,
+            c="#263238",
+            s=10,
+            alpha=0.28,
+            linewidths=0,
+            zorder=2,
+        )
+    hb_bins: str | None = "log" if hexbin_bins_log else None
     hb = ax2.hexbin(
         xc,
         yc,
         gridsize=gsz,
         mincnt=1,
         cmap="Purples",
-        bins="log",
+        bins=hb_bins,
         extent=(xmin, xmax, ymin, ymax),
+        zorder=4,
     )
     f_cont = np.array(F_grid, dtype=np.float64, copy=True)
     f_good = f_cont[np.isfinite(f_cont)]
@@ -613,7 +636,11 @@ def plot_opes_2d_fes_triptych_opes_style(
     except Exception:
         ax2.set_aspect("equal", adjustable="box")
     cbar2 = fig.colorbar(hb, ax=ax2, fraction=0.046, pad=0.02)
-    cbar2.set_label(r"$\mathrm{counts\ (log\ scale)}$")
+    cbar2.set_label(
+        r"$\mathrm{counts\ (log\ scale)}$"
+        if hexbin_bins_log
+        else r"$\mathrm{counts}$"
+    )
 
     fig.savefig(out_png, dpi=dpi, bbox_inches="tight")
     plt.close(fig)

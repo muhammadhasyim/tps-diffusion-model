@@ -21,7 +21,10 @@ history can list many deposition events, but ``opes.nker`` in ``COLVAR`` is the
 **KDE** (or PLUMED's equivalent script) with finite bandwidth, so the estimated
 free energy is a **smooth** functional of the biased histogram, not a raw sum
 of spiky Gaussians. That is expected behaviour, not a sign that the bias was
-ignored.
+ignored.  For OneOPES (``pp.proj``, ``cmap``), when the user does not pass two
+``sigma`` values, :func:`reweighting_kwargs_from_colvar_path` defaults the KDE
+bandwidth to the **mean kernel widths** read from ``KERNELS`` (falling back to
+``0.09,0.16``) so the ``.dat`` is not grossly over-smoothed relative to OPES.
 """
 
 from __future__ import annotations
@@ -30,6 +33,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
+
+from genai_tps.simulation.fes_io import load_plumed_kernels_2d
 from genai_tps.subprocess_support import repository_root
 
 
@@ -42,6 +48,28 @@ def read_colvar_field_names(colvar_path: Path) -> list[str]:
             if s.startswith("#! FIELDS"):
                 return s.split()[2:]
     raise ValueError(f"No #! FIELDS line in {colvar_path}")
+
+
+def _default_sigma_2d_from_kernels_mean(kernels_path: Path) -> str:
+    """Mean per-CV Gaussian widths from PLUMED 2D ``KERNELS`` for reweighting defaults.
+
+    When the user does not pass exactly two ``sigma`` values, OneOPES reweighting
+    should use a bandwidth comparable to OPES kernel sigmas — not a much larger
+    placeholder (e.g. ``0.3,0.5``), which over-smooths the FES ``.dat``.
+    """
+    if not kernels_path.is_file():
+        return "0.09,0.16"
+    try:
+        _, _, sigmas, _ = load_plumed_kernels_2d(kernels_path)
+        if sigmas.size == 0:
+            return "0.09,0.16"
+        s0 = float(np.mean(sigmas[:, 0]))
+        s1 = float(np.mean(sigmas[:, 1]))
+        if not (np.isfinite(s0) and np.isfinite(s1) and s0 > 0.0 and s1 > 0.0):
+            return "0.09,0.16"
+        return f"{s0:.10g},{s1:.10g}"
+    except (OSError, ValueError, IndexError):
+        return "0.09,0.16"
 
 
 def reweighting_kwargs_from_colvar_path(
@@ -59,7 +87,11 @@ def reweighting_kwargs_from_colvar_path(
     parent = colvar_path.parent
     n_sig = len([p for p in sigma_arg.split(",") if p.strip()])
     if "pp.proj" in field_names and "cmap" in field_names:
-        sigma_use = sigma_arg if n_sig == 2 else "0.3,0.5"
+        sigma_use = (
+            sigma_arg
+            if n_sig == 2
+            else _default_sigma_2d_from_kernels_mean(parent / "KERNELS")
+        )
         return {
             "cv_names": "pp.proj,cmap",
             "sigma": sigma_use,

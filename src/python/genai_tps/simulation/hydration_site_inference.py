@@ -24,12 +24,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
-
 import numpy as np
-
-if TYPE_CHECKING:
-    from genai_tps.backends.boltz.cv_pose import PoseCVIndexer
 
 __all__ = [
     "default_oneopes_hydration_boltz_indices",
