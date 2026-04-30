@@ -3,14 +3,23 @@
 # OPES module enabled and install into the active conda prefix (overlays conda-forge
 # libplumedKernel.so so OPES_METAD is available to openmm-plumed).
 #
+# Submodule remote (see .gitmodules): https://github.com/muhammadhasyim/plumed2 — a fork of
+# https://github.com/plumed/plumed2 carrying the PRINT HEAVY_FLUSH patch on branch
+# tps/v2.9.2-print-heavy-flush (based on v2.9.2). After cloning this repo:
+#   git submodule sync -- plumed2 && git submodule update --init plumed2
+#   git -C plumed2 fetch origin && git -C plumed2 checkout tps/v2.9.2-print-heavy-flush
+# Maintainers: push submodule commits with:
+#   git -C plumed2 push fork tps/v2.9.2-print-heavy-flush
+# (add remotes if needed: fork -> muhammadhasyim/plumed2, upstream -> plumed/plumed2)
+#
 # Prerequisites:
 #   - conda env created from environment.yml (includes plumed, openmm-plumed, build deps)
-#   - git submodule at plumed2/ checked out to v2.9.x matching conda plumed pin
+#   - plumed2/ at v2.9.2 or the patched branch above (must match environment.yml plumed>=2.9,<2.10)
 #
 # Usage (from repo root, genai-tps activated):
 #   conda activate genai-tps
 #   git submodule update --init plumed2
-#   git -C plumed2 checkout v2.9.2   # must match environment.yml plumed>=2.9,<2.10
+#   git -C plumed2 checkout tps/v2.9.2-print-heavy-flush   # or v2.9.2 without HEAVY_FLUSH deck flag
 #   bash scripts/build_plumed_opes.sh
 #
 # Then re-activate so activate.d exports PLUMED_KERNEL:

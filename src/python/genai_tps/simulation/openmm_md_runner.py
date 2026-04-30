@@ -170,9 +170,28 @@ def main() -> None:
     parser.add_argument("--temperature", type=float, default=300.0, help="Langevin temperature (K)")
     parser.add_argument("--pocket-radius", type=float, default=6.0)
     parser.add_argument("--platform", type=str, default="CUDA", choices=["CUDA", "OpenCL", "CPU"])
+    parser.add_argument(
+        "--openmm-device-index",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "CUDA/OpenCL GPU ordinal for OpenMM (platform property DeviceIndex). "
+            "Ignored when the resolved platform is CPU."
+        ),
+    )
     parser.add_argument("--minimize-steps", type=int, default=1000)
     parser.add_argument("--progress-every", type=int, default=10000)
     parser.add_argument("--save-opes-every", type=int, default=50000)
+    parser.add_argument(
+        "--plumed-colvar-heavy-flush",
+        action="store_true",
+        help=(
+            "Emit PRINT ... HEAVY_FLUSH for COLVAR (PLUMED reopens the file after each line). "
+            "Requires PLUMED built from the patched plumed2 submodule "
+            "(see scripts/build_plumed_opes.sh); omit for stock PLUMED."
+        ),
+    )
     parser.add_argument("--ligand-smiles", type=str, default=None, help="chain:SMILES (e.g. B:CC...)")
     parser.add_argument("--mol-dir", type=Path, default=None, help="Boltz CCD mol dir for SMILES lookup")
     args = parser.parse_args()
@@ -189,6 +208,7 @@ def main() -> None:
         build_openmm_indices_for_boltz_atoms,
         load_build_md_simulation_from_pdb,
     )
+    from genai_tps.utils.compute_device import openmm_device_index_properties
 
     out = args.out.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -333,6 +353,7 @@ def main() -> None:
             state_rfile=args.opes_restart,
             kernel_cutoff=args.opes_kernel_cutoff,
             nlist_parameters=args.opes_nlist_parameters,
+            print_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
         )
         script_path.write_text(script, encoding="utf-8")
         force, force_index = add_plumed_opes_to_system(
@@ -365,12 +386,16 @@ def main() -> None:
             "boltz_mol_dir": args.mol_dir.expanduser().resolve(),
             "ligand_pose_policy": "boltz_first",
         }
+    omm_props = openmm_device_index_properties(
+        args.platform, args.openmm_device_index
+    )
     sim, meta = build_md(
         pdb_path,
         platform_name=args.platform,
         temperature_k=args.temperature,
         ligand_smiles=ligand_smiles,
         extra_forces=_add_plumed_force if args.opes_mode == "plumed" else None,
+        platform_properties=omm_props if omm_props else None,
         **md_boltz_pose,
     )
     print(f"[MD-OPES] Platform: {meta['platform_used']}", flush=True)

@@ -37,6 +37,15 @@ Outputs (one subdirectory per system)::
         plumed_opes.dat                # PLUMED input deck used by OpenMM
         md_summary.json                # timing and hyperparameter record
 
+Optional postprocessing (after MD finishes): run
+``scripts/campaign/01b_plumed_colvar_fes.py`` on the same ``--out`` tree, or
+``01_assemble_datasets.py --plumed-fes``, to write
+``opes_states/fes_reweighted_2d.dat`` from ``COLVAR`` via PLUMED's OPES
+reweighting script.
+
+For COLVAR path stability with a PLUMED build from the patched ``plumed2``
+submodule (see ``scripts/build_plumed_opes.sh``), pass ``--plumed-colvar-heavy-flush``.
+
 Example::
 
     # Quick test (100 k MD steps per system; Boltz + OpenMM default to GPU):
@@ -159,6 +168,7 @@ def _run_openmm_md(
     opes_mode: str,
     opes_kernel_cutoff: float | None,
     opes_nlist_parameters: tuple[float, float] | None,
+    plumed_colvar_heavy_flush: bool,
 ) -> None:
     """Invoke the OpenMM OPES-MD runner via subprocess for isolation."""
     md_script = _REPO_ROOT / "scripts" / "run_openmm_opes_md.py"
@@ -190,6 +200,8 @@ def _run_openmm_md(
         cmd += ["--opes-nlist-parameters", f"{a},{b}"]
     if frame_npz is not None:
         cmd += ["--frame-npz", str(frame_npz)]
+    if plumed_colvar_heavy_flush:
+        cmd += ["--plumed-colvar-heavy-flush"]
 
     print(f"  [md] Command: {' '.join(cmd)}", flush=True)
     result = subprocess.run(cmd, check=False, env=child_env_with_repo_src_python())
@@ -276,6 +288,15 @@ def main() -> None:
         default=None,
         metavar="A,B",
         help="Forwarded to the MD runner: OPES NLIST_PARAMETERS, e.g. '4.0,0.4'.",
+    )
+    parser.add_argument(
+        "--plumed-colvar-heavy-flush",
+        action="store_true",
+        help=(
+            "Forwarded to the MD runner: emit PRINT ... HEAVY_FLUSH for COLVAR. "
+            "Use after rebuilding PLUMED from the patched plumed2 submodule "
+            "(scripts/build_plumed_opes.sh).",
+        ),
     )
     parser.add_argument(
         "--opes-mode",
@@ -396,6 +417,7 @@ def main() -> None:
             opes_mode=args.opes_mode,
             opes_kernel_cutoff=args.opes_kernel_cutoff,
             opes_nlist_parameters=args.opes_nlist_parameters,
+            plumed_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
         )
 
         # Count output shards

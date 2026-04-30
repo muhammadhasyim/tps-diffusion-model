@@ -69,6 +69,29 @@ def test_generate_plumed_opes_script_contains_real_opes_actions(tmp_path: Path) 
     assert float(m.group(1)) >= 3.5
     assert "opes.zed" in script and "opes.neff" in script
     assert "ARG=lig_rmsd,lig_dist,opes.bias,opes.rct,opes.nker,opes.zed,opes.neff" in script
+    assert "HEAVY_FLUSH" not in script
+
+
+def test_generate_plumed_opes_script_colvar_heavy_flush(tmp_path: Path) -> None:
+    from genai_tps.simulation.plumed_opes import generate_plumed_opes_script
+
+    ref_path = tmp_path / "reference_pose.pdb"
+    script = generate_plumed_opes_script(
+        ligand_plumed_idx=[5, 6, 7],
+        pocket_ca_plumed_idx=[1, 2, 3],
+        rmsd_reference_pdb=ref_path,
+        sigma=(0.3, 0.5),
+        pace=500,
+        barrier=5.0,
+        biasfactor=10.0,
+        temperature=300.0,
+        save_opes_every=50_000,
+        progress_every=10_000,
+        out_dir=tmp_path,
+        print_colvar_heavy_flush=True,
+    )
+    assert "PRINT STRIDE=10000" in script
+    assert "opes.neff HEAVY_FLUSH" in script
 
 
 def test_generate_plumed_opes_script_explicit_kernel_cutoff(tmp_path: Path) -> None:

@@ -192,6 +192,7 @@ def generate_plumed_opes_script(
     whole_molecule_plumed_idx: Sequence[int] | None = None,
     kernel_cutoff: float | None = None,
     nlist_parameters: tuple[float, float] | None = None,
+    print_colvar_heavy_flush: bool = False,
 ) -> str:
     """Generate a two-dimensional PLUMED ``OPES_METAD`` input script.
 
@@ -210,6 +211,12 @@ def generate_plumed_opes_script(
 
     When *nlist_parameters* is ``(a, b)``, ``NLIST_PARAMETERS=a,b`` is emitted
     after ``NLIST`` for neighbor-list tuning without hand-editing the deck.
+
+    When *print_colvar_heavy_flush* is ``True``, the ``PRINT`` line for ``COLVAR``
+    includes PLUMED's ``HEAVY_FLUSH`` flag (requires a PLUMED build that contains
+    the ``PRINT`` patch, e.g. the ``tps/v2.9.2-print-heavy-flush`` branch on the
+    forked submodule). Stock conda PLUMED without that patch will error on the
+    unknown keyword.
     """
     if len(sigma) != 2:
         raise ValueError("OPES-MD requires exactly two sigma values.")
@@ -221,6 +228,8 @@ def generate_plumed_opes_script(
         raise ValueError("PLUMED STATE_WSTRIDE must be positive.")
     if nlist_parameters is not None and len(nlist_parameters) != 2:
         raise ValueError("nlist_parameters must be a (cutoff, stride) pair of floats.")
+
+    colvar_print_suffix = " HEAVY_FLUSH" if print_colvar_heavy_flush else ""
 
     out = out_dir.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -288,7 +297,8 @@ def generate_plumed_opes_script(
             "",
             "PRINT "
             f"STRIDE={int(progress_every)} FILE={colvar_path} "
-            "ARG=lig_rmsd,lig_dist,opes.bias,opes.rct,opes.nker,opes.zed,opes.neff",
+            "ARG=lig_rmsd,lig_dist,opes.bias,opes.rct,opes.nker,opes.zed,opes.neff"
+            f"{colvar_print_suffix}",
             "",
         ]
     )
