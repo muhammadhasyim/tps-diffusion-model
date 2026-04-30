@@ -82,6 +82,38 @@ def _require_finite_positions(pos_nm: np.ndarray, *, context_msg: str) -> None:
         )
 
 
+def _next_observer_event_step(
+    completed: int,
+    n_steps: int,
+    periods: tuple[int, ...],
+) -> int:
+    """Return the smallest step index in ``(completed, n_steps]`` on any period boundary.
+
+    If no boundary lies before ``n_steps``, returns ``n_steps`` so the remaining
+    trajectory can be integrated in one batch without host checkpoints.
+
+    Parameters
+    ----------
+    completed
+        Number of MD steps already taken (0 before the first batch).
+    n_steps
+        Total planned MD steps.
+    periods
+        Positive integers (e.g. deposit pace, save interval, progress interval).
+    """
+    if completed >= n_steps:
+        return n_steps
+    m = completed + 1
+    nxt: int | None = None
+    for p in periods:
+        if p <= 0:
+            raise ValueError("observer checkpoint periods must be positive")
+        k = ((m + p - 1) // p) * p
+        if k <= n_steps:
+            nxt = k if nxt is None else min(nxt, k)
+    return nxt if nxt is not None else n_steps
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="OPES-biased OpenMM MD for WDSM data collection")
     parser.add_argument("--topo-npz", type=Path, required=True, help="Boltz processed structures NPZ")
@@ -423,17 +455,41 @@ def main() -> None:
     if args.opes_mode == "observer":
         if opes is None:
             raise RuntimeError("[MD-OPES] Observer mode did not initialize OPESBias.")
-        for step in range(1, args.n_steps + 1):
-            sim.step(1)
+        _observer_periods = (
+            int(args.deposit_pace),
+            int(args.save_every),
+            int(args.progress_every),
+            int(args.save_opes_every),
+        )
+        completed = 0
+        while completed < args.n_steps:
+            next_at = _next_observer_event_step(
+                completed, int(args.n_steps), _observer_periods
+            )
+            batch = int(next_at - completed)
+            assert batch > 0
+            sim.step(batch)
+            completed = int(next_at)
 
-            if step % args.deposit_pace == 0:
-                coords = get_coords_boltz_order()
-                cv = compute_cv(coords)
-                opes.update(cv, step)
+            coords = None
+            cv = None
 
-            if step % args.save_every == 0:
-                coords = get_coords_boltz_order()
+            def _ensure_cv_once() -> None:
+                nonlocal coords, cv
+                if cv is not None:
+                    return
+                st = sim.context.getState(getPositions=True)
+                coords = get_coords_boltz_order(st)
                 cv = compute_cv(coords)
+
+            if completed % args.deposit_pace == 0:
+                _ensure_cv_once()
+                assert cv is not None
+                opes.update(cv, completed)
+
+            if completed % args.save_every == 0:
+                _ensure_cv_once()
+                assert cv is not None
                 logw = float(opes.evaluate(cv)) / opes.kbt
 
                 n_saved += 1
@@ -443,25 +499,25 @@ def main() -> None:
                     coords=coords,
                     cv=cv,
                     logw=np.float64(logw),
-                    md_step=np.int64(step),
+                    md_step=np.int64(completed),
                 )
-                cv_log.append({"step": step, "cv": cv.tolist(), "logw": logw})
+                cv_log.append({"step": completed, "cv": cv.tolist(), "logw": logw})
 
-            if step % args.save_opes_every == 0:
+            if completed % args.save_opes_every == 0:
                 opes.save_state(
-                    opes_dir / f"opes_state_{step:010d}.json",
+                    opes_dir / f"opes_state_{completed:010d}.json",
                     bias_cv="ligand_rmsd,ligand_pocket_dist",
                     bias_cv_names=["ligand_rmsd", "ligand_pocket_dist"],
                 )
 
-            if step % args.progress_every == 0:
+            if completed % args.progress_every == 0:
+                _ensure_cv_once()
+                assert cv is not None
                 elapsed = time.time() - t0
-                rate = step / elapsed
-                eta = (args.n_steps - step) / rate
-                coords = get_coords_boltz_order()
-                cv = compute_cv(coords)
+                rate = completed / elapsed
+                eta = (args.n_steps - completed) / rate if rate > 0 else float("inf")
                 print(
-                    f"[MD-OPES] step {step:>10,}/{args.n_steps:,} | "
+                    f"[MD-OPES] step {completed:>10,}/{args.n_steps:,} | "
                     f"{rate:.0f} steps/s | ETA {eta/60:.1f}min | "
                     f"CV=[{cv[0]:.3f}, {cv[1]:.3f}] | "
                     f"kernels={opes.n_kernels} | saved={n_saved}",

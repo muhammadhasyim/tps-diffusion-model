@@ -1125,11 +1125,53 @@ def make_training_sucos_pocket_qcov_traj_fn(
     return _fn
 
 
+def _normalize_atom_mask_for_compute_cvs(
+    atom_mask_np: np.ndarray | None,
+    *,
+    n_atoms_coords: int,
+    n_struct_topo: int,
+) -> np.ndarray | None:
+    """Return mask of shape ``(1, n_atoms_coords)`` or ``None``.
+
+    RMSD / Rg helpers expect a batch row mask matching the coordinate width *M*.
+    A legacy mistake used ``mask_np[:1]`` on a 1D array of length *n_s*,
+    producing shape ``(1,)`` instead of ``(1, M)``.
+    """
+    if atom_mask_np is None:
+        return None
+    am = np.asarray(atom_mask_np, dtype=np.float32)
+    M = int(n_atoms_coords)
+    n_s = int(n_struct_topo)
+    if am.ndim == 1:
+        if am.shape[0] == M:
+            return am.reshape(1, M)
+        if am.shape[0] == n_s and M >= n_s:
+            row = np.zeros((1, M), dtype=np.float32)
+            row[0, :n_s] = am
+            return row
+        raise ValueError(
+            "compute_cvs atom_mask_np 1-D: expected length "
+            f"n_atoms={M} or n_struct={n_s}, got {am.shape[0]}."
+        )
+    if am.ndim == 2:
+        if am.shape[1] != M:
+            raise ValueError(
+                "compute_cvs atom_mask_np 2-D: expected width "
+                f"n_atoms={M}, got {am.shape[1]}."
+            )
+        return np.asarray(am[:1], dtype=np.float32)
+    raise ValueError(
+        f"compute_cvs atom_mask_np must be 1-D or 2-D, got ndim={am.ndim}."
+    )
+
+
 def compute_cvs(
     structures: np.ndarray,
     reference_coords: np.ndarray,
     atom_mask_np: np.ndarray | None,
     topo_npz: str | Path,
+    *,
+    pocket_radius: float = 6.0,
 ) -> dict[str, np.ndarray]:
     """Compute geometry and pose CVs using Boltz topology from *topo_npz*.
 
@@ -1140,20 +1182,37 @@ def compute_cvs(
     reference_coords
         Reference structure for RMSD, shape ``(n_atoms, 3)`` or larger (padded).
     atom_mask_np
-        Optional mask for reference RMSD, shape broadcastable with batch.
+        Optional per-atom mask for protein RMSD / Rg: either 1-D ``(n_atoms,)``
+        aligned with *structures*' second axis, 1-D ``(n_struct,)`` for the first
+        *n_struct* real atoms (padded coords: pad columns get weight 0), or 2-D
+        ``(batch, n_atoms)`` where only the first row is used for every frame.
     topo_npz
         Path to Boltz processed-structure NPZ for :class:`PoseCVIndexer` topology.
+    pocket_radius
+        Å radius defining the binding pocket for ligand pose CVs (passed to
+        :class:`PoseCVIndexer`).
     """
     from genai_tps.backends.boltz.snapshot import BoltzSnapshot  # noqa: PLC0415
     from genai_tps.io.boltz_npz_export import load_topo  # noqa: PLC0415
 
-    ref_t = torch.tensor(reference_coords, dtype=torch.float32)
-    mask_t = torch.tensor(atom_mask_np[:1], dtype=torch.float32) if atom_mask_np is not None else None
+    structures = np.asarray(structures, dtype=np.float64)
+    if structures.ndim != 3:
+        raise ValueError(f"structures must be (N, n_atoms, 3), got shape {structures.shape}")
+    n_atoms_coords = int(structures.shape[1])
 
     structure, n_struct = load_topo(Path(topo_npz))
     n_s = int(n_struct)
     ref_np = reference_coords[:n_s].astype(np.float32)
-    indexer = PoseCVIndexer(structure, ref_np, pocket_radius=6.0)
+    ref_t = torch.tensor(reference_coords, dtype=torch.float32)
+
+    mask_arr = _normalize_atom_mask_for_compute_cvs(
+        atom_mask_np,
+        n_atoms_coords=n_atoms_coords,
+        n_struct_topo=n_s,
+    )
+    mask_t = torch.tensor(mask_arr, dtype=torch.float32) if mask_arr is not None else None
+
+    indexer = PoseCVIndexer(structure, ref_np, pocket_radius=float(pocket_radius))
 
     results: dict[str, list[float]] = {
         "rmsd": [],

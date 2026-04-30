@@ -112,12 +112,30 @@ def _compute_all_cvs(
 
     data = np.load(coords_npz)
     coords = data["coords"]  # (N, M, 3)
+    m_atoms = int(coords.shape[1])
+
+    if "atom_mask" in data:
+        am = np.asarray(data["atom_mask"], dtype=np.float32)
+        if am.ndim == 2 and am.shape[1] == m_atoms:
+            atom_mask_np = am
+        elif am.ndim == 1 and am.shape[0] == m_atoms:
+            atom_mask_np = am
+        else:
+            atom_mask_np = None
+    else:
+        atom_mask_np = None
+
+    if atom_mask_np is None:
+        row = np.zeros((1, m_atoms), dtype=np.float32)
+        row[0, : min(n_struct, m_atoms)] = 1.0
+        atom_mask_np = row
 
     cv_dict = compute_cvs(
         coords,
         reference_coords=ref_coords,
-        atom_mask_np=np.ones(n_struct, dtype=np.float32),
+        atom_mask_np=atom_mask_np,
         topo_npz=topo_npz,
+        pocket_radius=pocket_radius,
     )
     return cv_dict
 
@@ -326,18 +344,49 @@ def main() -> None:
         n_struct = int(n_struct)
         ref_coords = np.asarray(structure.atoms["coords"], dtype=np.float64)
 
-        # Load ground-truth OPES-MD data for FES reference
+        # Load ground-truth OPES-MD data for FES reference (training NPZ or WDSM shards)
         gt_logw: np.ndarray | None = None
         gt_rmsd: np.ndarray | None = None
         gt_pocket_dist: np.ndarray | None = None
+        gt_cv_dict: dict[str, np.ndarray] | None = None
+        gt_hist_raw: np.ndarray | None = None
+
         gt_dataset = case_dir / "training_dataset.npz"
+        wdsm_dir = case_dir / "openmm_opes_md" / "wdsm_samples"
+        assembled_gt_npz = quality_dir / "assembled_gt_from_wdsm.npz"
+
+        gt_coords_npz: Path | None = None
         if gt_dataset.is_file():
+            gt_coords_npz = gt_dataset
+        elif wdsm_dir.is_dir() and any(wdsm_dir.glob("wdsm_step_*.npz")):
             try:
-                gt_data = np.load(gt_dataset)
-                gt_logw = gt_data["logw"]
-                # Recompute CVs for ground truth
-                print(f"  [05] Computing ground-truth CVs from {gt_dataset}...", flush=True)
-                gt_cv_dict = _compute_all_cvs(gt_dataset, topo_npz, ref_coords, n_struct, args.pocket_radius)
+                from genai_tps.simulation.dataset_assembly import assemble_wdsm_from_directory
+
+                n_shards = len(list(wdsm_dir.glob("wdsm_step_*.npz")))
+                print(
+                    f"  [05] No training_dataset.npz; assembling {n_shards} WDSM shards "
+                    f"from {wdsm_dir}...",
+                    flush=True,
+                )
+                assembled = assemble_wdsm_from_directory(wdsm_dir, topo_npz=topo_npz)
+                np.savez_compressed(
+                    assembled_gt_npz,
+                    coords=assembled.coords,
+                    logw=assembled.logw,
+                    atom_mask=assembled.atom_mask,
+                )
+                gt_coords_npz = assembled_gt_npz
+            except Exception as exc:
+                print(f"  [05] WDSM assembly failed: {exc}", flush=True)
+
+        if gt_coords_npz is not None:
+            try:
+                gt_data = np.load(gt_coords_npz)
+                gt_logw = np.asarray(gt_data["logw"])
+                print(f"  [05] Computing ground-truth CVs from {gt_coords_npz}...", flush=True)
+                gt_cv_dict = _compute_all_cvs(
+                    gt_coords_npz, topo_npz, ref_coords, n_struct, args.pocket_radius
+                )
                 gt_rmsd = np.array(gt_cv_dict.get("ligand_rmsd", []))
                 gt_pocket_dist = np.array(gt_cv_dict.get("ligand_pocket_dist", []))
             except Exception as exc:
@@ -402,7 +451,11 @@ def main() -> None:
                 )
                 fes_data_all[variant] = (fes, r_edges, d_edges)
                 # FES divergences vs ground truth
-                if gt_rmsd is not None and len(gt_rmsd) > 0:
+                if (
+                    gt_rmsd is not None
+                    and len(gt_rmsd) > 0
+                    and gt_hist_raw is not None
+                ):
                     pred_hist = np.histogram2d(
                         lig_rmsd_arr, pocket_dist_arr,
                         bins=args.fes_bins,
@@ -438,6 +491,13 @@ def main() -> None:
             print(f"    [05] PoseBusters pass fraction: "
                   f"{pb_rates.get('ligand_rmsd_le_2a', 'N/A'):.3f}", flush=True)
 
+        if (
+            gt_cv_dict is not None
+            and gt_rmsd is not None
+            and len(gt_rmsd) > 0
+        ):
+            cv_data_all["ground_truth (OPES-MD)"] = gt_cv_dict
+
         # Plots
         if cv_data_all:
             _plot_cv_distributions(
@@ -459,6 +519,14 @@ def main() -> None:
         with open(report_path, "w") as fh:
             json.dump(case_result, fh, indent=2)
         print(f"  [05] Report: {report_path}", flush=True)
+
+        if not fes_data_all and not case_result["variants"]:
+            print(
+                "  [05] Hint: add training_dataset.npz (stage 01) or wdsm_step_*.npz under "
+                "openmm_opes_md/wdsm_samples for ground-truth FES; run stage 03 for "
+                "baseline/generated_structures.npz for baseline diagnostics.",
+                flush=True,
+            )
 
         all_results[name] = case_result
 
