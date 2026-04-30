@@ -140,7 +140,12 @@ def main() -> None:
         "--plumed-fes-sigma",
         type=str,
         default="0.3,0.5",
-        help="KDE sigma string for PLUMED FES (comma-separated, Å).",
+        help=(
+            "KDE sigma string for PLUMED FES (comma-separated, Å). OneOPES "
+            "(pp.proj,cmap): pass exactly two values or omit extras so mean "
+            "sigmas are read from KERNELS. Three-CV (lig_contacts): pass three "
+            "values or use two/one tokens to trigger KERNELS-derived 3D means."
+        ),
     )
     parser.add_argument(
         "--plumed-fes-skiprows",
@@ -209,12 +214,14 @@ def main() -> None:
         save_assembled_npz(out_npz, assembled)
         print(f"  [01] Saved: {out_npz}", flush=True)
 
+        plumed_fes_meta: dict | None = None
         if args.plumed_fes:
             from genai_tps.simulation.plumed_colvar_fes import run_fes_from_reweighting_script
 
             colvar = md_out / "opes_states" / "COLVAR"
             if not colvar.is_file():
                 msg = f"No COLVAR at {colvar}; skip PLUMED FES."
+                plumed_fes_meta = {"skipped": True, "reason": msg, "colvar": str(colvar)}
                 if args.plumed_fes_strict:
                     raise FileNotFoundError(msg)
                 print(f"  [01] {msg}", flush=True)
@@ -224,6 +231,20 @@ def main() -> None:
                         colvar, args.plumed_fes_sigma
                     )
                     outfile = fes_kw["outfile"]
+                    plumed_fes_meta = {
+                        "colvar": str(colvar),
+                        "cv_names": str(fes_kw["cv_names"]),
+                        "sigma": str(fes_kw["sigma"]),
+                        "grid_bin": str(fes_kw["grid_bin"]),
+                        "outfile": str(outfile),
+                        "temperature_k": float(args.plumed_fes_temperature),
+                        "bias_name": "opes.bias",
+                        "note": (
+                            "sigma uses KERNELS mean widths when the number of "
+                            "--plumed-fes-sigma values does not match the CV "
+                            "dimension (see reweighting_kwargs_from_colvar_path)."
+                        ),
+                    }
                     run_fes_from_reweighting_script(
                         colvar_path=colvar,
                         outfile=outfile,
@@ -238,6 +259,7 @@ def main() -> None:
                     )
                     print(f"  [01] PLUMED FES: {outfile}", flush=True)
                 except Exception as exc:
+                    plumed_fes_meta = {"colvar": str(colvar), "error": str(exc)}
                     if args.plumed_fes_strict:
                         raise
                     print(f"  [01] PLUMED FES failed (non-fatal): {exc}", flush=True)
@@ -268,7 +290,7 @@ def main() -> None:
             val_path = str(val_npz)
             print(f"  [01] Train/val split: {train_npz.name} / {val_npz.name}", flush=True)
 
-        assembly_log.append({
+        log_entry: dict = {
             "case": name,
             "n_shards": shard_count,
             "n_samples": int(n_samples),
@@ -280,7 +302,10 @@ def main() -> None:
             "max_weight_fraction": float(stats["max_weight_fraction"]),
             "out_npz": str(out_npz),
             "val_npz": val_path,
-        })
+        }
+        if plumed_fes_meta is not None:
+            log_entry["plumed_fes_reweighting"] = plumed_fes_meta
+        assembly_log.append(log_entry)
 
     log_path = out_root / "01_assembly_log.json"
     with open(log_path, "w") as fh:
