@@ -58,11 +58,12 @@ import sys
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 import numpy as np
 
-from genai_tps.simulation.boltz_ligand_pose import (
+from genai_tps.simulation.openmm_boltz_bridge import (
+    LigandPosePolicy,
     ligand_topology_relabeled_chain,
     try_ligand_pose_from_boltz_ccd,
 )
@@ -71,8 +72,6 @@ logger = logging.getLogger(__name__)
 
 # Tests import this symbol from ``compute_cv_rmsd``; keep alias to package helper.
 _ligand_topology_relabeled_chain = ligand_topology_relabeled_chain
-
-LigandPosePolicy = Literal["boltz_first", "pdb_only", "strict"]
 
 # Boltz/OpenMM PDB: protein uses standard 3-letter codes; cofactors are HETATM
 # with CCD names (ATP, MG, …), not necessarily ``LIG``.  Anything outside this

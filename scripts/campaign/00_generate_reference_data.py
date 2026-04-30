@@ -65,6 +65,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.simulation.openmm_md_runner import _parse_opes_nlist_parameters
 from genai_tps.subprocess_support import child_env_with_repo_src_python
 
 # ---------------------------------------------------------------------------
@@ -156,6 +157,8 @@ def _run_openmm_md(
     save_opes_every: int,
     opes_restart: Path | None,
     opes_mode: str,
+    opes_kernel_cutoff: float | None,
+    opes_nlist_parameters: tuple[float, float] | None,
 ) -> None:
     """Invoke the OpenMM OPES-MD runner via subprocess for isolation."""
     md_script = _REPO_ROOT / "scripts" / "run_openmm_opes_md.py"
@@ -180,6 +183,11 @@ def _run_openmm_md(
     ]
     if opes_restart is not None:
         cmd += ["--opes-restart", str(opes_restart)]
+    if opes_kernel_cutoff is not None:
+        cmd += ["--opes-kernel-cutoff", str(opes_kernel_cutoff)]
+    if opes_nlist_parameters is not None:
+        a, b = opes_nlist_parameters
+        cmd += ["--opes-nlist-parameters", f"{a},{b}"]
     if frame_npz is not None:
         cmd += ["--frame-npz", str(frame_npz)]
 
@@ -252,6 +260,23 @@ def main() -> None:
                         help="Energy minimisation steps before MD.")
     parser.add_argument("--progress-every", type=int, default=10_000)
     parser.add_argument("--save-opes-every", type=int, default=50_000)
+    parser.add_argument(
+        "--opes-kernel-cutoff",
+        type=float,
+        default=None,
+        metavar="SIGMA",
+        help=(
+            "Forwarded to the MD runner: PLUMED OPES_METAD KERNEL_CUTOFF. "
+            "Omit for auto max(3.5, PLUMED default formula)."
+        ),
+    )
+    parser.add_argument(
+        "--opes-nlist-parameters",
+        type=_parse_opes_nlist_parameters,
+        default=None,
+        metavar="A,B",
+        help="Forwarded to the MD runner: OPES NLIST_PARAMETERS, e.g. '4.0,0.4'.",
+    )
     parser.add_argument(
         "--opes-mode",
         type=str,
@@ -369,6 +394,8 @@ def main() -> None:
             save_opes_every=args.save_opes_every,
             opes_restart=opes_restart,
             opes_mode=args.opes_mode,
+            opes_kernel_cutoff=args.opes_kernel_cutoff,
+            opes_nlist_parameters=args.opes_nlist_parameters,
         )
 
         # Count output shards

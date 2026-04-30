@@ -28,7 +28,7 @@ _MODULES = [
     "genai_tps.backends.boltz.tps_sampling",
     # Simulation
     "genai_tps.simulation.openmm_cv",
-    "genai_tps.simulation.boltz_ligand_pose",
+    "genai_tps.simulation.openmm_boltz_bridge",
     "genai_tps.simulation.bias.opes",
     "genai_tps.simulation.bias.umbrella",
     "genai_tps.simulation.mbar_analysis",

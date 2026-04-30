@@ -8,6 +8,7 @@ without requiring a compiled ``openmm-plumed`` plugin.
 from __future__ import annotations
 
 import inspect
+import re
 from pathlib import Path
 
 import numpy as np
@@ -63,6 +64,58 @@ def test_generate_plumed_opes_script_contains_real_opes_actions(tmp_path: Path) 
     assert "BIASFACTOR=10" in script
     assert "NLIST" in script
     assert "PRINT STRIDE=10000" in script
+    m = re.search(r"KERNEL_CUTOFF=([0-9.eE+-]+)", script)
+    assert m is not None
+    assert float(m.group(1)) >= 3.5
+    assert "opes.zed" in script and "opes.neff" in script
+    assert "ARG=lig_rmsd,lig_dist,opes.bias,opes.rct,opes.nker,opes.zed,opes.neff" in script
+
+
+def test_generate_plumed_opes_script_explicit_kernel_cutoff(tmp_path: Path) -> None:
+    from genai_tps.simulation.plumed_opes import generate_plumed_opes_script
+
+    ref_path = tmp_path / "reference_pose.pdb"
+    script = generate_plumed_opes_script(
+        ligand_plumed_idx=[5, 6, 7],
+        pocket_ca_plumed_idx=[1, 2, 3],
+        rmsd_reference_pdb=ref_path,
+        sigma=(0.3, 0.5),
+        pace=500,
+        barrier=5.0,
+        biasfactor=10.0,
+        temperature=300.0,
+        save_opes_every=50_000,
+        progress_every=10_000,
+        out_dir=tmp_path,
+        kernel_cutoff=2.0,
+    )
+    m = re.search(r"KERNEL_CUTOFF=([0-9.eE+-]+)", script)
+    assert m is not None
+    assert float(m.group(1)) == pytest.approx(2.0)
+
+
+def test_generate_plumed_opes_script_nlist_parameters(tmp_path: Path) -> None:
+    from genai_tps.simulation.plumed_opes import generate_plumed_opes_script
+
+    ref_path = tmp_path / "reference_pose.pdb"
+    script = generate_plumed_opes_script(
+        ligand_plumed_idx=[5, 6, 7],
+        pocket_ca_plumed_idx=[1, 2, 3],
+        rmsd_reference_pdb=ref_path,
+        sigma=(0.3, 0.5),
+        pace=500,
+        barrier=5.0,
+        biasfactor=10.0,
+        temperature=300.0,
+        save_opes_every=50_000,
+        progress_every=10_000,
+        out_dir=tmp_path,
+        nlist_parameters=(4.0, 0.4),
+    )
+    m_nl = re.search(r"NLIST_PARAMETERS=([\d.eE+-]+),([\d.eE+-]+)", script)
+    assert m_nl is not None
+    assert float(m_nl.group(1)) == pytest.approx(4.0)
+    assert float(m_nl.group(2)) == pytest.approx(0.4)
 
 
 def test_generate_plumed_opes_script_rejects_wrong_sigma_length(tmp_path: Path) -> None:

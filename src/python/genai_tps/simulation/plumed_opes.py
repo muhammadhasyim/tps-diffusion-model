@@ -13,6 +13,7 @@ All atom indices passed to this module must already be PLUMED indices, i.e.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,32 @@ __all__ = [
 def _format_float(value: float) -> str:
     """Return a compact deterministic decimal representation for PLUMED input."""
     return f"{float(value):.12g}"
+
+
+def _plumed_kbt_kjmol(temperature_k: float) -> float:
+    """Return *k* B T in kJ/mol, matching :mod:`genai_tps.simulation.openmm_md_runner`.
+
+    Uses the gas constant *R* = 8.314e-3 kJ/(mol·K) times absolute temperature.
+    """
+    return float(8.314e-3 * float(temperature_k))
+
+
+def _opes_metad_default_kernel_cutoff_sigma(
+    barrier_kjmol: float, biasfactor: float, temperature_k: float
+) -> float:
+    """PLUMED ``OPES_METAD`` default ``KERNEL_CUTOFF`` in Gaussian sigma units.
+
+    Mirrors ``plumed2/src/opes/OPESmetad.cpp`` for well-tempered OPES:
+    ``sqrt(2 * BARRIER / (1 - 1/gamma) / kbt)`` with ``gamma = BIASFACTOR``.
+    """
+    gamma = float(biasfactor)
+    if gamma <= 1.0:
+        raise ValueError("OPES BIASFACTOR must be greater than 1.")
+    kbt = _plumed_kbt_kjmol(temperature_k)
+    if kbt <= 0.0:
+        raise ValueError("Temperature must be positive for OPES kernel cutoff.")
+    bias_pref = 1.0 - 1.0 / gamma
+    return math.sqrt(2.0 * float(barrier_kjmol) / bias_pref / kbt)
 
 
 def _format_indices(indices: Sequence[int]) -> str:
@@ -163,12 +190,26 @@ def generate_plumed_opes_script(
     out_dir: Path,
     state_rfile: Path | None = None,
     whole_molecule_plumed_idx: Sequence[int] | None = None,
+    kernel_cutoff: float | None = None,
+    nlist_parameters: tuple[float, float] | None = None,
 ) -> str:
     """Generate a two-dimensional PLUMED ``OPES_METAD`` input script.
 
     Parameters use PLUMED units: Angstrom for lengths, Kelvin for temperature,
     and kJ/mol for energies.  ``sigma`` must contain two values corresponding
     to ligand RMSD and ligand-pocket distance.
+
+    ``KERNEL_CUTOFF`` controls truncated Gaussian kernel support (in units of
+    per-dimension ``SIGMA``).  PLUMED's internal default follows
+    ``sqrt(2 * BARRIER / (1 - 1/BIASFACTOR) / kBT)`` and can fall below 3.5,
+    which triggers PLUMED's "kernels are truncated too much" warning.  When
+    *kernel_cutoff* is ``None``, this function uses the same formula then takes
+    ``max(3.5, ...)`` so typical decks avoid that warning without changing the
+    collective variables.  ``BARRIER`` still controls ``EPSILON`` inside
+    ``OPES_METAD`` as in PLUMED.  Pass an explicit *kernel_cutoff* to override.
+
+    When *nlist_parameters* is ``(a, b)``, ``NLIST_PARAMETERS=a,b`` is emitted
+    after ``NLIST`` for neighbor-list tuning without hand-editing the deck.
     """
     if len(sigma) != 2:
         raise ValueError("OPES-MD requires exactly two sigma values.")
@@ -178,6 +219,8 @@ def generate_plumed_opes_script(
         raise ValueError("PLUMED PRINT stride must be positive.")
     if int(save_opes_every) <= 0:
         raise ValueError("PLUMED STATE_WSTRIDE must be positive.")
+    if nlist_parameters is not None and len(nlist_parameters) != 2:
+        raise ValueError("nlist_parameters must be a (cutoff, stride) pair of floats.")
 
     out = out_dir.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -187,6 +230,16 @@ def generate_plumed_opes_script(
     kernels_path = out / "KERNELS"
     state_path = out / "STATE"
     colvar_path = out / "COLVAR"
+
+    cutoff_plumed_default = _opes_metad_default_kernel_cutoff_sigma(
+        barrier, biasfactor, temperature
+    )
+    if kernel_cutoff is None:
+        kernel_cutoff_resolved = max(3.5, cutoff_plumed_default)
+    else:
+        kernel_cutoff_resolved = float(kernel_cutoff)
+        if kernel_cutoff_resolved <= 0.0:
+            raise ValueError("kernel_cutoff must be positive when set explicitly.")
 
     lines = [
         "UNITS LENGTH=A",
@@ -215,12 +268,18 @@ def generate_plumed_opes_script(
             f"  BARRIER={_format_float(barrier)}",
             f"  BIASFACTOR={_format_float(biasfactor)}",
             f"  TEMP={_format_float(temperature)}",
+            f"  KERNEL_CUTOFF={_format_float(kernel_cutoff_resolved)}",
             f"  FILE={kernels_path}",
             f"  STATE_WFILE={state_path}",
             f"  STATE_WSTRIDE={int(save_opes_every)}",
             "  NLIST",
         ]
     )
+    if nlist_parameters is not None:
+        a, b = (float(nlist_parameters[0]), float(nlist_parameters[1]))
+        lines.append(
+            f"  NLIST_PARAMETERS={_format_float(a)},{_format_float(b)}"
+        )
     if state_rfile is not None:
         lines.append(f"  STATE_RFILE={state_rfile.expanduser().resolve()}")
     lines.extend(
@@ -229,7 +288,7 @@ def generate_plumed_opes_script(
             "",
             "PRINT "
             f"STRIDE={int(progress_every)} FILE={colvar_path} "
-            "ARG=lig_rmsd,lig_dist,opes.bias,opes.rct,opes.nker",
+            "ARG=lig_rmsd,lig_dist,opes.bias,opes.rct,opes.nker,opes.zed,opes.neff",
             "",
         ]
     )

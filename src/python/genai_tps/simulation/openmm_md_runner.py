@@ -60,6 +60,16 @@ def _diagnostic_energy_and_large_forces(
         )
 
 
+def _parse_opes_nlist_parameters(value: str) -> tuple[float, float]:
+    """Parse ``'a,b'`` into PLUMED ``NLIST_PARAMETERS`` components."""
+    parts = [p.strip() for p in value.split(",")]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(
+            "expected two comma-separated floats, e.g. '4.0,0.4'"
+        )
+    return float(parts[0]), float(parts[1])
+
+
 def _require_finite_positions(pos_nm: np.ndarray, *, context_msg: str) -> None:
     a = np.asarray(pos_nm, dtype=np.float64)
     if not np.isfinite(a).all():
@@ -85,6 +95,28 @@ def main() -> None:
     parser.add_argument("--opes-biasfactor", type=float, default=10.0)
     parser.add_argument("--opes-sigma", type=str, default="0.3,0.5", help="Per-dim kernel sigma (Angstrom)")
     parser.add_argument("--opes-restart", type=Path, default=None, help="Resume OPES from saved state")
+    parser.add_argument(
+        "--opes-kernel-cutoff",
+        type=float,
+        default=None,
+        metavar="SIGMA",
+        help=(
+            "PLUMED OPES_METAD KERNEL_CUTOFF in units of per-CV SIGMA. "
+            "If omitted, uses PLUMED's default formula max(3.5, sqrt(...)) "
+            "to avoid the 'kernels are truncated too much' warning at typical "
+            "BARRIER/BIASFACTOR/T."
+        ),
+    )
+    parser.add_argument(
+        "--opes-nlist-parameters",
+        type=_parse_opes_nlist_parameters,
+        default=None,
+        metavar="A,B",
+        help=(
+            "Optional PLUMED NLIST_PARAMETERS for OPES_METAD neighbor list, "
+            "e.g. '4.0,0.4' (comma-separated floats)."
+        ),
+    )
     parser.add_argument(
         "--opes-mode",
         type=str,
@@ -267,6 +299,8 @@ def main() -> None:
             progress_every=args.progress_every,
             out_dir=opes_dir,
             state_rfile=args.opes_restart,
+            kernel_cutoff=args.opes_kernel_cutoff,
+            nlist_parameters=args.opes_nlist_parameters,
         )
         script_path.write_text(script, encoding="utf-8")
         force, force_index = add_plumed_opes_to_system(

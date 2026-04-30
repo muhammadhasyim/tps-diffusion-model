@@ -1,4 +1,4 @@
-"""Tests for Boltz NPZ + CCD pickle ligand placement (``boltz_ligand_pose``)."""
+"""Tests for Boltz NPZ + CCD pickle ligand placement (``openmm_boltz_bridge``)."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def _ethanol_rdkit_template_with_names():
 
 def test_try_ligand_pose_from_boltz_ccd_places_heavy_atoms(tmp_path: Path):
     pytest.importorskip("openff.toolkit", reason="OpenFF required")
-    from genai_tps.simulation.boltz_ligand_pose import try_ligand_pose_from_boltz_ccd
+    from genai_tps.simulation.openmm_boltz_bridge import try_ligand_pose_from_boltz_ccd
 
     mol_dir = tmp_path
     with (mol_dir / "TST.pkl").open("wb") as fh:
@@ -126,7 +126,7 @@ def test_try_ligand_pose_from_boltz_ccd_places_heavy_atoms(tmp_path: Path):
 
 def test_try_ligand_pose_raises_on_smiles_graph_mismatch(tmp_path: Path):
     pytest.importorskip("openff.toolkit", reason="OpenFF required")
-    from genai_tps.simulation.boltz_ligand_pose import try_ligand_pose_from_boltz_ccd
+    from genai_tps.simulation.openmm_boltz_bridge import try_ligand_pose_from_boltz_ccd
 
     mol_dir = tmp_path
     with (mol_dir / "TST.pkl").open("wb") as fh:
