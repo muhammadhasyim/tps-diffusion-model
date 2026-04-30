@@ -1,0 +1,82 @@
+\section{Introduction}
+\label{sec:intro}
+
+Diffusion-based structure generators such as AlphaFold~3 \citep{alphafold3},
+Boltz-2 \citep{boltz2}, and RoseTTAFold All-Atom \citep{rfaa} are now used at
+large scale, yet systematic evaluations continue to expose failure modes:
+confidence can be miscalibrated on disordered regions \citep{gopalan2025},
+protein--ligand co-folding can track memorized poses \citep{skrinjar2025}, and
+antibody--antigen docking remains brittle at a single seed
+\citep{hitawala2025}. A complementary diagnostic question is not only whether
+a \emph{single} prediction looks plausible, but what distribution of outcomes a
+model assigns to a \emph{fixed} input when its internal stochasticity is
+exhausted. One forward pass answers the former; the latter requires sampling over
+entire denoising trajectories under the generator's transition law.
+
+Transition path sampling (TPS), developed for rare transitions in molecular
+simulation \citep{dellago1998,bolhuis2002}, has recently been extended to
+non-equilibrium and learned generators
+\citep{buijsman2020,falkner2023,falkner2024}. The same construction applies when
+each reverse-diffusion step is a deterministic map of explicit noise and
+auxiliary random variables: the object of interest is the induced distribution
+on reactive paths connecting a high-noise set $A$ and a structured endpoint
+set $B$. Path-space Metropolis--Hastings moves then yield unbiased reactive
+ensembles with computable log-weights. Parallel work applies path sampling ideas
+to large language models \citep{dorman2026} and to diffusion-driven molecular
+pathways via action minimization \citep{raja2025omtps}.
+
+This paper develops the discrete-time path measure for the Boltz-2 reverse
+sampler, including SE(3) augmentation and EDM-style churn \citep{karras2022},
+gives the forward- and backward-shooting acceptance corrections following
+\citet{buijsman2020,falkner2024}, analyzes Jacobian factors as diagnostics versus
+as part of extended-variable weights, and combines TPS with on-the-fly
+probability enhanced sampling (OPES) \citep{invernizzi2020,invernizzi2022} on
+collective variables of the terminal frame. We relate rigid-body augmentation
+to quotient-space and equivariant-network perspectives
+\citep{xu2026quotient,yim2023se}. Nothing here claims an explicit likelihood for
+the neural denoiser: the path weight uses Gaussian priors on injected noise and
+augmentation together with the deterministic map from those variables to
+coordinates; the network enters only through that map.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+  \item We state a generic discrete-time path distribution for a
+    non-reversible generator and the Metropolis--Hastings acceptance for forward
+    shooting, backward shooting with a dedicated backward proposal, and global
+    reshuffle, including a simple irreducibility argument when reshuffle has
+    positive weight.
+  \item We specialize the construction to Boltz-2's extended state (rotations,
+    translations, churn noise, coordinates), give the log path density used in
+    code, and clarify when schedule-only Jacobian surrogates cancel in forward
+    shooting and when they must not be inserted into backward proposals.
+  \item We derive the multiplicative Boltzmann correction for OPES bias on
+    terminal-frame collective variables and record caveats when the bias
+    evolves during the chain.
+  \item We report experiments on a 228-residue protein--ligand co-folding
+    system: unbiased TPS shows sharply concentrated terminal structures, while
+    TPS+OPES exposes metastable pose basins in a two-dimensional collective
+    variable projection.
+\end{enumerate}
+
+\paragraph{Road map.}
+Section~\ref{sec:related} situates the work in the literature.
+Section~\ref{sec:tps-foundations} develops TPS on discrete paths.
+Section~\ref{sec:diffusion-boltz} connects score-based diffusion and EDM
+preconditioning to the discrete kernel relevant for sampling.
+Section~\ref{sec:kernel-full} gives the Boltz-2 extended kernel, Jacobians, and
+implementation log-ratios. Section~\ref{sec:opes-theory} treats OPES and biased
+TPS. Section~\ref{sec:quotient} discusses quotient-space diffusion and
+equivariance. Section~\ref{sec:experiments} presents experiments.
+Sections~\ref{sec:discussion} and~\ref{sec:conclusion} discuss limitations and
+close. With the problem and contributions fixed, the next section reviews prior
+art and notation common to rare-event methods and generative modeling.
+
+\paragraph{Notation.}
+We write $x_i \in \R^{M \times 3}$ for the coordinate tensor at reverse-diffusion
+index $i$ after padding to $M$ atoms. Steps run from $i=0$ (high noise) to
+$i=L$ (structured output). We use $\mathcal{S}_i$ for the collection of random
+objects fed into the sampler at step $i$. Inner products and norms are
+Frobenius unless stated otherwise. We write $k_BT$ in OPES formulas for
+compatibility with molecular simulation convention; in the pure TPS chain
+without a thermal bath it should be read as an arbitrary energy scale fixing
+the bias strength.

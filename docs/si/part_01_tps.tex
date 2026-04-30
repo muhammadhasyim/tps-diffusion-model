@@ -1,0 +1,113 @@
+\section{Transition Path Sampling for Discrete-Time Generators}
+\label{sec:tps-foundations}
+
+Section~\ref{sec:related} reviewed how TPS has been used for equilibrium and
+learned dynamics. We now give a self-contained discrete-time formulation: the
+path distribution, Metropolis--Hastings acceptance, concrete shooting moves, and
+why a global reshuffle matters for irreducibility. The transition maps $T_i$
+remain abstract until Section~\ref{sec:diffusion-boltz}, where we specialize to
+Boltz-2's denoising step.
+
+\subsection{Reactive Paths and the Path Distribution}
+
+Fix an integer $L \geq 1$ and consider a Markov transition law that advances a state through $L$ steps. Classical TPS was built for time-sliced molecular dynamics, where the transition kernel is (approximately) the short-time propagator of a thermal equilibrium dynamics and microscopic reversibility supplies a simple relation between forward and backward kernels \citep{dellago1998,bolhuis2002}. Generative denoising is different. Each step applies a deterministic map once noise and any auxiliary random variables are fixed, and the map need not be the time reverse of any known kernel \citep{buijsman2020}. The sampling problem is unchanged in spirit: we want the conditional distribution over full trajectories that start in a set $A$ and end in a set $B$, under the dynamics induced by the generator.
+
+Let $\xi_i$ denote the collection of all exogenous random variables drawn at step $i$ (for Boltz-2, rotations, translations, and churn noise; Section~\ref{sec:kernel-full}). Let $T_i$ denote the deterministic update so that $x_{i+1} = T_i(x_i, \xi_i)$. A \emph{path} is
+\[
+  \mathcal{X} = (x_0, \xi_0, \xi_1, \ldots, \xi_{L-1}, x_L),
+\]
+with the understanding that intermediate coordinates can be recovered by integration if needed. The forward kernel on extended variables factorizes as
+\begin{equation}
+  \label{eq:forward-kernel-product}
+  P(\mathcal{X}) = \rho(x_0) \prod_{i=0}^{L-1} \pi_i(\xi_i)\,
+  \delta\bigl(x_{i+1} - T_i(x_i, \xi_i)\bigr),
+\end{equation}
+where $\rho$ is the initial law on $x_0$ and $\pi_i$ is the joint density of $\xi_i$ (including any discrete components with respect to counting measure, written formally as densities where we condition on continuous parts). Equation~\eqref{eq:forward-kernel-product} is the object Metropolis corrections must preserve. The reactive ensemble restricts to paths with $x_0 \in A$ and $x_L \in B$; we write $H_{AB}(\mathcal{X})$ for the indicator of that event.
+
+Given a target $P_{AB} \propto H_{AB}\,P$, the next subsection records the generic
+Metropolis--Hastings acceptance on path space that every move below will
+instantiate.
+
+\subsection{Metropolis--Hastings on Path Space}
+
+Suppose we run a Markov chain on reactive paths with proposal kernel $Q(\mathcal{X}' \mid \mathcal{X})$. A standard sufficient condition for stationarity with respect to $P_{AB}(\mathcal{X}) \propto H_{AB}(\mathcal{X}) P(\mathcal{X})$ is detailed balance with acceptance
+\begin{equation}
+  \label{eq:mh-generic}
+  \alpha(\mathcal{X} \to \mathcal{X}')
+  = \min\left\{ 1,\,
+    \frac{P(\mathcal{X}') Q(\mathcal{X} \mid \mathcal{X}')}
+         {P(\mathcal{X}) Q(\mathcal{X}' \mid \mathcal{X})}
+    \right\},
+\end{equation}
+whenever $H_{AB}(\mathcal{X}')=1$, and $\alpha=0$ otherwise. Taking logarithms,
+\begin{equation}
+  \label{eq:delta-generic}
+  \Delta(\mathcal{X}, \mathcal{X}')
+  = \log P(\mathcal{X}') - \log P(\mathcal{X})
+  + \log Q(\mathcal{X} \mid \mathcal{X}') - \log Q(\mathcal{X}' \mid \mathcal{X}).
+\end{equation}
+All path sampling variants in this paper are special cases of~\eqref{eq:mh-generic} with different $Q$.
+
+The simplest move that realizes~\eqref{eq:mh-generic} with nontrivial paths is
+forward shooting: resample a suffix while holding a prefix fixed.
+
+\subsection{Forward Shooting}
+
+Forward shooting picks an index $k \in \{1,\ldots,L-1\}$, leaves the prefix $(x_0,\ldots,x_k)$ unchanged, redraws $\xi_i$ for all $i \geq k$ from $\pi_i$, and integrates forward to obtain a new suffix. The proposal is therefore the conditional law of all resampled noise variables given the fixed prefix. Under~\eqref{eq:forward-kernel-product}, the log target decomposes into a sum over steps. The proposal contributes exactly the same factors for the resampled $\xi_i$ as appear in $\log P(\mathcal{X}')$, and the unchanged prefix contributes the same terms in $\log P(\mathcal{X})$ and $\log P(\mathcal{X}')$. Hence every term involving $i \geq k$ cancels between $\log P(\mathcal{X}')$ and $\log Q(\mathcal{X}'\mid\mathcal{X})$, and the same cancellation holds for $\log P(\mathcal{X})$ versus $\log Q(\mathcal{X}\mid\mathcal{X}')$. The ratio reduces to $\Delta_{\mathrm{fwd}} = 0$ whenever $\rho(x_0)$ does not change (fixed initial noise) and the schedule is fixed. If $x_0$ is also resampled as part of the move, the ratio picks up $\log \rho(x_0') - \log \rho(x_0)$ in the usual way. We summarize the forward-shooting log-ratio as
+\begin{equation}
+  \label{eq:delta}
+  \Delta_{\mathrm{fwd}} = 0
+  \qquad\text{(fixed $x_0$ law and fixed schedule).}
+\end{equation}
+
+\begin{remark}
+If one writes the path density in coordinates $(x_0,\ldots,x_L)$ instead of in the underlying noise variables, each pushforward through $T_i$ contributes a Jacobian. Our implementation follows the extended-variable parameterization of \citet{falkner2023}, where those coordinate Jacobians are absent from the base log density and may be tracked separately as diagnostics (Section~\ref{sec:kernel-full}).
+\end{remark}
+
+Forward shooting is straightforward because the proposal uses the same priors
+as the target on the resampled noise. Rebuilding a \emph{prefix} compatible with
+a fixed suffix is subtler when $T_i$ is not time-reversible.
+
+\subsection{Backward Shooting and a Dedicated Backward Proposal}
+
+Backward shooting fixes a suffix and rebuilds a new prefix ending at frame $k$. Because $T_i$ is not reversible in the MD sense, the correct proposal is not ``run the dynamics backward in time.'' Instead one uses an explicit proposal law $q_{\mathrm{bwd}}(\tilde{\mathcal{X}} \mid x_{k+1:L})$ on prefix variables that generates a candidate prefix consistent with the fixed suffix \citep{buijsman2020,falkner2024}. Write $X_{0:k}$ for all random objects in the prefix including $x_0$. The Hastings correction is
+\begin{equation}
+  \label{eq:deltabwd-full}
+  \Delta_{\mathrm{bwd}}
+  = \bigl[\log P_{\mathrm{fwd}}(X'_{0:k}) - \log P_{\mathrm{fwd}}(X_{0:k})\bigr]
+  + \bigl[\log q_{\mathrm{bwd}}(X_{0:k} \mid x_{k+1:L})
+          - \log q_{\mathrm{bwd}}(X'_{0:k} \mid x'_{k+1:L})\bigr],
+\end{equation}
+together with any change in $\log \rho(x_0)$ if the initial state moves. Here $P_{\mathrm{fwd}}$ denotes the marginal of~\eqref{eq:forward-kernel-product} on the prefix variables obtained by integrating out the suffix (in practice both terms are computed along the respective full paths with the suffix fixed). Equation~\eqref{eq:deltabwd-full} is the discrete-time analogue of the ratio used in non-reversible generator TPS \citep{falkner2024}. In the Boltz-2 backend, $q_{\mathrm{bwd}}$ is implemented by inverting the deterministic denoising map at each step (fixed-point iteration) and drawing Gaussian backward noise; the corresponding log densities appear as $\log p_{\mathrm{bwd}}$ in the code (Section~\ref{sec:kernel-full}).
+
+Shooting moves alone can be slow to mix across distant modes of $P_{AB}$. A
+complementary move redraws the entire exogenous trajectory in one step.
+
+\subsection{Global Reshuffle}
+
+Global reshuffle draws a fresh $x_0 \sim \rho$, all $\xi_i \sim \pi_i$, integrates the entire trajectory, and accepts with the same MH rule. Because the proposal is exactly the product prior on all exogenous variables followed by the deterministic maps, and the target restricted to reactive paths is proportional to that same product with the reactive indicator, the acceptance probability for a reactive proposal is one up to the indicator. This move is small in Monte Carlo weight, but it is large in Markov chain theory: it can propose any reactive path that has positive prior weight in one step.
+
+\begin{theorem}[Irreducibility of the combined move set]
+\label{thm:ergodicity-full}
+Consider the Markov chain that, at each step, applies one of: forward shooting, backward shooting (with the Hastings correction~\eqref{eq:deltabwd-full}), or global reshuffle, each with fixed positive selection probability. Suppose every move preserves stationarity with respect to $\pi(\mathcal{X}) \propto H_{AB}(\mathcal{X}) P(\mathcal{X})$ on the space of reactive paths of positive weight. Then the chain is $\pi$-irreducible: from any reactive path with $\pi(\mathcal{X})>0$, any set of reactive paths with positive $\pi$-measure can be reached in finite time with positive probability.
+\end{theorem}
+
+\begin{proof}
+Global reshuffle selects an entirely new path from the restriction of the path prior to the reactive set. If a measurable set $\mathcal{R}$ carries positive probability under $\pi$, then for any current state $\mathcal{X}$, the one-step transition kernel assigns positive mass to $\mathcal{R}$ because the reshuffle move has positive selection probability and places positive mass on every elementary event that has positive prior density. Irreducibility follows. Aperiodicity holds as soon as forward shooting can return to the current path with positive probability on a reactive update, which is generic under positive rejection probability of the identity proposal event.
+\end{proof}
+
+\begin{remark}
+Irreducibility follows from reshuffle alone; the proof makes the supporting measure argument explicit. Ergodicity (convergence of time averages to $\pi$-expectations) additionally needs aperiodicity and Harris recurrence, which hold under mild conditions on the proposal and continuity of the acceptance probability on path space; we do not pursue measure-theoretic minimal hypotheses here because the practical chain uses a finite-state representation after discretization of storage.
+\end{remark}
+
+\subsection{Connection to Boltzmann Generators}
+
+\citet{falkner2023} interpret deep equilibrium generators as defining $P(\mathcal{X})$ and modify them with TPS-style moves to sample rare fluctuations. The present setting is the same formal object with a different $T_i$: a pretrained denoising map with engineered noise rather than a learned stochastic integrator for a physical force field. The path probability~\eqref{eq:forward-kernel-product} is what makes TPS a diagnostic. If two models assign similar single-frame marginals but very different weights to classes of trajectories, that difference shows up only in path space.
+
+\subsection{Extended Ensemble Notation and the Move Mix Used Here}
+
+Following \citet{falkner2023}, one may augment path MCMC with an auxiliary shooting index $\hat{k}$ and work with $\pi(\mathcal{X}, \hat{k}) \propto H_{AB}(\mathcal{X}) P(\mathcal{X}) p(\hat{k}\mid \mathcal{X})$. The OpenPathSampling configuration used in our experiments randomizes the shooting frame each step and mixes three kernels: forward shooting with probability $0.45$, backward shooting with probability $0.45$, and global reshuffle with probability $0.10$. Each kernel preserves the correct stationary law when composed with the appropriate acceptance rule; the mixture therefore preserves the same law. The reshuffle probability is modest in weight but decisive for Theorem~\ref{thm:ergodicity-full}.
+
+The TPS moves above are defined for an abstract kernel~\eqref{eq:forward-kernel-product}.
+The next section specifies the noise schedule, EDM preconditioning, and churn
+that define $T_i$ for Boltz-2's reverse sampler.

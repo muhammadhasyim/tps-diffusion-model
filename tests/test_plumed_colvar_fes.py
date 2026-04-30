@@ -77,6 +77,38 @@ def test_run_fes_rejects_empty_colvar(tmp_path: Path) -> None:
         )
 
 
+def test_run_fes_from_reweighting_script_3d_internal(tmp_path: Path) -> None:
+    """Three CVs use internal NumPy KDE (no PLUMED FES_from_Reweighting.py)."""
+    from genai_tps.simulation.plumed_colvar_fes import run_fes_from_reweighting_script
+
+    opes_dir = tmp_path / "opes_states"
+    opes_dir.mkdir(parents=True)
+    colvar = opes_dir / "COLVAR"
+    lines = ["#! FIELDS time lig_rmsd lig_dist lig_contacts opes.bias"]
+    for i in range(120):
+        lines.append(
+            f"{float(i * 10):.6f} {1.0 + 0.01 * (i % 9):.6f} "
+            f"{2.0 + 0.02 * (i % 7):.6f} {100.0 + 0.5 * (i % 5):.6f} "
+            f"{-2.0 + 0.1 * (i % 11):.6f}"
+        )
+    colvar.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    outfile = opes_dir / "fes_reweighted_3d.dat"
+    run_fes_from_reweighting_script(
+        colvar_path=colvar,
+        outfile=outfile,
+        temperature_k=300.0,
+        sigma="0.3,0.5,2.0",
+        cv_names="lig_rmsd,lig_dist,lig_contacts",
+        grid_bin="6,7,5",
+        skiprows=0,
+        blocks=1,
+    )
+    assert outfile.is_file()
+    body = outfile.read_text(encoding="utf-8")
+    assert "lig_rmsd lig_dist lig_contacts file.free" in body
+    assert "genai_grid_bins 6 7 5" in body
+
+
 def test_run_fes_raises_if_outfile_wrong_parent(tmp_path: Path) -> None:
     from genai_tps.simulation.plumed_colvar_fes import (
         fes_from_reweighting_script_path,

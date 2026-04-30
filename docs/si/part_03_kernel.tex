@@ -1,0 +1,137 @@
+\section{Extended State, Transition Kernel, and Jacobians for Boltz-2}
+\label{sec:kernel-full}
+
+Sections~\ref{sec:diffusion-boltz}--\ref{sec:tps-foundations} specify the
+discrete-time structure and acceptance logic. We now freeze the one-step map
+$T_i$ to the Boltz-2 implementation: random rigid motion, churn noise, and an
+EDM-preconditioned denoiser. Storing augmentation in the path state keeps
+$P(\mathcal{X})$ aligned with the code and avoids hidden Jacobian terms in
+forward shooting \citep{falkner2023}. We then record inversion for backward
+shooting, the extended log path density, Jacobian diagnostics, the repository's
+two-way log-ratio, and two implementation notes (indexing and non-finite guards).
+
+\subsection{Why the State Is Extended}
+
+Boltz-2 applies a random rigid motion to centered coordinates before injecting churn noise and calling the denoiser. If one ignored the draw $(R_i,\tau_i)$ and tried to write a kernel only on $x_i$, one would be conditioning on hidden variables that the implementation actually samples. Option~A, which we adopt, stores $(R_i,\tau_i)$ in the path snapshot together with $x_i$ and the churn draw $\varepsilon_i$. The path measure is then a product of explicit priors times deterministic maps, which is the setting in which forward shooting attains $\Delta=0$ without hidden Jacobian surprises \citep{falkner2023}.
+
+Centroid $\bar{x}_i = M^{-1}\sum_m (x_i)_m$ is fixed from the coordinate frame before augmentation (mass weighting can replace uniform averaging where the code does so; our experiments use the same convention as the released Boltz-2 implementation). Augmentation reads
+\begin{equation}
+  \label{eq:se3-aug-si}
+  \tilde{x}_i = R_i (x_i - \bar{x}_i) + \tau_i,
+  \qquad
+  R_i \sim \Haar,\quad
+  \tau_i \sim \N(0, s_{\mathrm{trans}}^2 I).
+\end{equation}
+Churn noise is
+\begin{equation}
+  \label{eq:churn-si}
+  x^{\mathrm{noisy}}_i = \tilde{x}_i + \varepsilon_i,
+  \qquad
+  \varepsilon_i \sim \N(0, v_i I),
+  \qquad
+  v_i = \eta^2(\hat{t}_i^2 - \sigma_{i-1}^2),
+\end{equation}
+with $\hat{t}_i = \sigma_{i-1}(1+\gamma_i)$. The denoising map uses EDM preconditioning at $\hat{t}_i$:
+\begin{equation}
+  \label{eq:denoise-update-si}
+  x_{i+1} = (1+\alpha_i)\,x^{\mathrm{noisy}}_i
+            - \alpha_i\, D_\theta(x^{\mathrm{noisy}}_i, \hat{t}_i),
+  \qquad
+  \alpha_i = s\,(\sigma_i - \hat{t}_i)/\hat{t}_i,
+\end{equation}
+with a step-scale parameter $s$ set by the sampler configuration. The one-step extended kernel is
+\begin{align}
+  \label{eq:kernel-extended-si}
+  p\bigl(x_{i+1}, R_i, \tau_i, \varepsilon_i \mid x_i\bigr)
+  &= \Haar(R_i)\,
+     \N(\tau_i;\, 0, s_{\mathrm{trans}}^2 I)\,
+     \N(\varepsilon_i;\, 0, v_i I) \nonumber\\
+  &\quad \times
+     \delta\bigl(x_{i+1} - T_i(x_i; R_i,\tau_i,\varepsilon_i)\bigr).
+\end{align}
+
+Backward shooting inverts this composed map edge-by-edge rather than reversing
+time.
+
+\subsection{Inversion Used in Backward Shooting}
+
+Given $x_{i+1}$ and the stored augmentation, invert~\eqref{eq:se3-aug-si} by
+$x_i = R_i^\top(\tilde{x}_i - \tau_i) + \bar{x}_i$ once $\tilde{x}_i$ is known. Recovering $x^{\mathrm{noisy}}_i$ from~\eqref{eq:denoise-update-si} uses fixed-point iteration on the preconditioned network because $D_\theta$ is implicit in $x^{\mathrm{noisy}}$. The implementation uses a rescaled Picard map that remains contractive at low noise \citep{boltz2}; four iterations suffice in practice.
+
+With forward simulation and backward inversion specified, the path log-density
+in extended variables follows directly from~\eqref{eq:kernel-extended-si}.
+
+\subsection{Log Path Probability in Extended Variables}
+
+Let $\mathcal{X}_{\mathrm{ext}}$ denote a full path in extended form. Up to an additive constant from Haar normalization,
+\begin{equation}
+  \label{eq:logpath}
+  \log P_{\mathrm{ext}}(\mathcal{X}_{\mathrm{ext}})
+  = \log \rho(x_0)
+  + \sum_{i=0}^{L-1}
+    \Bigl[
+      \log \N(\tau_i;\, 0, s_{\mathrm{trans}}^2 I)
+      + \log \N(\varepsilon_i;\, 0, v_i I)
+    \Bigr].
+\end{equation}
+Equation~\eqref{eq:logpath} is the discrete analogue of the log path weights used for Boltzmann generators \citep{falkner2023}. Translation and Haar factors cancel between $P$ and the proposal in forward shooting because both draw fresh variables from the same priors; only ratios of Gaussian densities on $\varepsilon_i$ survive when comparing paths that share schedule parameters.
+
+Coordinate-parameterized densities would insert Jacobians of $\varepsilon_i \mapsto x_{i+1}$;
+we record their structure next for diagnostics and cancellation arguments.
+
+\subsection{Jacobian of the Noise-to-State Map}
+
+If one insists on a density on $x_{i+1}$ given $x_i$ induced by Gaussian $\varepsilon_i$, the change-of-variables formula adds $-\log|\det J_i|$ with
+\begin{equation}
+  \label{eq:jacobian-exact-si}
+  J_i = \frac{\partial x_{i+1}}{\partial \varepsilon_i}
+  = \beta_i I + \mu_i \,\nabla_z f_\theta\Big|_{z = c_{\mathrm{in}}(\hat{t}_i)\, x^{\mathrm{noisy}}_i}.
+\end{equation}
+where
+$\beta_i = 1 + \alpha_i(1 - c_{\mathrm{skip}}(\hat{t}_i))$ and
+$\mu_i = -\alpha_i\, c_{\mathrm{out}}(\hat{t}_i)\, c_{\mathrm{in}}(\hat{t}_i)$.
+This object is state dependent through the Jacobian of the inner network. The diagnostic ``scalar schedule Jacobian'' replaces $\nabla_z f_\theta$ by zero, giving $\log|\det J_i| \approx 3M \log|\beta_i|$. That approximation tracks how the EDM outer scaling stretches volume but ignores representation learning.
+
+\begin{remark}[When the exact Jacobian matters]
+Forward shooting with resampled $\varepsilon_i$ pairs the same Jacobian factors in target and proposal densities for identical schedule indices, so schedule-only scalar Jacobians cancel in acceptance ratios (Proposition~\ref{prop:jacobian-cancel-si}). Backward shooting is different: the proposal density $q_{\mathrm{bwd}}$ need not generate the same Jacobian determinant as the forward pushforward unless one derives $q_{\mathrm{bwd}}$ as an explicit inverse map with its own Jacobian correction. The implementation follows the extended-variable Hastings ratio~\eqref{eq:deltabwd-full}; inserting the exact~\eqref{eq:jacobian-exact-si} into $q_{\mathrm{bwd}}$ without a matched derivation would break balance.
+\end{remark}
+
+\begin{proposition}[Cancellation of scalar Jacobians in forward shooting]
+\label{prop:jacobian-cancel-si}
+Fix a shooting index $k$. Suppose forward shooting resamples $(R_i,\tau_i,\varepsilon_i)$ for $i \geq k$ from their priors and leaves the prefix unchanged. Suppose the acceptance uses log weights that include schedule-only terms $-3M \log|\beta_i|$ for each resampled step. Then those Jacobian contributions cancel between the numerator and denominator of the Metropolis ratio for any two proposals that use the same schedule.
+\end{proposition}
+
+\begin{proof}
+Both the target $P$ and the proposal attach the same product of Haar, translation, and Gaussian factors to the resampled variables. Scalar Jacobians depend only on $i$ through $\alpha_i$ and the EDM scalars at $\hat{t}_i$, hence are identical for the old and new path at each index $i \geq k$. Ratios cancel termwise.
+\end{proof}
+
+The Hastings stack in the repository accumulates forward and backward log terms
+separately; we match that bookkeeping to~\eqref{eq:deltabwd-full}.
+
+\subsection{Two-Way Log Ratio Used in Code}
+
+Write $\log p_{\mathrm{fwd}}(x_{i+1}\mid x_i)$ for the log Gaussian on $\varepsilon_i$ plus any included Jacobian term, and $\log p_{\mathrm{bwd}}(x_i\mid x_{i+1})$ for the log density of backward Gaussian noise that reconstructs the prefix. The Hastings correction for a prefix resample up to $k$ is
+\begin{equation}
+  \label{eq:logr-impl-si}
+  \log r
+  = (\mathrm{lf\_new} - \mathrm{lf\_old})
+  + (\mathrm{lb\_old} - \mathrm{lb\_new})
+  + \bigl(\log\rho(x_0^{\mathrm{n}}) - \log\rho(x_0^{\mathrm{o}})\bigr),
+\end{equation}
+in the notation of the repository, where $\mathrm{lf}$ accumulates forward contributions and $\mathrm{lb}$ backward contributions along the respective prefixes.
+
+Two practical details affect whether~\eqref{eq:logr-impl-si} matches the intended
+extended path: tensor indexing for augmentation and guards on non-finite network
+outputs.
+
+\subsection{Augmentation Indexing in the Implementation}
+
+When the backward routine generates frame $x_i$ from $x_{i+1}$, it samples $(R_i,\tau_i)$ and stores them on the frame indexed as the output of that call. For noise recovery along an edge $(s_0,s_1)$ representing $(x_i,x_{i+1})$, the augmentation that entered the \emph{forward} map producing $x_{i+1}$ from $x_i$ is the one attached to the $x_i$ snapshot ($s_0$ in code), not the parent of $x_{i+1}$. Using the wrong tensor swaps Haar-uniform rotations and breaks the intended cancellation even though the continuous state $x$ may look plausible.
+
+\subsection{NaN Guards}
+
+Neural denoisers can emit non-finite values on pathological geometries. The sampling stack short-circuits rigid alignment on bad inputs, falls back to the last good state inside the GPU core, zeros OPES bias contributions when coordinates fail finiteness tests, and rejects moves at the OpenPathSampling layer if probabilities are non-finite \citep{ops}. These are engineering necessities; they do not change the intended stationary distribution except on a measure-zero set of degeneracies.
+
+With $P_{\mathrm{ext}}$ and the move corrections fixed, Section~\ref{sec:opes-theory}
+biases the chain along terminal-frame collective variables while preserving the
+intended stationary law up to the adaptive-bias caveats stated there.

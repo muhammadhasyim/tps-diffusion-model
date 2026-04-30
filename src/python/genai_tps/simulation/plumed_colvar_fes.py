@@ -66,16 +66,19 @@ def run_fes_from_reweighting_script(
         Simulation temperature in Kelvin (passed as ``--temp``; kBT in kJ/mol
         inside the PLUMED script uses 0.0083144621 × T).
     sigma
-        KDE bandwidth(s), comma-separated (e.g. ``\"0.3,0.5\"`` for 2D OPES).
+        KDE bandwidth(s), comma-separated (e.g. ``\"0.3,0.5\"`` for 2D OPES,
+        or three values for 3D).
     cv_names
-        Comma-separated CV labels matching ``FIELDS`` names.
+        Comma-separated CV labels matching ``FIELDS`` names.  Three CVs use an
+        internal NumPy implementation (same KDE idea as the PLUMED script);
+        one or two CVs still invoke ``FES_from_Reweighting.py``.
     bias_name
         Bias column name (e.g. ``opes.bias``).
     grid_min, grid_max
         If set, forwarded as ``--min`` / ``--max`` (comma-separated per CV for
         2D).  If ``None``, the PLUMED script auto-fits bounds from the data.
     grid_bin
-        Comma-separated bin counts (default ``100,100`` for 2D).
+        Comma-separated bin counts (``100,100`` for 2D; three integers for 3D).
     skiprows
         Rows to skip after the header (burn-in).
     blocks
@@ -108,6 +111,52 @@ def run_fes_from_reweighting_script(
         raise ValueError(
             f"outfile parent must match COLVAR directory ({cwd}); got {outfile.parent}"
         )
+
+    cv_tokens = [c.strip() for c in cv_names.split(",") if c.strip()]
+    if len(cv_tokens) == 3:
+        if int(blocks) != 1:
+            raise ValueError(
+                "Three CV reweighted FES uses the internal 3D KDE path; "
+                "use --blocks 1 (block uncertainty not implemented for 3D)."
+            )
+        sig_parts = [float(x.strip()) for x in sigma.split(",") if x.strip()]
+        if len(sig_parts) != 3:
+            raise ValueError(
+                f"Three CVs require three comma-separated --sigma values; got {sigma!r}"
+            )
+        bin_parts = [int(float(x.strip())) for x in grid_bin.split(",") if x.strip()]
+        if len(bin_parts) != 3:
+            raise ValueError(
+                f"Three CVs require three comma-separated --bin values; got {grid_bin!r}"
+            )
+
+        def _triple_or_none(
+            raw: str | None,
+        ) -> tuple[float, float, float] | None:
+            if raw is None:
+                return None
+            parts = [float(x.strip()) for x in raw.split(",") if x.strip()]
+            if len(parts) != 3:
+                raise ValueError(
+                    f"Expected three comma-separated floats for grid bounds; got {raw!r}"
+                )
+            return (parts[0], parts[1], parts[2])
+
+        from genai_tps.simulation.reweighted_fes_kde import write_reweighted_fes_3d
+
+        write_reweighted_fes_3d(
+            colvar_path,
+            outfile,
+            temperature_k=float(temperature_k),
+            sigma=(sig_parts[0], sig_parts[1], sig_parts[2]),
+            cv_names=(cv_tokens[0], cv_tokens[1], cv_tokens[2]),
+            bias_name=bias_name,
+            grid_bin=(bin_parts[0], bin_parts[1], bin_parts[2]),
+            grid_min=_triple_or_none(grid_min),
+            grid_max=_triple_or_none(grid_max),
+            skiprows=int(skiprows),
+        )
+        return
 
     script = fes_from_reweighting_script_path(repo_root)
     if not script.is_file():

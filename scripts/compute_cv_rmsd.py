@@ -5,8 +5,8 @@ For each PDB in ``--pdb-dir``:
 
 1. Load the heavy-atom structure produced by Boltz.
 2. Add hydrogens with AMBER14 (``Modeller.addHydrogens``).
-3. Energy-minimise with AMBER14 + implicit GBSA-OBC2 on a CUDA GPU (falls back
-   to OpenCL then CPU if CUDA is unavailable).
+3. Energy-minimise with AMBER14 + explicit TIP3P solvent in a periodic box
+   (PME) on a CUDA GPU (falls back to OpenCL then CPU if CUDA is unavailable).
 4. Compute the Kabsch-aligned Cα-RMSD between the raw and minimised structures.
 5. Write per-structure results to ``--out-dir/rmsd_results.json``.
 6. Plot the distribution as ``--out-dir/rmsd_distribution.png``.
@@ -800,6 +800,45 @@ def _ligand_openmm_positions_from_pdb_heavy_atoms(
     return lig_pos, False
 
 
+def _add_explicit_tip3p_solvent(
+    topology: object,
+    positions: object,
+    forcefield: object,
+    *,
+    padding_nm: float = 1.0,
+    ionic_strength_molar: float = 0.15,
+) -> tuple[object, object]:
+    """Solvate *topology* with TIP3P water and neutralizing ions (OpenMM Modeller).
+
+    Parameters
+    ----------
+    topology, positions
+        Hydrogenated solute :class:`openmm.app.Topology` and positions.
+    forcefield
+        :class:`openmm.app.ForceField` that already includes ``amber14/tip3p.xml``.
+    padding_nm
+        Minimum distance from any solute atom to each box face (nm).
+    ionic_strength_molar
+        Ionic strength for added NaCl (molar), passed to ``addSolvent``.
+
+    Returns
+    -------
+    tuple
+        ``(topology_with_solvent, positions_with_solvent)``.
+    """
+    import openmm.app
+    from openmm import unit
+
+    modeller = openmm.app.Modeller(topology, positions)
+    modeller.addSolvent(
+        forcefield,
+        model="tip3p",
+        padding=float(padding_nm) * unit.nanometers,
+        ionicStrength=float(ionic_strength_molar) * unit.molar,
+    )
+    return modeller.topology, modeller.positions
+
+
 def build_md_simulation_from_pdb(
     pdb_path: Path,
     *,
@@ -814,11 +853,13 @@ def build_md_simulation_from_pdb(
     ligand_pose_debug_sdf_dir: Path | None = None,
     platform_properties: dict[str, str] | None = None,
 ) -> tuple[object, dict]:
-    """Build AMBER14 + implicit GBn2 Langevin :class:`openmm.app.Simulation` without minimising.
+    """Build AMBER14 + explicit TIP3P Langevin :class:`openmm.app.Simulation` without minimising.
 
-    Uses the same protonation / GAFF2 / PDBFixer logic as :func:`minimize_pdb`.
-    Intended for persistent OpenMM contexts in FES-guided RL (MD bursts on the
-    hot path avoid re-building the system).
+    After protonation, the solute is solvated in a periodic TIP3P water box with
+    physiological ionic strength, and electrostatics use PME. Uses the same
+    protonation / GAFF2 / PDBFixer logic as :func:`minimize_pdb`. Intended for
+    persistent OpenMM contexts in FES-guided RL (MD bursts on the hot path avoid
+    re-building the system).
 
     Parameters
     ----------
@@ -903,11 +944,8 @@ def build_md_simulation_from_pdb(
             orig_topology, orig_positions, ligand_smiles
         )
 
-    ff_paths = ["amber14-all.xml", "implicit/gbn2.xml"]
-    if has_ligand and ligand_smiles and _ligand_smiles_needs_tip3p_xml(
-        ligand_smiles
-    ):
-        ff_paths.append("amber14/tip3p.xml")
+    # Explicit TIP3P solvent (ions for GAFF ligands still use tip3p ion templates).
+    ff_paths = ["amber14-all.xml", "amber14/tip3p.xml"]
     ff = openmm.app.ForceField(*ff_paths)
     if has_ligand and ligand_smiles is not None:
         _register_ligand_params(ff, orig_topology, ligand_smiles)
@@ -1103,12 +1141,19 @@ def build_md_simulation_from_pdb(
         h_topology = modeller.topology
         h_positions = modeller.positions
 
+    h_topology, h_positions = _add_explicit_tip3p_solvent(
+        h_topology, h_positions, ff
+    )
+    meta["explicit_solvent"] = "tip3p"
+    meta["nonbonded_method"] = "PME"
+
     ca_h_idx = select_ca_indices(h_topology)
     meta["n_ca_atoms"] = len(ca_h_idx)
 
     system = ff.createSystem(
         h_topology,
-        nonbondedMethod=openmm.app.NoCutoff,
+        nonbondedMethod=openmm.app.PME,
+        nonbondedCutoff=1.0 * unit.nanometers,
         constraints=openmm.app.HBonds,
     )
     if extra_forces is not None:
@@ -1166,7 +1211,7 @@ def minimize_pdb(
     3. Prepares the structure for simulation (adds H via PDBFixer or Modeller).
     4. Re-selects Cα atoms from the hydrogen-added topology (atom indices shift
        after ``addHydrogens``).
-    5. Builds an AMBER14 / implicit-GBSA-OBC2 system and minimises.
+    5. Builds an AMBER14 / explicit-TIP3P (PME) system and minimises.
     6. Returns Kabsch-aligned Cα-RMSD (Å) between pre- and post-minimisation
        coordinates, plus the final potential energy.
 

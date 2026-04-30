@@ -1,0 +1,23 @@
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+
+We cast the Boltz-2 reverse sampler as a discrete-time Markov chain on an
+extended path space, derived the associated path measure and Metropolis--Hastings
+moves (including backward shooting and global reshuffle), analyzed Jacobian
+diagnostics in the extended-variable parameterization, and combined TPS with
+OPES bias on terminal-frame collective variables. On a $228$-residue
+protein--ligand co-folding example without MSA, unbiased TPS shows a concentrated
+terminal ensemble, while TPS+OPES exposes additional pose basins in a
+two-dimensional ligand projection.
+
+Natural extensions include varying MSA depth to test how evolutionary
+information reshapes path-level concentration; sweeps over OPES hyperparameters
+with reweighting checks; learned or nonlinear collective variables
+\citep{invernizzi2022}; and porting the same path MCMC stack to additional
+public structure generators for comparative diagnostics.
+
+\paragraph{Reproducibility.}
+The LaTeX source, sampling scripts, and analysis utilities for the figures and
+tables in Section~\ref{sec:experiments} are maintained in the project
+repository (\texttt{tps-diffusion-model}) alongside frozen configuration files
+for the reported runs.

@@ -146,9 +146,9 @@ dependencies:
   # processes (e.g. Boltz inference holds ~7 GiB, blocking a second CUDA client).
   # OpenCL clCreateContext (-6) has the same root cause (GPU busy).
 
-  # ── Additional force-field parameters (AMBER14, GBn2 implicit solvent) ──────
+  # ── Additional force-field parameters (AMBER14, explicit TIP3P / PME) ───────
   # openmmforcefields provides AMBER14 + GAFF2 + SMIRNOFF templates used by
-  # compute_cv_rmsd.minimize_pdb (amber14-all.xml, implicit/gbn2.xml).
+  # compute_cv_rmsd.minimize_pdb (amber14-all.xml, amber14/tip3p.xml).
   - openmmforcefields>=0.14
   # OpenFF Toolkit: OpenFF Molecule / protonation paths for GAFF2 ligands in compute_cv_rmsd.
   - openff-toolkit>=0.14.0

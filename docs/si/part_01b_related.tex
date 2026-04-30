@@ -1,0 +1,68 @@
+\section{Background and Related Work}
+\label{sec:related}
+
+The introduction argued that characterizing a generator requires path-level
+sampling, not only single draws from the terminal marginal. We now summarize the
+lines of work that make this program precise: classical TPS and its
+extensions to non-reversible dynamics, score-based diffusion and EDM samplers,
+structure prediction models and their known failure modes, adaptive biasing
+methods including OPES, and symmetry-aware generative modeling on molecular
+geometry.
+
+\paragraph{Transition path sampling.}
+Classical TPS targets reactive trajectories of (near-)equilibrium molecular
+dynamics by Monte Carlo moves in path space, using short-time propagators and,
+when available, microscopic reversibility to relate forward and backward
+kernels \citep{dellago1998,bolhuis2002}. For dynamics that are not the
+time-reversal of a known reference propagator---including learned generators and
+fixed-schedule denoisers---\citet{buijsman2020} formulated TPS with explicit
+backward proposals on path segments. \citet{falkner2023} conditioned deep
+Boltzmann generators for rare events using path weights analogous to those we
+use for a frozen denoiser. \citet{falkner2024} revisited shooting moves and
+acceptance ratios in this discrete-time, non-reversible setting. Our
+development follows these references and instantiates them for a public
+protein diffusion pipeline.
+
+\paragraph{Score-based diffusion and EDM.}
+Score-based models define a family of noisy laws and learn a score or denoiser
+across noise levels \citep{song2021,ho2020}. The EDM parameterization and
+sampler design of \citet{karras2022} match engineering practice in many
+structure predictors. For TPS, the relevant object is the \emph{discrete}
+transition law implemented in code (including optional churn between schedule
+levels), not a formal continuous-time limit. Section~\ref{sec:diffusion-boltz}
+makes that distinction explicit for Boltz-2.
+
+\paragraph{Generative protein structure models and evaluation.}
+Large multimodal predictors have achieved broad chemical coverage
+\citep{alphafold3,boltz2,rfaa}. Independent studies have highlighted
+miscalibration and memorization risks \citep{gopalan2025,skrinjar2025,hitawala2025}.
+Path sampling complements aggregate benchmarks by exposing the generator's
+stochastic landscape for a single input conditioning.
+
+\paragraph{Rare events, paths, and other generative modalities.}
+Rare-event analysis of autoregressive language models using path-space methods
+appears in \citet{dorman2026}. For diffusion on molecular energy landscapes,
+\citet{raja2025omtps} connect high-probability paths to an Onsager--Machlup
+action under SDE dynamics. Our setting differs: we take the generator's
+\emph{discrete} reverse kernel as given and target its induced path measure
+without gradient-based path optimization.
+
+\paragraph{Enhanced sampling and OPES.}
+Metadynamics and related methods flatten or reshape free-energy barriers along
+collective variables \citep{barducci2008}. OPES estimates a marginal along
+chosen CVs and applies a well-tempered bias toward a target visit distribution
+\citep{invernizzi2020,invernizzi2022}. We use OPES only as an outer bias on the
+terminal-frame CVs inside a TPS Metropolis correction
+(Section~\ref{sec:opes-theory}), with the caveats of adaptive bias documented
+there.
+
+\paragraph{Symmetry, quotients, and equivariance.}
+Internal molecular shape is invariant under global rigid motions; quotient-space
+diffusion \citep{xu2026quotient} and SE(3) equivariant architectures
+\citep{yim2023se,satorras2021,batzner2022,hoogeboom2022} formalize how learning
+and sampling should interact with symmetry. Boltz-2 samples in Euclidean
+coordinates with random augmentation; we explain how storing augmentation in
+the extended TPS state aligns Metropolis weights with the implementation.
+
+Having fixed the literature context, we next give a self-contained derivation of
+TPS for abstract discrete-time generators before specializing to diffusion.

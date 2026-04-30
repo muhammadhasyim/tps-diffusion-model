@@ -1,0 +1,55 @@
+\section{Discussion}
+\label{sec:discussion}
+
+The experiments in Section~\ref{sec:experiments} support a consistent
+qualitative picture for the studied input: Boltz-2's reverse diffusion under
+the reported configuration behaves like a sharply funneled stochastic map
+toward a dominant terminal basin, while TPS+OPES still surfaces persistent
+excursions to elevated ligand RMSD at non-negligible frequency along the biased
+chain. Interpreting those excursions requires separating three issues: (i) what
+the \emph{unbiased} path measure says about concentration; (ii) what a
+two-dimensional OPES projection reveals about a \emph{margin} of the path
+measure; and (iii) how much of the tail is attributable to adaptive bias updates
+versus genuine secondary basins of the underlying generator.
+
+\paragraph{Sharp funnel versus memorization.}
+A single forward pass cannot distinguish a sharply legitimate ensemble from an
+overly rigid memorized map. Unbiased TPS is designed to answer that distinction
+at the path level: if the induced path measure were diffuse, accepted paths
+would explore structurally diverse terminals at appreciable rates under the
+same move set. The observed sub-angstrom RMSD spread instead indicates that,
+for this input, most stochastic mass sits near one binding geometry. That
+conclusion is not a sampling artifact of forward shooting: each accepted path
+involves independent draws of augmentation and churn noise, so identical
+terminal packing reflects the generator rather than a failure to perturb the
+chain.
+
+\paragraph{OPES projections and caveats.}
+The two-dimensional OPES summaries should be read as biased-path statistics
+together with the fixed-bias lemma (Lemma~\ref{lem:opes-mh}) and the adaptive-bias
+remark in Section~\ref{sec:opes-theory}. Different $(\gamma, \mathrm{barrier},
+\mathrm{pace})$ choices change the visited kernel mixture and therefore the
+shape of reported surfaces. Secondary peaks can also arise from projection:
+distinct three-dimensional configurations can map to similar $(s_1,s_2)$.
+Cross-checking with diagnostic scalars logged alongside trajectories (clashes,
+Ramachandran outliers, lDDT, pLDDT) remains essential before chemical
+interpretation.
+
+\paragraph{Generality.}
+The same TPS construction applies to other generators cast as explicit
+discrete-time Markov kernels with tractable noise priors, including many
+score-based samplers and flow-matching implementations \citep{lipman2022}. The
+Boltz-2-specific content is the map $T_i$, the schedule, and the augmentation
+stack; Sections~\ref{sec:kernel-full}--\ref{sec:diffusion-boltz} document that
+specialization pattern for reuse.
+
+\paragraph{Relation to Boltzmann generators and action methods.}
+Deep equilibrium models trained as Boltzmann generators define path measures
+similar to Eq.~\eqref{eq:forward-kernel-product} and have been combined with TPS
+for rare events \citep{falkner2023}. Complementary approaches interpret
+diffusion as inducing dynamics whose likely paths minimize an action functional
+\citep{raja2025omtps}. Our emphasis is diagnostic rather than control: we use
+exact MH corrections for the given pretrained sampler rather than learning a
+new path measure.
+
+Section~\ref{sec:conclusion} collects practical takeaways and open directions.

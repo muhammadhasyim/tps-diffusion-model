@@ -146,6 +146,62 @@ _ALA_ALA_PDB = textwrap.dedent("""\
 """)
 
 
+def _ala_ala_fake_boltz_structure_and_ref_coords():
+    """Minimal ``StructureV2``-like layout matching ``_ALA_ALA_PDB`` atom order.
+
+    Boltz's ``parse_pdb`` can fail on bare peptide fixtures; this mirrors the
+    fields :func:`genai_tps.simulation.openmm_boltz_bridge._boltz_atom_pdb_key` reads.
+    """
+    from boltz.data.const import chain_type_ids  # noqa: PLC0415
+    from boltz.data.types import AtomV2, Chain, Residue  # noqa: PLC0415
+
+    prot = int(chain_type_ids["PROTEIN"])
+    chains = np.array(
+        [("A", prot, 0, 0, 0, 0, 11, 0, 2, 0)],
+        dtype=Chain,
+    )
+    residues = np.array(
+        [
+            ("ALA", 0, 0, 0, 5, 0, 0, True, True),
+            ("ALA", 0, 1, 5, 6, 0, 0, True, True),
+        ],
+        dtype=Residue,
+    )
+    coords_block = np.array(
+        [
+            [1.201, 0.847, 0.100],
+            [2.285, -0.103, 0.000],
+            [3.669, 0.538, 0.000],
+            [4.008, 1.650, -0.400],
+            [2.166, -0.999, -1.231],
+            [4.592, -0.277, 0.400],
+            [5.961, 0.223, 0.400],
+            [6.940, -0.921, 0.000],
+            [7.100, -1.920, 0.800],
+            [6.343, 1.332, 1.381],
+            [7.643, -0.870, -1.000],
+        ],
+        dtype=np.float64,
+    )
+    pdb_names = ("N  ", "CA ", "C  ", "O  ", "CB ", "N  ", "CA ", "C  ", "O  ", "CB ", "OXT")
+    atoms = np.array(
+        [
+            (pdb_names[i], tuple(coords_block[i]), True, 0.0, 0.0)
+            for i in range(11)
+        ],
+        dtype=AtomV2,
+    )
+
+    class _S:
+        pass
+
+    s = _S()
+    s.chains = chains
+    s.residues = residues
+    s.atoms = atoms
+    return s, coords_block.copy()
+
+
 class TestMinimizePDB:
     def _write_ala_ala(self, tmp_path: Path) -> Path:
         pdb_path = tmp_path / "ala_ala.pdb"
@@ -163,8 +219,8 @@ class TestMinimizePDB:
         assert result["ca_rmsd_angstrom"] is not None
         assert result["ca_rmsd_angstrom"] >= 0.0, "RMSD must be non-negative"
         assert result["energy_kj_mol"] is not None
-        # AMBER14 + GBn2 implicit solvent potential energies for a small peptide
-        # are always negative (electrostatic and solvation contributions dominate)
+        # AMBER14 + explicit TIP3P: total potential energy is typically negative
+        # for a small solvated peptide at a near-equilibrium geometry.
         assert result["energy_kj_mol"] < 0.0, (
             f"Expected negative potential energy, got {result['energy_kj_mol']}"
         )
@@ -508,6 +564,88 @@ class TestLigandRdkitGraphAlignment:
         assert not gas, f"unexpected gas-phase ligand warnings: {gas}"
         chain_ids = {c.id.strip() for c in sim.topology.chains()}
         assert "B" in chain_ids
+
+
+class TestBuildMdExplicitTip3p:
+    """``build_md_simulation_from_pdb`` uses TIP3P solvation and PME."""
+
+    def test_periodic_box_and_water_present(self, tmp_path):
+        pytest.importorskip("openmm", reason="openmm not installed")
+        pytest.importorskip("pdbfixer", reason="PDBFixer required for ALA-ALA prep")
+
+        from compute_cv_rmsd import build_md_simulation_from_pdb  # type: ignore[import]
+
+        pdb_path = tmp_path / "ala_ala_box.pdb"
+        pdb_path.write_text(_ALA_ALA_PDB)
+        sim, meta = build_md_simulation_from_pdb(pdb_path, platform_name="CPU")
+
+        assert meta.get("explicit_solvent") == "tip3p"
+        assert meta.get("nonbonded_method") == "PME"
+        bv = sim.topology.getPeriodicBoxVectors()
+        assert bv is not None
+        n_hoh = sum(1 for r in sim.topology.residues() if r.name == "HOH")
+        assert n_hoh > 0
+
+
+class TestBoltzOrderedCoordsExcludeExplicitSolvent:
+    """Regression: Boltz atom count and WDSM-style coords exclude bulk TIP3P.
+
+    Mirrors :func:`genai_tps.simulation.openmm_md_runner` coordinate extraction:
+    ``n_boltz`` rows, each mapped from OpenMM via ``omm_idx``, while the solvated
+    topology has many more particles.
+    """
+
+    def test_boltz_rows_lt_openmm_and_match_shard_shape(self, tmp_path):
+        pytest.importorskip("openmm", reason="openmm not installed")
+        pytest.importorskip("pdbfixer", reason="PDBFixer required for solvation")
+        pytest.importorskip("boltz", reason="boltz dtypes required for fake structure")
+
+        import openmm.unit as u
+
+        from compute_cv_rmsd import build_md_simulation_from_pdb  # type: ignore[import]
+        from genai_tps.simulation.openmm_boltz_bridge import (  # noqa: PLC0415
+            build_openmm_indices_for_boltz_atoms,
+        )
+
+        pdb_path = tmp_path / "ala_ala_boltz_map.pdb"
+        pdb_path.write_text(_ALA_ALA_PDB)
+        structure, ref_coords = _ala_ala_fake_boltz_structure_and_ref_coords()
+        n_boltz = int(structure.atoms.shape[0])
+        assert n_boltz == 11
+
+        mol_dir = tmp_path / "mols"
+        mol_dir.mkdir(parents=True, exist_ok=True)
+
+        sim, meta = build_md_simulation_from_pdb(
+            pdb_path,
+            platform_name="CPU",
+            boltz_structure=structure,
+            boltz_coords_angstrom=ref_coords,
+            boltz_mol_dir=mol_dir,
+        )
+        assert meta.get("explicit_solvent") == "tip3p"
+        n_omm = sim.topology.getNumAtoms()
+        assert n_boltz < n_omm
+
+        state = sim.context.getState(getPositions=True)
+        pos_ang = state.getPositions(asNumpy=True).value_in_unit(u.angstrom)
+        pos_nm = state.getPositions(asNumpy=True)
+
+        omm_idx = build_openmm_indices_for_boltz_atoms(
+            structure,
+            sim.topology,
+            ref_coords_angstrom=ref_coords,
+            omm_positions_nm=pos_nm,
+        )
+        assert omm_idx.shape == (n_boltz,)
+        assert int(np.min(omm_idx)) >= 0
+
+        # Same indexing as openmm_md_runner.get_coords_boltz_order → wdsm_step_*.npz
+        coords = np.zeros((n_boltz, 3), dtype=np.float32)
+        for i in range(n_boltz):
+            coords[i] = pos_ang[int(omm_idx[i])]
+        assert coords.shape == (n_boltz, 3)
+        assert np.isfinite(coords).all()
 
 
 class TestMinimizePDBWithMonoatomicIon:

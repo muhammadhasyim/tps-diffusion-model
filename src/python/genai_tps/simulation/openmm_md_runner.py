@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -60,6 +62,22 @@ def _diagnostic_energy_and_large_forces(
         )
 
 
+_DEFAULT_OPES_WALL_MARGIN_ANGSTROM = 10.0
+
+
+def default_opes_upper_wall_dist_angstrom(
+    initial_ligand_pocket_dist_angstrom: float,
+    *,
+    margin_angstrom: float = _DEFAULT_OPES_WALL_MARGIN_ANGSTROM,
+) -> float:
+    """Return UPPER_WALLS ``AT`` distance (Å) from initial pocket COM distance + margin.
+
+    Used when ``--opes-wall-dist`` is omitted so OPES exploration is bounded
+    relative to the starting pose without unbinding to arbitrary distances.
+    """
+    return float(initial_ligand_pocket_dist_angstrom) + float(margin_angstrom)
+
+
 def _parse_opes_nlist_parameters(value: str) -> tuple[float, float]:
     """Parse ``'a,b'`` into PLUMED ``NLIST_PARAMETERS`` components."""
     parts = [p.strip() for p in value.split(",")]
@@ -68,6 +86,59 @@ def _parse_opes_nlist_parameters(value: str) -> tuple[float, float]:
             "expected two comma-separated floats, e.g. '4.0,0.4'"
         )
     return float(parts[0]), float(parts[1])
+
+
+def _parse_comma_int_list(value: str) -> list[int]:
+    """Parse ``'1,2,3'`` into a list of integers (empty string → empty list)."""
+    value = value.strip()
+    if not value:
+        return []
+    return [int(p.strip()) for p in value.split(",") if p.strip()]
+
+
+def _parse_oneopes_contact_pairs_boltz(value: str) -> list[tuple[int, int]]:
+    """Parse ``'p-l,p-l'`` Boltz global atom index pairs (hyphen-separated)."""
+    out: list[tuple[int, int]] = []
+    for chunk in value.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "-" not in chunk:
+            raise argparse.ArgumentTypeError(
+                f"invalid OneOPES contact pair {chunk!r}; expected 'protein_boltz-ligand_boltz'"
+            )
+        a, b = chunk.split("-", 1)
+        out.append((int(a.strip()), int(b.strip())))
+    return out
+
+
+def collect_water_oxygen_plumed_1based(topology: Any) -> list[int]:
+    """Return PLUMED 1-based indices of explicit-solvent water oxygen atoms.
+
+    Matches common Amber/OpenMM TIP3P residue names and oxygen atom labels.
+    """
+    water_like = {
+        "HOH",
+        "WAT",
+        "SOL",
+        "TIP3",
+        "TIP3P",
+        "SPC",
+        "SPC/E",
+        "OPC",
+        "OPC3",
+        "H2O",
+    }
+    o_names = {"O", "OW", "OH2"}
+    out: list[int] = []
+    for atom in topology.atoms():
+        res = str(atom.residue.name).strip().upper()
+        if res not in water_like:
+            continue
+        nm = str(atom.name).strip().upper()
+        if nm in o_names:
+            out.append(int(atom.index) + 1)
+    return out
 
 
 def _require_finite_positions(pos_nm: np.ndarray, *, context_msg: str) -> None:
@@ -123,9 +194,63 @@ def main() -> None:
     parser.add_argument("--n-steps", type=int, default=5_000_000, help="Total MD steps (default: 5M = 10ns at 2fs)")
     parser.add_argument("--save-every", type=int, default=1000, help="Save structure every N steps (default: 1000 = 2ps)")
     parser.add_argument("--deposit-pace", type=int, default=500, help="OPES kernel deposit every N steps")
-    parser.add_argument("--opes-barrier", type=float, default=5.0, help="OPES barrier (kJ/mol)")
+    parser.add_argument(
+        "--opes-barrier",
+        type=float,
+        default=40.0,
+        help="OPES BARRIER (kJ/mol); should exceed the largest FES barrier you target.",
+    )
     parser.add_argument("--opes-biasfactor", type=float, default=10.0)
-    parser.add_argument("--opes-sigma", type=str, default="0.3,0.5", help="Per-dim kernel sigma (Angstrom)")
+    parser.add_argument(
+        "--opes-sigma",
+        type=str,
+        default="0.3,0.5",
+        help=(
+            "Comma-separated kernel sigmas (Å): two for --bias-cv 2d or oneopes, "
+            "three for 3d."
+        ),
+    )
+    parser.add_argument(
+        "--bias-cv",
+        type=str,
+        default="2d",
+        choices=["2d", "3d", "oneopes"],
+        help=(
+            "PLUMED CV set: 2d = lig_rmsd+lig_dist; 3d adds lig_contacts (COORDINATION "
+            "ligand vs pocket heavy atoms); oneopes = PROJECTION_ON_AXIS (pp.proj) + "
+            "CONTACTMAP SUM (requires --opes-mode plumed; see --oneopes-* flags)."
+        ),
+    )
+    parser.add_argument(
+        "--opes-explore",
+        action="store_true",
+        help="Use OPES_METAD_EXPLORE instead of OPES_METAD (more aggressive exploration).",
+    )
+    parser.add_argument(
+        "--opes-wall-dist",
+        type=float,
+        default=None,
+        metavar="ANGSTROM",
+        help=(
+            "UPPER_WALLS at this distance (Å) with EXTRA_BIAS in OPES: on lig_dist "
+            "for --bias-cv 2d/3d; on pp.ext (orthogonal extension from the OneOPES "
+            "axis) for --bias-cv oneopes. If omitted in PLUMED mode, the wall is set "
+            "adaptively from the initial pose plus "
+            f"{_DEFAULT_OPES_WALL_MARGIN_ANGSTROM:g} Å."
+        ),
+    )
+    parser.add_argument(
+        "--opes-wall-kappa",
+        type=float,
+        default=200.0,
+        help="Harmonic constant (kJ/mol/Å^2) for --opes-wall-dist UPPER_WALLS.",
+    )
+    parser.add_argument(
+        "--coordination-r0",
+        type=float,
+        default=4.5,
+        help="COORDINATION R_0 (Å) for lig_contacts; matches protein_ligand_contacts r0 in observer mode.",
+    )
     parser.add_argument("--opes-restart", type=Path, default=None, help="Resume OPES from saved state")
     parser.add_argument(
         "--opes-kernel-cutoff",
@@ -155,10 +280,11 @@ def main() -> None:
         default="plumed",
         choices=["plumed", "observer"],
         help=(
-            "OPES implementation: 'plumed' applies OPES_METAD bias forces through "
-            "openmm-plumed (requires a PLUMED build with the 'opes' module — not "
-            "included in default conda-forge plumed). 'observer' runs unbiased MD "
-            "and updates Python OPESBias only (different physics than PLUMED OPES)."
+            "OPES implementation: 'plumed' applies OPES_METAD / OPES_METAD_EXPLORE "
+            "bias forces through openmm-plumed (requires a PLUMED build with the "
+            "'opes' module — not included in default conda-forge plumed). "
+            "'observer' runs unbiased MD and updates Python OPESBias only "
+            "(different physics than PLUMED OPES)."
         ),
     )
     parser.add_argument(
@@ -194,7 +320,110 @@ def main() -> None:
     )
     parser.add_argument("--ligand-smiles", type=str, default=None, help="chain:SMILES (e.g. B:CC...)")
     parser.add_argument("--mol-dir", type=Path, default=None, help="Boltz CCD mol dir for SMILES lookup")
+    parser.add_argument(
+        "--log-gpu-util",
+        action="store_true",
+        help=(
+            "Background thread: poll nvidia-smi for GPU utilization (CUDA/OpenCL). "
+            "Requires nvidia-smi on PATH; ignored for CPU platform."
+        ),
+    )
+    parser.add_argument(
+        "--gpu-util-interval",
+        type=float,
+        default=0.1,
+        metavar="SEC",
+        help="Wall-clock seconds between nvidia-smi samples when --log-gpu-util is set.",
+    )
+    parser.add_argument(
+        "--gpu-util-out",
+        type=Path,
+        default=None,
+        metavar="CSV",
+        help="GPU utilization CSV (default: <out>/gpu_utilization.csv).",
+    )
+    parser.add_argument(
+        "--opes-expanded-temp-max",
+        type=float,
+        default=None,
+        metavar="K",
+        help=(
+            "If set, append PLUMED OPES_EXPANDED + ECV_MULTITHERMAL on ENERGY with "
+            "TEMP_MAX=K (Kelvin; must exceed --temperature). Single-replica multithermal "
+            "expanded ensemble (replica-exchange-like target without multiple replicas)."
+        ),
+    )
+    parser.add_argument(
+        "--opes-expanded-pace",
+        type=int,
+        default=50,
+        help=(
+            "PLUMED OPES_EXPANDED PACE in MD steps (only used when "
+            "--opes-expanded-temp-max is set)."
+        ),
+    )
+    parser.add_argument(
+        "--oneopes-axis-p0-boltz",
+        type=_parse_comma_int_list,
+        default=None,
+        help=(
+            "Optional comma-separated Boltz global atom indices defining the deep-pocket "
+            "anchor COM for --bias-cv oneopes. Omit both axis flags to auto-split pocket Cα."
+        ),
+    )
+    parser.add_argument(
+        "--oneopes-axis-p1-boltz",
+        type=_parse_comma_int_list,
+        default=None,
+        help=(
+            "Optional comma-separated Boltz indices for the pocket-mouth anchor COM "
+            "(--bias-cv oneopes). Omit both axis flags to auto-split pocket Cα."
+        ),
+    )
+    parser.add_argument(
+        "--oneopes-contact-pairs-boltz",
+        type=_parse_oneopes_contact_pairs_boltz,
+        default=None,
+        help=(
+            "OneOPES CONTACTMAP pairs as 'prot-lig,prot-lig,...' using Boltz global "
+            "0-based atom indices. If omitted, zips pocket heavy vs ligand atoms (up to 6)."
+        ),
+    )
+    parser.add_argument(
+        "--oneopes-hydration-boltz",
+        type=_parse_comma_int_list,
+        default=None,
+        help=(
+            "Optional Boltz global atom indices for auxiliary water COORDINATION OPES "
+            "(each spot vs TIP3P oxygens). When set, water oxygens are taken from the "
+            "hydrogenated OpenMM topology unless --oneopes-water-oxygen-plumed is set."
+        ),
+    )
+    parser.add_argument(
+        "--oneopes-water-oxygen-plumed",
+        type=_parse_comma_int_list,
+        default=None,
+        help=(
+            "Optional comma-separated PLUMED 1-based water oxygen indices for the WO "
+            "GROUP (overrides auto-detection when --oneopes-hydration-boltz is set)."
+        ),
+    )
+    parser.add_argument("--oneopes-water-pace", type=int, default=40_000)
+    parser.add_argument("--oneopes-water-barrier", type=float, default=3.0)
+    parser.add_argument("--oneopes-water-biasfactor", type=float, default=5.0)
+    parser.add_argument("--oneopes-water-sigma", type=float, default=0.15)
     args = parser.parse_args()
+
+    if args.bias_cv == "oneopes" and args.opes_mode != "plumed":
+        parser.error("--bias-cv oneopes requires --opes-mode plumed")
+
+    if args.opes_expanded_temp_max is not None:
+        if args.opes_mode != "plumed":
+            parser.error("--opes-expanded-temp-max requires --opes-mode plumed")
+        if float(args.opes_expanded_temp_max) <= float(args.temperature):
+            parser.error(
+                "--opes-expanded-temp-max must be strictly greater than --temperature"
+            )
 
     if args.opes_mode == "plumed":
         from genai_tps.simulation.plumed_kernel import assert_plumed_opes_metad_available
@@ -209,6 +438,7 @@ def main() -> None:
         load_build_md_simulation_from_pdb,
     )
     from genai_tps.utils.compute_device import openmm_device_index_properties
+    from genai_tps.simulation.gpu_util_csv_logger import GpuUtilCsvLogger
 
     out = args.out.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -235,9 +465,65 @@ def main() -> None:
     indexer = PoseCVIndexer(structure, ref_coords, pocket_radius=args.pocket_radius)
     print(
         f"[MD-OPES] PoseCVIndexer: {len(indexer.ligand_idx)} ligand atoms, "
-        f"{len(indexer.pocket_ca_idx)} pocket Cas",
+        f"{len(indexer.pocket_ca_idx)} pocket Cas, "
+        f"{len(indexer.pocket_heavy_idx)} pocket heavy atoms",
         flush=True,
     )
+
+    opes_wall_dist_resolved: float | None = None
+    if args.opes_mode == "plumed":
+        if args.opes_wall_dist is not None:
+            opes_wall_dist_resolved = float(args.opes_wall_dist)
+        elif args.bias_cv == "oneopes":
+            from genai_tps.simulation.plumed_opes import (
+                compute_oneopes_pp_ext_angstrom,
+                default_oneopes_axis_boltz_indices,
+            )
+
+            p_axes = args.oneopes_axis_p0_boltz
+            q_axes = args.oneopes_axis_p1_boltz
+            if (p_axes is None) ^ (q_axes is None):
+                raise ValueError(
+                    "Supply both --oneopes-axis-p0-boltz and --oneopes-axis-p1-boltz, "
+                    "or omit both for automatic pocket Cα median split."
+                )
+            if p_axes is None:
+                bp0, bp1 = default_oneopes_axis_boltz_indices(
+                    indexer.pocket_ca_idx, ref_coords[:n_s], indexer.ligand_idx
+                )
+            else:
+                bp0 = np.asarray(p_axes, dtype=np.int64)
+                bp1 = np.asarray(q_axes, dtype=np.int64)
+            ext0 = compute_oneopes_pp_ext_angstrom(
+                ref_coords[:n_s],
+                axis_p0_boltz=bp0.tolist(),
+                axis_p1_boltz=bp1.tolist(),
+                ligand_boltz=indexer.ligand_idx.tolist(),
+            )
+            opes_wall_dist_resolved = default_opes_upper_wall_dist_angstrom(ext0)
+            print(
+                f"[MD-OPES] Adaptive --opes-wall-dist (oneopes pp.ext): initial extension="
+                f"{ext0:.4f} Å + margin={_DEFAULT_OPES_WALL_MARGIN_ANGSTROM:g} Å "
+                f"-> AT={opes_wall_dist_resolved:.4f} Å",
+                flush=True,
+            )
+        else:
+            from types import SimpleNamespace
+
+            from genai_tps.backends.boltz.collective_variables import (
+                ligand_pocket_distance,
+            )
+
+            x0 = torch.from_numpy(ref_coords[:n_s]).float().unsqueeze(0)
+            snap0 = SimpleNamespace(_tensor_coords_gpu=x0)
+            d0 = float(ligand_pocket_distance(snap0, indexer))
+            opes_wall_dist_resolved = default_opes_upper_wall_dist_angstrom(d0)
+            print(
+                f"[MD-OPES] Adaptive --opes-wall-dist: initial ligand-pocket COM "
+                f"distance={d0:.4f} Å + margin={_DEFAULT_OPES_WALL_MARGIN_ANGSTROM:g} Å "
+                f"-> AT={opes_wall_dist_resolved:.4f} Å",
+                flush=True,
+            )
 
     ligand_smiles = None
     if args.ligand_smiles:
@@ -250,8 +536,15 @@ def main() -> None:
 
     kbt_kjmol = 8.314e-3 * args.temperature
     sigma = [float(s) for s in args.opes_sigma.split(",")]
-    if len(sigma) != 2:
-        raise ValueError("--opes-sigma must contain two comma-separated values.")
+    if args.bias_cv == "3d":
+        expected_sigmas = 3
+    else:
+        expected_sigmas = 2
+    if len(sigma) != expected_sigmas:
+        raise ValueError(
+            f"--opes-sigma must contain {expected_sigmas} comma-separated values "
+            f"for --bias-cv {args.bias_cv!r} (got {len(sigma)})."
+        )
 
     opes = None
     if args.opes_mode == "observer":
@@ -262,7 +555,7 @@ def main() -> None:
             opes = OPESBias.load_state(args.opes_restart)
         else:
             opes = OPESBias(
-                ndim=2,
+                ndim=expected_sigmas,
                 kbt=kbt_kjmol,
                 barrier=args.opes_barrier,
                 biasfactor=args.opes_biasfactor,
@@ -279,11 +572,27 @@ def main() -> None:
         print(
             f"[MD-OPES] PLUMED OPES: barrier={args.opes_barrier:.1f} "
             f"biasfactor={args.opes_biasfactor:.1f} kbt={kbt_kjmol:.3f} kJ/mol "
-            f"sigma={sigma}",
+            f"bias_cv={args.bias_cv} explore={bool(args.opes_explore)} sigma={sigma}",
             flush=True,
         )
 
-    print(f"[MD-OPES] Building OpenMM simulation (AMBER14/GBn2, {args.platform})...", flush=True)
+    if args.opes_mode == "plumed" and args.opes_explore and opes_wall_dist_resolved is not None:
+        print(
+            "[MD-OPES] PLUMED: UPPER_WALLS uses EXTRA_BIAS, which is only available "
+            "for OPES_METAD (not OPES_METAD_EXPLORE); the generated deck uses OPES_METAD.",
+            flush=True,
+        )
+    if args.opes_mode == "plumed" and args.opes_expanded_temp_max is not None:
+        print(
+            f"[MD-OPES] PLUMED: OPES_EXPANDED multithermal TEMP_MAX="
+            f"{float(args.opes_expanded_temp_max):.1f} K, PACE={int(args.opes_expanded_pace)}",
+            flush=True,
+        )
+    print(
+        f"[MD-OPES] Building OpenMM simulation (AMBER14 + explicit TIP3P, PME, "
+        f"{args.platform})...",
+        flush=True,
+    )
     build_md = load_build_md_simulation_from_pdb()
     plumed_context: dict[str, object] = {}
 
@@ -293,6 +602,8 @@ def main() -> None:
 
         from genai_tps.simulation.plumed_opes import (
             add_plumed_opes_to_system,
+            default_oneopes_axis_boltz_indices,
+            default_oneopes_contact_pairs_boltz,
             generate_plumed_opes_script,
             write_rmsd_reference_pdb,
         )
@@ -325,10 +636,37 @@ def main() -> None:
                 "[MD-OPES] PLUMED ligand-pocket distance requires at least one "
                 "pocket C-alpha atom."
             )
+        if args.bias_cv == "3d" and len(indexer.pocket_heavy_idx) == 0:
+            raise RuntimeError(
+                "[MD-OPES] --bias-cv 3d requires pocket heavy atoms; "
+                "increase --pocket-radius or check the reference structure."
+            )
+        if args.bias_cv == "oneopes":
+            if len(indexer.pocket_ca_idx) < 2:
+                raise RuntimeError(
+                    "[MD-OPES] --bias-cv oneopes requires at least two pocket Cα atoms."
+                )
+            if args.oneopes_contact_pairs_boltz is None and len(indexer.pocket_heavy_idx) == 0:
+                raise RuntimeError(
+                    "[MD-OPES] --bias-cv oneopes needs pocket heavy atoms for default "
+                    "CONTACTMAP pairs unless --oneopes-contact-pairs-boltz is set; "
+                    "increase --pocket-radius or supply explicit pairs."
+                )
 
         ligand_plumed_idx = boltz_to_plumed_indices(indexer.ligand_idx, omm_idx_cb)
         pocket_plumed_idx = boltz_to_plumed_indices(indexer.pocket_ca_idx, omm_idx_cb)
+        pocket_heavy_plumed_idx = (
+            boltz_to_plumed_indices(indexer.pocket_heavy_idx, omm_idx_cb)
+            if args.bias_cv in ("3d", "oneopes")
+            else None
+        )
         align_plumed_idx = boltz_to_plumed_indices(rmsd_align_boltz, omm_idx_cb)
+        solute_boltz = np.unique(
+            np.concatenate([indexer.protein_idx, indexer.ligand_idx])
+        )
+        whole_molecule_plumed_idx = sorted(
+            boltz_to_plumed_indices(solute_boltz, omm_idx_cb)
+        )
         ref_pdb = out / "plumed_rmsd_reference.pdb"
         script_path = out / "plumed_opes.dat"
         write_rmsd_reference_pdb(
@@ -338,6 +676,71 @@ def main() -> None:
             align_plumed_idx,
             ref_pdb,
         )
+        expanded_state_rfile: Path | None = None
+        if args.opes_expanded_temp_max is not None and args.opes_restart is not None:
+            cand_exp = opes_dir / "STATE_EXPANDED"
+            if cand_exp.is_file():
+                expanded_state_rfile = cand_exp
+
+        oneopes_kw: dict = {}
+        if args.bias_cv == "oneopes":
+            assert pocket_heavy_plumed_idx is not None
+            p_axes = args.oneopes_axis_p0_boltz
+            q_axes = args.oneopes_axis_p1_boltz
+            if (p_axes is None) ^ (q_axes is None):
+                raise RuntimeError(
+                    "[MD-OPES] Supply both --oneopes-axis-p0-boltz and "
+                    "--oneopes-axis-p1-boltz, or omit both for automatic pocket Cα split."
+                )
+            if p_axes is None:
+                bp0, bp1 = default_oneopes_axis_boltz_indices(
+                    indexer.pocket_ca_idx, ref_coords[:n_s], indexer.ligand_idx
+                )
+            else:
+                bp0 = np.asarray(p_axes, dtype=np.int64)
+                bp1 = np.asarray(q_axes, dtype=np.int64)
+            p0_pl = boltz_to_plumed_indices(bp0.tolist(), omm_idx_cb)
+            p1_pl = boltz_to_plumed_indices(bp1.tolist(), omm_idx_cb)
+            if args.oneopes_contact_pairs_boltz is not None:
+                pairs_b = args.oneopes_contact_pairs_boltz
+            else:
+                pairs_b = default_oneopes_contact_pairs_boltz(
+                    indexer.pocket_heavy_idx, indexer.ligand_idx, max_pairs=6
+                )
+            cmap_pairs: list[tuple[int, int]] = []
+            for pr, li in pairs_b:
+                pp_i = boltz_to_plumed_indices([int(pr)], omm_idx_cb)[0]
+                li_i = boltz_to_plumed_indices([int(li)], omm_idx_cb)[0]
+                cmap_pairs.append((int(pp_i), int(li_i)))
+            hydr_b = list(args.oneopes_hydration_boltz or [])
+            hydr_pl = (
+                boltz_to_plumed_indices(hydr_b, omm_idx_cb) if hydr_b else []
+            )
+            wo_pl: list[int] | None = None
+            if hydr_b:
+                if args.oneopes_water_oxygen_plumed is not None and len(
+                    args.oneopes_water_oxygen_plumed
+                ) > 0:
+                    wo_pl = [int(x) for x in args.oneopes_water_oxygen_plumed]
+                else:
+                    wo_pl = collect_water_oxygen_plumed_1based(h_topology)
+                if not wo_pl:
+                    raise RuntimeError(
+                        "[MD-OPES] OneOPES hydration CVs requested but no water "
+                        "oxygens found in topology; pass --oneopes-water-oxygen-plumed."
+                    )
+            oneopes_kw = {
+                "oneopes_axis_p0_plumed_idx": p0_pl,
+                "oneopes_axis_p1_plumed_idx": p1_pl,
+                "oneopes_contactmap_pairs_plumed": cmap_pairs,
+                "oneopes_hydration_spot_plumed_idx": hydr_pl if hydr_pl else None,
+                "water_oxygen_plumed_idx": wo_pl,
+                "oneopes_water_pace": int(args.oneopes_water_pace),
+                "oneopes_water_barrier": float(args.oneopes_water_barrier),
+                "oneopes_water_biasfactor": float(args.oneopes_water_biasfactor),
+                "oneopes_water_sigma": float(args.oneopes_water_sigma),
+            }
+
         script = generate_plumed_opes_script(
             ligand_plumed_idx=ligand_plumed_idx,
             pocket_ca_plumed_idx=pocket_plumed_idx,
@@ -354,6 +757,18 @@ def main() -> None:
             kernel_cutoff=args.opes_kernel_cutoff,
             nlist_parameters=args.opes_nlist_parameters,
             print_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
+            cv_mode=args.bias_cv,
+            pocket_heavy_plumed_idx=pocket_heavy_plumed_idx,
+            coordination_r0=float(args.coordination_r0),
+            opes_variant="explore" if args.opes_explore else "metad",
+            upper_wall_dist=opes_wall_dist_resolved,
+            upper_wall_kappa=float(args.opes_wall_kappa),
+            use_pbc=True,
+            whole_molecule_plumed_idx=whole_molecule_plumed_idx,
+            opes_expanded_temp_max=args.opes_expanded_temp_max,
+            opes_expanded_pace=int(args.opes_expanded_pace),
+            opes_expanded_state_rfile=expanded_state_rfile,
+            **oneopes_kw,
         )
         script_path.write_text(script, encoding="utf-8")
         force, force_index = add_plumed_opes_to_system(
@@ -437,6 +852,11 @@ def main() -> None:
         _log_coord_stats_np("checkpoint_skip_minimize", pos_post_nm, unit_label="nm")
         _require_finite_positions(pos_post_nm, context_msg="initial context (minimize_steps=0)")
 
+    # WDSM shards (and CV tensors) use Boltz-ordered **solute-only** coordinates:
+    # explicit TIP3P and ions exist only in the OpenMM topology.  ``n_boltz`` is
+    # the Boltz-processed heavy-atom count from the topology NPZ; ``omm_idx`` maps
+    # each Boltz row to one OpenMM particle.  Bulk solvent is never written to
+    # ``wdsm_step_*.npz``.
     def get_coords_boltz_order(state=None):
         import openmm.unit as u
 
@@ -461,11 +881,31 @@ def main() -> None:
         from types import SimpleNamespace
 
         snap = SimpleNamespace(_tensor_coords_gpu=x)
-        from genai_tps.backends.boltz.collective_variables import ligand_pose_rmsd, ligand_pocket_distance
+        from genai_tps.backends.boltz.collective_variables import (
+            ligand_pocket_distance,
+            ligand_pose_rmsd,
+            protein_ligand_contacts,
+        )
 
         rmsd = float(ligand_pose_rmsd(snap, indexer))
         dist = float(ligand_pocket_distance(snap, indexer))
+        if args.bias_cv == "3d":
+            contacts = float(
+                protein_ligand_contacts(snap, indexer, r0=float(args.coordination_r0))
+            )
+            return np.array([rmsd, dist, contacts], dtype=np.float64)
         return np.array([rmsd, dist], dtype=np.float64)
+
+    if args.bias_cv == "3d":
+        _observer_bias_cv = "ligand_rmsd,ligand_pocket_dist,ligand_contacts"
+        _observer_bias_names = [
+            "ligand_rmsd",
+            "ligand_pocket_dist",
+            "ligand_contacts",
+        ]
+    else:
+        _observer_bias_cv = "ligand_rmsd,ligand_pocket_dist"
+        _observer_bias_names = ["ligand_rmsd", "ligand_pocket_dist"]
 
     print(f"\n{'='*60}")
     print(f"  OpenMM OPES-MD: {args.n_steps:,} steps ({args.n_steps * 2e-6:.1f} ns at 2fs)")
@@ -476,6 +916,45 @@ def main() -> None:
     cv_log = []
     n_saved = 0
     t0 = time.time()
+
+    gpu_logger: GpuUtilCsvLogger | None = None
+    gpu_csv: Path | None = None
+    if args.log_gpu_util:
+        if args.platform == "CPU":
+            print(
+                "[MD-OPES] --log-gpu-util ignored for --platform CPU.",
+                flush=True,
+            )
+        elif shutil.which("nvidia-smi") is None:
+            print(
+                "[MD-OPES] --log-gpu-util: nvidia-smi not found on PATH; skipping.",
+                flush=True,
+            )
+        else:
+            gpu_ord = (
+                int(args.openmm_device_index)
+                if args.openmm_device_index is not None
+                else 0
+            )
+            gpu_csv = (
+                args.gpu_util_out.expanduser().resolve()
+                if args.gpu_util_out is not None
+                else (out / "gpu_utilization.csv")
+            )
+            gpu_logger = GpuUtilCsvLogger(
+                gpu_csv,
+                float(args.gpu_util_interval),
+                gpu_ord,
+            )
+            if gpu_logger.start():
+                print(
+                    f"[MD-OPES] GPU util log: device {gpu_ord}, every "
+                    f"{float(args.gpu_util_interval):.3f}s -> {gpu_csv}",
+                    flush=True,
+                )
+            else:
+                gpu_logger = None
+                gpu_csv = None
 
     if args.opes_mode == "observer":
         if opes is None:
@@ -531,8 +1010,8 @@ def main() -> None:
             if completed % args.save_opes_every == 0:
                 opes.save_state(
                     opes_dir / f"opes_state_{completed:010d}.json",
-                    bias_cv="ligand_rmsd,ligand_pocket_dist",
-                    bias_cv_names=["ligand_rmsd", "ligand_pocket_dist"],
+                    bias_cv=_observer_bias_cv,
+                    bias_cv_names=_observer_bias_names,
                 )
 
             if completed % args.progress_every == 0:
@@ -541,18 +1020,19 @@ def main() -> None:
                 elapsed = time.time() - t0
                 rate = completed / elapsed
                 eta = (args.n_steps - completed) / rate if rate > 0 else float("inf")
+                cv_str = ", ".join(f"{v:.3f}" for v in cv)
                 print(
                     f"[MD-OPES] step {completed:>10,}/{args.n_steps:,} | "
                     f"{rate:.0f} steps/s | ETA {eta/60:.1f}min | "
-                    f"CV=[{cv[0]:.3f}, {cv[1]:.3f}] | "
+                    f"CV=[{cv_str}] | "
                     f"kernels={opes.n_kernels} | saved={n_saved}",
                     flush=True,
                 )
 
         opes.save_state(
             out / "opes_state_final.json",
-            bias_cv="ligand_rmsd,ligand_pocket_dist",
-            bias_cv_names=["ligand_rmsd", "ligand_pocket_dist"],
+            bias_cv=_observer_bias_cv,
+            bias_cv_names=_observer_bias_names,
         )
     else:
         import openmm.unit as u
@@ -601,15 +1081,19 @@ def main() -> None:
                 elapsed = time.time() - t0
                 rate = step / elapsed
                 eta = (args.n_steps - step) / rate
+                cv_str = ", ".join(f"{v:.3f}" for v in cv)
                 print(
                     f"[MD-OPES] step {step:>10,}/{args.n_steps:,} | "
                     f"{rate:.0f} steps/s | ETA {eta/60:.1f}min | "
-                    f"CV=[{cv[0]:.3f}, {cv[1]:.3f}] | "
+                    f"CV=[{cv_str}] | "
                     f"bias={bias_energy_kj:.3f} kJ/mol | saved={n_saved}",
                     flush=True,
                 )
                 while next_progress <= step:
                     next_progress += int(args.progress_every)
+
+    if gpu_logger is not None:
+        gpu_logger.stop()
 
     with open(out / "cv_log.json", "w") as f:
         json.dump(cv_log, f)
@@ -633,6 +1117,8 @@ def main() -> None:
         "plumed_reference_pdb": str(plumed_context.get("reference_pdb"))
         if "reference_pdb" in plumed_context
         else None,
+        "gpu_utilization_csv": str(gpu_csv) if gpu_csv is not None else None,
+        "gpu_util_interval_s": float(args.gpu_util_interval) if gpu_csv else None,
     }
     with open(out / "md_summary.json", "w") as f:
         json.dump(summary, f, indent=2)

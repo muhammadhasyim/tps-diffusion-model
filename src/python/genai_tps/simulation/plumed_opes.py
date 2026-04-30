@@ -5,7 +5,21 @@ resulting :class:`openmmplumed.PlumedForce` to an OpenMM ``System``.  The CVs
 mirror the existing Python diagnostics:
 
 * ligand pose RMSD after optimal alignment on pocket C-alpha atoms;
-* ligand-to-pocket geometric-center distance.
+* ligand-to-pocket geometric-center distance;
+* optional ligand–pocket heavy-atom coordination (``COORDINATION``), matching
+  :func:`genai_tps.backends.boltz.collective_variables.protein_ligand_contacts`;
+* optional ``cv_mode="oneopes"``: ``PROJECTION_ON_AXIS`` (``pp.proj`` / ``pp.ext``),
+  ``CONTACTMAP SUM``, optional water ``COORDINATION`` sites with auxiliary
+  ``OPES_METAD_EXPLORE`` biases (OneOPES / JPCL 2024 style).
+
+The deck can use ``OPES_METAD`` (default) or ``OPES_METAD_EXPLORE`` and optional
+``UPPER_WALLS`` on ``lig_dist`` with ``EXTRA_BIAS`` so OPES accounts for the wall.
+Optionally, ``OPES_EXPANDED`` + ``ECV_MULTITHERMAL`` on ``ENERGY`` targets a
+multithermal expanded ensemble in a single replica (replica-exchange-like sampling
+without multiple walkers; see PLUMED ``OPES_EXPANDED`` documentation).
+With periodic explicit solvent, pass ``use_pbc=True`` and ``whole_molecule_plumed_idx``
+so ``WHOLEMOLECULES`` unwraps the solute and CV lines omit ``NOPBC`` for
+minimum-image distances.
 
 All atom indices passed to this module must already be PLUMED indices, i.e.
 1-based OpenMM particle indices.
@@ -16,15 +30,22 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
 __all__ = [
     "add_plumed_opes_to_system",
+    "compute_oneopes_pp_ext_angstrom",
+    "default_oneopes_axis_boltz_indices",
+    "default_oneopes_contact_pairs_boltz",
+    "default_oneopes_contact_pairs_plumed",
     "generate_plumed_opes_script",
     "write_rmsd_reference_pdb",
 ]
+
+OpesCvMode = Literal["2d", "3d", "oneopes"]
+OpesMetadVariant = Literal["metad", "explore"]
 
 
 def _format_float(value: float) -> str:
@@ -66,6 +87,118 @@ def _format_indices(indices: Sequence[int]) -> str:
     if min(values) < 1:
         raise ValueError("PLUMED atom indices must be 1-based positive integers.")
     return ",".join(str(i) for i in values)
+
+
+def _com_mean(coords: np.ndarray, indices: Sequence[int]) -> np.ndarray:
+    """Unweighted geometric mean of *coords* at *indices* (0-based global atom rows)."""
+    idx = np.asarray(list(indices), dtype=np.int64)
+    if idx.size == 0:
+        raise ValueError("COM index list must be non-empty.")
+    pts = np.asarray(coords, dtype=np.float64)[idx]
+    return pts.mean(axis=0)
+
+
+def compute_oneopes_pp_ext_angstrom(
+    ref_coords_angstrom: np.ndarray,
+    *,
+    axis_p0_boltz: Sequence[int],
+    axis_p1_boltz: Sequence[int],
+    ligand_boltz: Sequence[int],
+) -> float:
+    """Return ``pp.ext`` (Å): orthogonal distance from ligand COM to pocket axis.
+
+    The axis passes through the geometric centers of *axis_p0_boltz* and
+    *axis_p1_boltz*; the ligand position is the COM of *ligand_boltz* rows in
+    *ref_coords_angstrom* (Boltz-ordered, same layout as :class:`PoseCVIndexer`).
+    """
+    ref = np.asarray(ref_coords_angstrom, dtype=np.float64)
+    p0 = _com_mean(ref, axis_p0_boltz)
+    p1 = _com_mean(ref, axis_p1_boltz)
+    lig = _com_mean(ref, ligand_boltz)
+    axis = p1 - p0
+    norm = float(np.linalg.norm(axis))
+    if norm < 1e-9:
+        raise ValueError("OneOPES axis anchors are degenerate (zero-length axis).")
+    axis_u = axis / norm
+    v = lig - p0
+    # extension = | v - (v·û) û |
+    along = float(np.dot(v, axis_u))
+    perp = v - along * axis_u
+    return float(np.linalg.norm(perp))
+
+
+def default_oneopes_axis_boltz_indices(
+    pocket_ca_boltz: Sequence[int],
+    ref_coords_angstrom: np.ndarray,
+    ligand_boltz: Sequence[int],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Split pocket Cα atoms into proximal / distal anchors along the binding axis.
+
+    Proximal (*p0*) = pocket Cα atoms closer than the median distance to the
+    ligand COM; distal (*p1*) = the remainder.  This mirrors the PLUMED-NEST
+    OneOPES ABFE convention (deep pocket vs solvent-facing pocket mouth).
+    """
+    ca = np.asarray(list(pocket_ca_boltz), dtype=np.int64)
+    if ca.size < 2:
+        raise ValueError(
+            "default_oneopes_axis_boltz_indices requires at least two pocket Cα atoms."
+        )
+    ref = np.asarray(ref_coords_angstrom, dtype=np.float64)
+    lig_com = _com_mean(ref, ligand_boltz)
+    d = np.linalg.norm(ref[ca] - lig_com.reshape(1, 3), axis=1)
+    med = float(np.median(d))
+    p0 = ca[d <= med]
+    p1 = ca[d > med]
+    if p0.size == 0 or p1.size == 0:
+        # Degenerate median split: fall back to first half / second half ordering.
+        k = max(1, ca.size // 2)
+        p0 = ca[:k]
+        p1 = ca[k:]
+    if p0.size == 0 or p1.size == 0:
+        raise ValueError(
+            "Could not form two non-empty pocket Cα groups for OneOPES axis anchors."
+        )
+    return p0, p1
+
+
+def default_oneopes_contact_pairs_boltz(
+    pocket_heavy_boltz: Sequence[int],
+    ligand_boltz: Sequence[int],
+    *,
+    max_pairs: int = 6,
+) -> list[tuple[int, int]]:
+    """Zip pocket-heavy vs ligand **Boltz** global indices into (protein, ligand) pairs."""
+    ph = [int(i) for i in pocket_heavy_boltz]
+    lg = [int(i) for i in ligand_boltz]
+    if not ph or not lg:
+        raise ValueError(
+            "default_oneopes_contact_pairs_boltz requires non-empty pocket and ligand lists."
+        )
+    n = min(len(ph), len(lg), int(max_pairs))
+    return [(ph[i], lg[i]) for i in range(n)]
+
+
+def default_oneopes_contact_pairs_plumed(
+    pocket_heavy_plumed_idx: Sequence[int],
+    ligand_plumed_idx: Sequence[int],
+    *,
+    max_pairs: int = 6,
+) -> list[tuple[int, int]]:
+    """Zip pocket-heavy vs ligand PLUMED indices into (protein, ligand) pairs.
+
+    This is a **deterministic fallback** for automated decks when no explicit
+    contact map is supplied; for production runs, prefer hand-curated pairs from
+    crystal-structure chemistry.
+    """
+    ph = [int(i) for i in pocket_heavy_plumed_idx]
+    lg = [int(i) for i in ligand_plumed_idx]
+    if not ph or not lg:
+        raise ValueError(
+            "default_oneopes_contact_pairs_plumed requires non-empty pocket and "
+            "ligand PLUMED index lists."
+        )
+    n = min(len(ph), len(lg), int(max_pairs))
+    return [(ph[i], lg[i]) for i in range(n)]
 
 
 def _positions_to_angstrom(positions: Any) -> np.ndarray:
@@ -193,12 +326,50 @@ def generate_plumed_opes_script(
     kernel_cutoff: float | None = None,
     nlist_parameters: tuple[float, float] | None = None,
     print_colvar_heavy_flush: bool = False,
+    cv_mode: OpesCvMode = "2d",
+    pocket_heavy_plumed_idx: Sequence[int] | None = None,
+    coordination_r0: float = 4.5,
+    coordination_nn: int = 6,
+    coordination_mm: int = 12,
+    opes_variant: OpesMetadVariant = "metad",
+    upper_wall_dist: float | None = None,
+    upper_wall_kappa: float = 200.0,
+    use_pbc: bool = False,
+    opes_expanded_temp_max: float | None = None,
+    opes_expanded_pace: int = 50,
+    opes_expanded_observation_steps: int = 100,
+    opes_expanded_print_stride: int = 100,
+    opes_expanded_state_rfile: Path | None = None,
+    oneopes_axis_p0_plumed_idx: Sequence[int] | None = None,
+    oneopes_axis_p1_plumed_idx: Sequence[int] | None = None,
+    oneopes_contactmap_pairs_plumed: Sequence[tuple[int, int]] | None = None,
+    contactmap_switch_r0: float = 5.5,
+    contactmap_switch_d0: float = 0.0,
+    contactmap_switch_nn: int = 4,
+    contactmap_switch_mm: int = 10,
+    oneopes_hydration_spot_plumed_idx: Sequence[int] | None = None,
+    water_oxygen_plumed_idx: Sequence[int] | None = None,
+    oneopes_water_pace: int = 40000,
+    oneopes_water_barrier: float = 3.0,
+    oneopes_water_biasfactor: float = 5.0,
+    oneopes_water_sigma: float = 0.15,
+    oneopes_water_switch_r0: float = 2.5,
+    oneopes_water_switch_d0: float = 0.0,
+    oneopes_water_switch_nn: int = 6,
+    oneopes_water_switch_mm: int = 10,
+    oneopes_water_switch_d_max: float = 6.0,
+    oneopes_water_nl_cutoff: float = 16.0,
+    oneopes_water_nl_stride: int = 20,
+    oneopes_water_kernel_cutoff: float | None = None,
 ) -> str:
-    """Generate a two-dimensional PLUMED ``OPES_METAD`` input script.
+    """Generate a PLUMED ``OPES_METAD`` or ``OPES_METAD_EXPLORE`` input script.
 
     Parameters use PLUMED units: Angstrom for lengths, Kelvin for temperature,
-    and kJ/mol for energies.  ``sigma`` must contain two values corresponding
-    to ligand RMSD and ligand-pocket distance.
+    and kJ/mol for energies.  The length of *sigma* must match the number of
+    biased collective variables: two for ``cv_mode="2d"`` (``lig_rmsd``,
+    ``lig_dist``), three for ``cv_mode="3d"`` (adds ``lig_contacts``), two for
+    ``cv_mode="oneopes"`` (``pp.proj`` + ``cmap`` from ``PROJECTION_ON_AXIS`` and
+    ``CONTACTMAP SUM``).
 
     ``KERNEL_CUTOFF`` controls truncated Gaussian kernel support (in units of
     per-dimension ``SIGMA``).  PLUMED's internal default follows
@@ -217,9 +388,99 @@ def generate_plumed_opes_script(
     the ``PRINT`` patch, e.g. the ``tps/v2.9.2-print-heavy-flush`` branch on the
     forked submodule). Stock conda PLUMED without that patch will error on the
     unknown keyword.
+
+    *opes_variant* selects ``OPES_METAD`` (``"metad"``) or ``OPES_METAD_EXPLORE``
+    (``"explore"``).  When *upper_wall_dist* is set, an ``UPPER_WALLS`` restraint
+    is added and referenced via ``EXTRA_BIAS`` on the main OPES line: for
+    ``cv_mode`` ``"2d"`` / ``"3d"`` the wall acts on ``lig_dist``; for
+    ``cv_mode="oneopes"`` it acts on ``pp.ext`` (orthogonal distance from the
+    ligand COM to the pocket axis), i.e. a funnel on lateral excursions.  PLUMED's
+    ``OPES_METAD_EXPLORE`` does not register ``EXTRA_BIAS`` (only
+    ``OPES_METAD`` does), so if both *opes_variant* ``"explore"`` and a wall are
+    requested, the emitted action is ``OPES_METAD`` with a comment explaining
+    the downgrade.
+
+    When *use_pbc* is ``True`` (explicit solvent / periodic box): emit
+    ``WHOLEMOLECULES`` for *whole_molecule_plumed_idx* and omit ``NOPBC`` on
+    ``RMSD``, ``CENTER``, ``DISTANCE``, and ``COORDINATION`` so minimum-image
+    distances apply.  *whole_molecule_plumed_idx* must be non-empty when
+    *use_pbc* is ``True``.  When *use_pbc* is ``False`` (legacy implicit solvent),
+    ``NOPBC`` is kept and ``WHOLEMOLECULES`` is not emitted.
+
+    When *opes_expanded_temp_max* is set, the deck adds ``ene: ENERGY``,
+    ``ECV_MULTITHERMAL`` over ``[TEMP, TEMP_MAX]``, and ``OPES_EXPANDED`` with
+    ``PACE=opes_expanded_pace``.  This is additive to ``OPES_METAD`` /
+    ``OPES_METAD_EXPLORE`` and uses a fixed-volume potential energy expansion
+    (``U = E``).  For NPT, build a custom deck with ``U = E + pV`` via
+    ``CUSTOM`` and ``VOLUME`` instead of using this shortcut.
+
+    *opes_expanded_state_rfile* is passed as ``STATE_RFILE`` on
+    ``OPES_EXPANDED`` when restarting from a saved expanded state (typically
+    ``STATE_EXPANDED`` beside the main ``STATE`` file).
+
+    ``cv_mode="oneopes"`` emits the literature OneOPES-style ligand–pocket CVs:
+    ``PROJECTION_ON_AXIS`` (``pp.proj`` / ``pp.ext``) with axis anchors
+    *oneopes_axis_p0_plumed_idx* / *oneopes_axis_p1_plumed_idx*, ``CONTACTMAP SUM``
+    over *oneopes_contactmap_pairs_plumed* (each tuple is PLUMED 1-based
+    protein–ligand atom indices), optional auxiliary ``OPES_METAD_EXPLORE``
+    biases on per-site water ``COORDINATION`` CVs for each index in
+    *oneopes_hydration_spot_plumed_idx* with water oxygens in
+    *water_oxygen_plumed_idx* (a ``GROUP`` labeled ``WO``).
     """
-    if len(sigma) != 2:
-        raise ValueError("OPES-MD requires exactly two sigma values.")
+    if cv_mode not in ("2d", "3d", "oneopes"):
+        raise ValueError('cv_mode must be "2d", "3d", or "oneopes".')
+    if opes_variant not in ("metad", "explore"):
+        raise ValueError('opes_variant must be "metad" or "explore".')
+    if cv_mode == "3d":
+        if pocket_heavy_plumed_idx is None or len(pocket_heavy_plumed_idx) == 0:
+            raise ValueError(
+                'cv_mode="3d" requires a non-empty pocket_heavy_plumed_idx list.'
+            )
+    oneopes_hydr_spots: tuple[int, ...] = ()
+    if cv_mode == "oneopes":
+        oneopes_hydr_spots = tuple(int(x) for x in (oneopes_hydration_spot_plumed_idx or ()))
+        if oneopes_axis_p0_plumed_idx is None or len(list(oneopes_axis_p0_plumed_idx)) == 0:
+            raise ValueError(
+                'cv_mode="oneopes" requires non-empty oneopes_axis_p0_plumed_idx.'
+            )
+        if oneopes_axis_p1_plumed_idx is None or len(list(oneopes_axis_p1_plumed_idx)) == 0:
+            raise ValueError(
+                'cv_mode="oneopes" requires non-empty oneopes_axis_p1_plumed_idx.'
+            )
+        if oneopes_contactmap_pairs_plumed is None or len(oneopes_contactmap_pairs_plumed) == 0:
+            raise ValueError(
+                'cv_mode="oneopes" requires at least one entry in '
+                "oneopes_contactmap_pairs_plumed."
+            )
+        if oneopes_hydr_spots:
+            if water_oxygen_plumed_idx is None or len(list(water_oxygen_plumed_idx)) == 0:
+                raise ValueError(
+                    "oneopes_hydration_spot_plumed_idx is non-empty but "
+                    "water_oxygen_plumed_idx is missing or empty (define a WO GROUP)."
+                )
+            if int(oneopes_water_pace) <= 0:
+                raise ValueError("oneopes_water_pace must be positive.")
+            if float(oneopes_water_barrier) <= 0.0:
+                raise ValueError("oneopes_water_barrier must be positive.")
+            if float(oneopes_water_biasfactor) <= 1.0:
+                raise ValueError("oneopes_water_biasfactor must exceed 1.")
+            if float(oneopes_water_sigma) <= 0.0:
+                raise ValueError("oneopes_water_sigma must be positive.")
+
+    cv_names: tuple[str, ...]
+    if cv_mode == "oneopes":
+        cv_names = ("pp.proj", "cmap")
+    elif cv_mode == "3d":
+        cv_names = ("lig_rmsd", "lig_dist", "lig_contacts")
+    else:
+        cv_names = ("lig_rmsd", "lig_dist")
+    n_cv = len(cv_names)
+    sigma_t = tuple(float(s) for s in sigma)
+    if len(sigma_t) != n_cv:
+        raise ValueError(
+            f"OPES-MD requires {n_cv} sigma values for cv_mode={cv_mode!r} "
+            f"(got {len(sigma_t)})."
+        )
     if int(pace) <= 0:
         raise ValueError("OPES deposition pace must be positive.")
     if int(progress_every) <= 0:
@@ -228,6 +489,36 @@ def generate_plumed_opes_script(
         raise ValueError("PLUMED STATE_WSTRIDE must be positive.")
     if nlist_parameters is not None and len(nlist_parameters) != 2:
         raise ValueError("nlist_parameters must be a (cutoff, stride) pair of floats.")
+    if upper_wall_dist is not None and float(upper_wall_dist) <= 0.0:
+        raise ValueError("upper_wall_dist must be positive when set.")
+    if float(upper_wall_kappa) <= 0.0:
+        raise ValueError("upper_wall_kappa must be positive.")
+    oneopes_n_hydr = len(oneopes_hydr_spots)
+    if use_pbc:
+        if whole_molecule_plumed_idx is None or len(list(whole_molecule_plumed_idx)) == 0:
+            raise ValueError(
+                "use_pbc=True requires a non-empty whole_molecule_plumed_idx list "
+                "for WHOLEMOLECULES unwrapping."
+            )
+
+    use_expanded = opes_expanded_temp_max is not None
+    if use_expanded:
+        t_max = float(opes_expanded_temp_max)
+        t0 = float(temperature)
+        if t_max <= t0 + 1e-9:
+            raise ValueError(
+                "opes_expanded_temp_max must be strictly greater than simulation "
+                f"TEMP (got TEMP_MAX={t_max:g} K vs TEMP={t0:g} K)."
+            )
+        ep = int(opes_expanded_pace)
+        if ep <= 0:
+            raise ValueError("opes_expanded_pace must be positive.")
+        obs = int(opes_expanded_observation_steps)
+        if obs < 1:
+            raise ValueError("opes_expanded_observation_steps must be >= 1.")
+        ps = int(opes_expanded_print_stride)
+        if ps < 1:
+            raise ValueError("opes_expanded_print_stride must be >= 1.")
 
     colvar_print_suffix = " HEAVY_FLUSH" if print_colvar_heavy_flush else ""
 
@@ -239,6 +530,8 @@ def generate_plumed_opes_script(
     kernels_path = out / "KERNELS"
     state_path = out / "STATE"
     colvar_path = out / "COLVAR"
+    expanded_delta_path = out / "OPES_EXPANDED_DELTAFS"
+    expanded_state_path = out / "STATE_EXPANDED"
 
     cutoff_plumed_default = _opes_metad_default_kernel_cutoff_sigma(
         barrier, biasfactor, temperature
@@ -254,25 +547,134 @@ def generate_plumed_opes_script(
         "UNITS LENGTH=A",
         "",
     ]
-    if whole_molecule_plumed_idx is not None:
+    if use_pbc and whole_molecule_plumed_idx is not None:
         lines.append(
             "WHOLEMOLECULES ENTITY0="
             f"{_format_indices(list(whole_molecule_plumed_idx))}"
         )
         lines.append("")
 
+    pbc_token = "" if use_pbc else " NOPBC"
+
     # CENTER computes an unweighted geometric center, matching the current
     # NumPy CVs that use mean coordinates rather than true mass-weighted COMs.
     lines.extend(
         [
-            f"lig_rmsd: RMSD TYPE=OPTIMAL NOPBC REFERENCE={rmsd_reference_pdb.expanduser().resolve()}",
-            f"lig_com: CENTER NOPBC ATOMS={ligand_atoms}",
-            f"pocket_com: CENTER NOPBC ATOMS={pocket_atoms}",
-            "lig_dist: DISTANCE NOPBC ATOMS=lig_com,pocket_com",
-            "",
-            "opes: OPES_METAD ...",
-            "  ARG=lig_rmsd,lig_dist",
-            f"  SIGMA={_format_float(sigma[0])},{_format_float(sigma[1])}",
+            f"lig_rmsd: RMSD TYPE=OPTIMAL{pbc_token} REFERENCE={rmsd_reference_pdb.expanduser().resolve()}",
+            f"lig_com: CENTER{pbc_token} ATOMS={ligand_atoms}",
+            f"pocket_com: CENTER{pbc_token} ATOMS={pocket_atoms}",
+            f"lig_dist: DISTANCE{pbc_token} ATOMS=lig_com,pocket_com",
+        ]
+    )
+    if cv_mode == "3d":
+        assert pocket_heavy_plumed_idx is not None
+        pocket_heavy = _format_indices(pocket_heavy_plumed_idx)
+        lines.append(
+            "lig_contacts: COORDINATION GROUPA="
+            f"{ligand_atoms} GROUPB={pocket_heavy} "
+            f"R_0={_format_float(float(coordination_r0))} "
+            f"NN={int(coordination_nn)} MM={int(coordination_mm)}{pbc_token}"
+        )
+    if cv_mode == "oneopes":
+        assert oneopes_axis_p0_plumed_idx is not None and oneopes_axis_p1_plumed_idx is not None
+        assert oneopes_contactmap_pairs_plumed is not None
+        p0_atoms = _format_indices(list(oneopes_axis_p0_plumed_idx))
+        p1_atoms = _format_indices(list(oneopes_axis_p1_plumed_idx))
+        lines.extend(
+            [
+                f"oneopes_axis_p0: CENTER{pbc_token} ATOMS={p0_atoms}",
+                f"oneopes_axis_p1: CENTER{pbc_token} ATOMS={p1_atoms}",
+                (
+                    "pp: PROJECTION_ON_AXIS AXIS_ATOMS=oneopes_axis_p0,oneopes_axis_p1 "
+                    f"ATOM=lig_com{pbc_token}"
+                ),
+            ]
+        )
+        cmap_atoms_parts: list[str] = []
+        for pi, li in oneopes_contactmap_pairs_plumed:
+            cmap_atoms_parts.append(f"ATOMS{len(cmap_atoms_parts) + 1}={int(pi)},{int(li)}")
+        sw = (
+            "SWITCH={RATIONAL "
+            f"R_0={_format_float(float(contactmap_switch_r0))} "
+            f"D_0={_format_float(float(contactmap_switch_d0))} "
+            f"NN={int(contactmap_switch_nn)} MM={int(contactmap_switch_mm)}}}"
+        )
+        cmap_line = "cmap: CONTACTMAP SUM " + " ".join(cmap_atoms_parts) + f" {sw}{pbc_token}"
+        lines.append(cmap_line)
+        if oneopes_hydr_spots:
+            assert water_oxygen_plumed_idx is not None
+            wo = _format_indices(list(water_oxygen_plumed_idx))
+            lines.append(f"WO: GROUP ATOMS={wo}")
+            for si, spot in enumerate(oneopes_hydr_spots):
+                w_sw = (
+                    "SWITCH={RATIONAL "
+                    f"D_0={_format_float(float(oneopes_water_switch_d0))} "
+                    f"R_0={_format_float(float(oneopes_water_switch_r0))} "
+                    f"NN={int(oneopes_water_switch_nn)} MM={int(oneopes_water_switch_mm)} "
+                    f"D_MAX={_format_float(float(oneopes_water_switch_d_max))}"
+                    "}"
+                )
+                lines.append(
+                    f"hydr_{si}: COORDINATION GROUPA={int(spot)} GROUPB=WO {w_sw}"
+                    f" NLIST NL_CUTOFF={_format_float(float(oneopes_water_nl_cutoff))} "
+                    f"NL_STRIDE={int(oneopes_water_nl_stride)}{pbc_token}"
+                )
+    lines.append("")
+    if use_expanded:
+        lines.extend(
+            [
+                "# Multithermal expanded ensemble (OPES_EXPANDED + ECV_MULTITHERMAL).",
+                "ene: ENERGY",
+                "",
+            ]
+        )
+
+    wall_label = "pp_ext_uwall" if cv_mode == "oneopes" else "lig_dist_uwall"
+    wall_arg = "pp.ext" if cv_mode == "oneopes" else "lig_dist"
+    if upper_wall_dist is not None:
+        # Action label is the leading ``name:`` token; UPPER_WALLS has no LABEL= keyword.
+        lines.append(
+            f"{wall_label}: UPPER_WALLS ARG={wall_arg} "
+            f"AT={_format_float(float(upper_wall_dist))} "
+            f"KAPPA={_format_float(float(upper_wall_kappa))}"
+        )
+        lines.append("")
+
+    # PLUMED OPESmetad.cpp registers EXTRA_BIAS only for OPES_METAD, not EXPLORE.
+    opes_action = (
+        "OPES_METAD_EXPLORE" if opes_variant == "explore" else "OPES_METAD"
+    )
+    if upper_wall_dist is not None and opes_variant == "explore":
+        lines.append(
+            "# OPES_METAD_EXPLORE has no EXTRA_BIAS in PLUMED; using OPES_METAD with wall."
+        )
+        lines.append("")
+        opes_action = "OPES_METAD"
+    arg_str = ",".join(cv_names)
+    sigma_str = ",".join(_format_float(s) for s in sigma_t)
+    if cv_mode == "oneopes":
+        print_cv_parts = ["lig_rmsd", "lig_dist", "pp.proj", "pp.ext", "cmap"]
+        print_cv_parts += [f"hydr_{i}" for i in range(oneopes_n_hydr)]
+    else:
+        print_cv_parts = list(cv_names)
+    print_cv_str = ",".join(print_cv_parts) + ",opes.bias,opes.rct,opes.nker,opes.zed,opes.neff"
+    for hi in range(oneopes_n_hydr):
+        print_cv_str += (
+            f",opes_hydr_{hi}.bias,opes_hydr_{hi}.rct,opes_hydr_{hi}.nker,"
+            f"opes_hydr_{hi}.zed,opes_hydr_{hi}.neff"
+        )
+    if use_expanded:
+        print_cv_str += ",ene,opes_expanded.bias"
+
+    opes_lines = [
+        f"opes: {opes_action} ...",
+        f"  ARG={arg_str}",
+    ]
+    if upper_wall_dist is not None:
+        opes_lines.append(f"  EXTRA_BIAS={wall_label}.bias")
+    opes_lines.extend(
+        [
+            f"  SIGMA={sigma_str}",
             f"  PACE={int(pace)}",
             f"  BARRIER={_format_float(barrier)}",
             f"  BIASFACTOR={_format_float(biasfactor)}",
@@ -284,6 +686,7 @@ def generate_plumed_opes_script(
             "  NLIST",
         ]
     )
+    lines.extend(opes_lines)
     if nlist_parameters is not None:
         a, b = (float(nlist_parameters[0]), float(nlist_parameters[1]))
         lines.append(
@@ -295,9 +698,95 @@ def generate_plumed_opes_script(
         [
             "...",
             "",
+        ]
+    )
+
+    if cv_mode == "oneopes" and oneopes_n_hydr > 0:
+        w_barrier = float(oneopes_water_barrier)
+        w_bf = float(oneopes_water_biasfactor)
+        w_temp = float(temperature)
+        w_cutoff_default = _opes_metad_default_kernel_cutoff_sigma(
+            w_barrier, w_bf, w_temp
+        )
+        if oneopes_water_kernel_cutoff is None:
+            w_kernel_cut = max(3.5, w_cutoff_default)
+        else:
+            w_kernel_cut = float(oneopes_water_kernel_cutoff)
+            if w_kernel_cut <= 0.0:
+                raise ValueError("oneopes_water_kernel_cutoff must be positive when set.")
+        w_sig = _format_float(float(oneopes_water_sigma))
+        lines.append("# Auxiliary low-barrier OPES on hydration COORDINATION CVs (OneOPES-style).")
+        lines.append("")
+        for hi in range(oneopes_n_hydr):
+            w_kernels = out / f"KERNELS_HYDR_{hi}"
+            w_state = out / f"STATE_HYDR_{hi}"
+            lines.extend(
+                [
+                    f"opes_hydr_{hi}: OPES_METAD_EXPLORE ...",
+                    f"  ARG=hydr_{hi}",
+                    f"  SIGMA={w_sig}",
+                    f"  PACE={int(oneopes_water_pace)}",
+                    f"  BARRIER={_format_float(w_barrier)}",
+                    f"  BIASFACTOR={_format_float(w_bf)}",
+                    f"  TEMP={_format_float(w_temp)}",
+                    f"  KERNEL_CUTOFF={_format_float(w_kernel_cut)}",
+                    f"  FILE={w_kernels}",
+                    f"  STATE_WFILE={w_state}",
+                    f"  STATE_WSTRIDE={int(save_opes_every)}",
+                    "  NLIST",
+                ]
+            )
+            if nlist_parameters is not None:
+                a, b = (float(nlist_parameters[0]), float(nlist_parameters[1]))
+                lines.append(
+                    f"  NLIST_PARAMETERS={_format_float(a)},{_format_float(b)}"
+                )
+            lines.extend(
+                [
+                    "...",
+                    "",
+                ]
+            )
+
+    if use_expanded:
+        # STATE_WSTRIDE must be >= PACE (MD steps) and align with bias PACE cycles.
+        ep = int(opes_expanded_pace)
+        wstride = max(ep, int(save_opes_every) // ep * ep)
+        if wstride < int(save_opes_every):
+            wstride += ep
+        lines.extend(
+            [
+                (
+                    f"opes_ecv: ECV_MULTITHERMAL ARG=ene TEMP={_format_float(float(temperature))} "
+                    f"TEMP_MIN={_format_float(float(temperature))} "
+                    f"TEMP_MAX={_format_float(float(opes_expanded_temp_max))}"
+                ),
+                "opes_expanded: OPES_EXPANDED ...",
+                "  ARG=opes_ecv.*",
+                f"  PACE={ep}",
+                f"  OBSERVATION_STEPS={int(opes_expanded_observation_steps)}",
+                f"  FILE={expanded_delta_path}",
+                f"  PRINT_STRIDE={int(opes_expanded_print_stride)}",
+                f"  STATE_WFILE={expanded_state_path}",
+                f"  STATE_WSTRIDE={int(wstride)}",
+            ]
+        )
+        if opes_expanded_state_rfile is not None:
+            lines.append(
+                f"  STATE_RFILE={opes_expanded_state_rfile.expanduser().resolve()}"
+            )
+        lines.extend(
+            [
+                "...",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
             "PRINT "
             f"STRIDE={int(progress_every)} FILE={colvar_path} "
-            "ARG=lig_rmsd,lig_dist,opes.bias,opes.rct,opes.nker,opes.zed,opes.neff"
+            f"ARG={print_cv_str}"
             f"{colvar_print_suffix}",
             "",
         ]

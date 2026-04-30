@@ -4,12 +4,12 @@ Two CVs are provided:
 
 :class:`OpenMMLocalMinRMSD`
     Kabsch-aligned Cα-RMSD between the raw Boltz structure and its own
-    AMBER14/GBn2 energy-minimized local minimum.  Expensive (~1–10 s per
+    AMBER14 + explicit TIP3P energy-minimized local minimum.  Expensive (~1–10 s per
     call on GPU) but captures how far the generated geometry is from a
     nearby physical minimum.
 
 :class:`OpenMMEnergy`
-    Raw AMBER14/GBn2 single-point potential energy (kJ/mol) evaluated at
+    Raw AMBER14 + explicit TIP3P single-point potential energy (kJ/mol) evaluated at
     the Boltz geometry **without any minimization**.  Faster than RMSD-to-
     minimum because it skips L-BFGS, and directly exposes high-energy
     (strained / clashing) configurations as large positive values.
@@ -104,13 +104,13 @@ def _detect_ligand_smiles(
 
 
 class OpenMMLocalMinRMSD:
-    """Cα-RMSD to AMBER14/GBn2 local minimum -- the canonical TPS validation CV.
+    """Cα-RMSD to AMBER14 + explicit-TIP3P local minimum -- the canonical TPS validation CV.
 
     Matches the pipeline in ``watch_rmsd_live.py`` and ``compute_cv_rmsd.py``:
 
     1. Extract the **last frame** of the trajectory (fully denoised structure).
     2. Write coordinates to a temporary PDB using the Boltz topology.
-    3. Run ``minimize_pdb`` (AMBER14 + GBn2 + OpenMM L-BFGS).
+    3. Run ``minimize_pdb`` (AMBER14 + explicit TIP3P + OpenMM L-BFGS).
     4. Return Kabsch-aligned Cα-RMSD in Ångström.
 
     Results are cached by coordinate hash to avoid redundant minimizations.
@@ -392,13 +392,13 @@ class OpenMMLocalMinRMSD:
 
 
 class OpenMMEnergy:
-    """Single-point AMBER14/GBn2 potential energy (kJ/mol) — no minimization.
+    """Single-point AMBER14 + explicit-TIP3P potential energy (kJ/mol) — no minimization.
 
     For each evaluation the class:
 
     1. Converts Boltz heavy-atom coordinates to a PDB string.
     2. Adds hydrogens via PDBFixer (or Modeller fallback).
-    3. Builds an AMBER14 + GBn2 implicit-solvent OpenMM system.
+    3. Builds an AMBER14 + explicit TIP3P (PME) OpenMM system.
     4. Returns the potential energy at the **raw** (un-minimized) geometry.
 
     Steps 2–3 are repeated per unique coordinate set because PDBFixer
@@ -568,7 +568,7 @@ class OpenMMEnergy:
         return hashlib.md5(arr.tobytes()).hexdigest()
 
     def __call__(self, trajectory) -> float:
-        """Return AMBER14/GBn2 potential energy (kJ/mol) of the last frame.
+        """Return AMBER14 + explicit-TIP3P potential energy (kJ/mol) of the last frame.
 
         High values indicate strained / physically implausible configurations.
         No energy minimization is performed — this is the raw single-point

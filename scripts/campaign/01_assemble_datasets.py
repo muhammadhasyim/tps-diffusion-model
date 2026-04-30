@@ -19,7 +19,8 @@ Outputs::
     outputs/campaign/case{1,2,3}/
         training_dataset.npz        # coords (N,M,3), logw (N,), atom_mask (N,M)
         training_dataset_val.npz    # 10% held-out split (optional)
-        openmm_opes_md/opes_states/fes_reweighted_2d.dat  # if --plumed-fes
+        openmm_opes_md/opes_states/fes_reweighted_2d.dat  # if --plumed-fes (2 CV COLVAR)
+        openmm_opes_md/opes_states/fes_reweighted_3d.dat  # same flag if COLVAR has lig_contacts
         01_assembly_log.json        # per-system N_eff / statistics
 
 Example::
@@ -52,6 +53,34 @@ _CASE_NAMES = [
     "case2_cdk2_atp_wildtype",
     "case3_cdk2_atp_packed",
 ]
+
+
+def _plumed_fes_kwargs_from_colvar(colvar: Path, sigma_arg: str) -> dict:
+    """Choose 2D vs 3D reweighting targets from COLVAR ``#! FIELDS`` (3D if ``lig_contacts``)."""
+    field_names: list[str] = []
+    with colvar.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            s = line.strip()
+            if s.startswith("#! FIELDS"):
+                field_names = s.split()[2:]
+                break
+    if not field_names:
+        raise ValueError(f"No #! FIELDS line in {colvar}")
+    if "lig_contacts" in field_names:
+        n_sig = len([p for p in sigma_arg.split(",") if p.strip()])
+        sigma_use = sigma_arg if n_sig == 3 else "0.3,0.5,1.0"
+        return {
+            "cv_names": "lig_rmsd,lig_dist,lig_contacts",
+            "sigma": sigma_use,
+            "grid_bin": "40,40,40",
+            "outfile": colvar.parent / "fes_reweighted_3d.dat",
+        }
+    return {
+        "cv_names": "lig_rmsd,lig_dist",
+        "sigma": sigma_arg,
+        "grid_bin": "100,100",
+        "outfile": colvar.parent / "fes_reweighted_2d.dat",
+    }
 
 
 def _find_topo_npz(md_out_dir: Path) -> Path:
@@ -205,7 +234,6 @@ def main() -> None:
             from genai_tps.simulation.plumed_colvar_fes import run_fes_from_reweighting_script
 
             colvar = md_out / "opes_states" / "COLVAR"
-            outfile = colvar.parent / "fes_reweighted_2d.dat"
             if not colvar.is_file():
                 msg = f"No COLVAR at {colvar}; skip PLUMED FES."
                 if args.plumed_fes_strict:
@@ -213,14 +241,19 @@ def main() -> None:
                 print(f"  [01] {msg}", flush=True)
             else:
                 try:
+                    fes_kw = _plumed_fes_kwargs_from_colvar(
+                        colvar, args.plumed_fes_sigma
+                    )
+                    outfile = fes_kw["outfile"]
                     run_fes_from_reweighting_script(
                         colvar_path=colvar,
                         outfile=outfile,
                         temperature_k=args.plumed_fes_temperature,
-                        sigma=args.plumed_fes_sigma,
+                        sigma=fes_kw["sigma"],
+                        cv_names=fes_kw["cv_names"],
                         grid_min=None,
                         grid_max=None,
-                        grid_bin="100,100",
+                        grid_bin=fes_kw["grid_bin"],
                         skiprows=args.plumed_fes_skiprows,
                         blocks=args.plumed_fes_blocks,
                     )

@@ -1,0 +1,56 @@
+\section{Diffusion Models, EDM Sampling, and the Boltz-2 Path Measure}
+\label{sec:diffusion-boltz}
+
+Section~\ref{sec:tps-foundations} fixed the path distribution~\eqref{eq:forward-kernel-product}
+for abstract maps $T_i$. Boltz-2 instantiates $T_i$ through a score-trained denoiser
+with a fixed noise schedule and optional churn. This section connects the
+variance-exploding (VE) forward noising picture and EDM preconditioning
+\citep{karras2022} to the \emph{discrete} reverse kernel that must enter $P(\mathcal{X})$.
+We emphasize where a continuous-time SDE intuition ends and the code-defined
+kernel begins.
+
+\subsection{Forward Noising and Reverse Sampling}
+
+Score-based diffusion models specify a family of noisy laws $p(x \mid \sigma)$ with a noise level $\sigma$ running from a large value where $p(x \mid \sigma)$ is close to a simple prior down to $\sigma$ near zero where $p(x \mid \sigma)$ approximates a target data law $p_{\mathrm{data}}(x)$ \citep{song2021}. Training fits a network $f_\theta$ so that the implied score $\nabla_x \log p_\theta(x \mid \sigma)$ tracks the score of the noising kernel. For the variance-exploding (VE) family used in EDM-style training,
+\begin{equation}
+  \label{eq:ve-forward}
+  p(x \mid x_0, \sigma) = \N(x;\, x_0, \sigma^2 I),
+\end{equation}
+so $\nabla_x \log p(x \mid x_0, \sigma) = -(x-x_0)/\sigma^2$. Tweedie's identity links denoised expectations to scores; in practice one parameterizes a denoiser $\hat{x}_\theta(x,\sigma)$ that predicts a clean signal from a single noisy input \citep{karras2022}.
+
+Continuous-time reverse SDEs make the sampling limit intuitive \citep{song2021}: one imagines a time-reversed stochastic process whose marginal score matches the trained score. Boltz-2 does not expose a continuous-time integrator to the user. It exposes a fixed schedule $\sigma_0 > \sigma_1 > \cdots > \sigma_L$ and a discrete update that combines deterministic drift with optional injected noise (``churn''). The correct object for TPS is therefore the \emph{discrete} transition law implied by the code, not a formal limit as step size goes to zero.
+
+The VE view motivates the noise levels; the actual reverse map uses the EDM
+outer parameterization evaluated at an effective noise scale.
+
+\subsection{EDM Preconditioning}
+
+\citet{karras2022} rewrite the denoiser in preconditioned form
+\begin{equation}
+  \label{eq:edm-precond-repeat}
+  D_\theta(x, \sigma)
+  = c_{\mathrm{skip}}(\sigma)\,x
+  + c_{\mathrm{out}}(\sigma)\,
+    f_\theta\bigl(c_{\mathrm{in}}(\sigma)\,x,\; c_{\mathrm{noise}}(\sigma)\bigr),
+\end{equation}
+with elementary functions $(c_{\mathrm{skip}}, c_{\mathrm{out}}, c_{\mathrm{in}}, c_{\mathrm{noise}})$ of $\sigma$ and a data scale $\sigma_{\mathrm{d}}$. The outer map is smooth in $x$ for almost every $\sigma$ of interest. The Boltz-2 step applies~\eqref{eq:edm-precond-repeat} at an effective noise level $\hat{t}_i$ tied to the schedule and churn (Section~\ref{sec:kernel-full}).
+
+Churn optionally injects additional Gaussian noise between schedule levels before
+applying~\eqref{eq:edm-precond-repeat}; its variance is fixed by the implementation,
+not by a mesh-refinement limit.
+
+\subsection{Churn and What Is Not an SDE Limit}
+
+At step $i$, Boltz-2 may inflate the noise level temporarily to $\hat{t}_i = \sigma_{i-1}(1+\gamma_i)$ before denoising, injecting Gaussian noise so that the variance of the increment matches the VE law between $\sigma_{i-1}$ and $\hat{t}_i$. When $\gamma_i>0$, that injection carries a fixed finite variance set by $\gamma_i$ and a global scale $\eta$. It is helpful to compare this to an Euler--Maruyama discretization of a reverse-time SDE with vanishing step size. Here the injected variance does not shrink when the schedule mesh tightens, because the schedule is fixed by architecture and training. In the limit $\gamma_i \to 0$ the stochastic contribution at that step vanishes and the update reduces to a deterministic probability-flow-like step along the trained vector field. This distinction matters only if one tries to import continuous-time path-large deviation formulas directly; for TPS we always use the actual discrete kernel.
+
+Having fixed the modeling context, we summarize which factors enter the path
+log-density used in our experiments versus which outputs remain diagnostics only.
+
+\subsection{What Enters the Boltz-2 Path Weight}
+
+For the experiments in Section~\ref{sec:experiments}, the path log density in extended variables is a sum of $\log \rho(x_0)$, Haar densities for rotations (constant on $\mathrm{SO}(3)$ in the canonical normalization), Gaussian logs for translations and churn noise, and any user-selected Jacobian diagnostics for coordinate pushes (Section~\ref{sec:kernel-full}). It does \emph{not} include the Boltz-2 confidence head: pLDDT is an auxiliary output used as a diagnostic collective variable, not as a factor in $P(\mathcal{X})$ unless one explicitly builds a joint generative model for $(x,\mathrm{pLDDT})$.
+
+The discrete kernel and the factors above are necessary to write $P(\mathcal{X})$
+explicitly. The next section records the extended state (including SE(3)
+augmentation), the one-step map $T_i$, backward inversion, Jacobian structure,
+and the two-way log-ratio used in the implementation.

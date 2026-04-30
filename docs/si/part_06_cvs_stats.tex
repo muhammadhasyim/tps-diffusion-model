@@ -1,0 +1,39 @@
+% NOTE (2026-04): This fragment is superseded by `part_07_experiments.tex` in the
+% JMLR article driver. Kept for reference / cherry-pick; not \input by default.
+
+\section{Collective variables, diagnostics, and case-study statistics}
+\label{sec:cvs-empirical}
+
+\subsection{CVs that enter the OPES bias}
+
+For the co-folding experiment, $s = (s_1, s_2)$ combines ligand heavy-atom RMSD after Kabsch alignment to a reference crystal pose ($s_1$, in \AA) with a ligand-to-pocket distance ($s_2$, in \AA) measured from the ligand center of mass to the nearest binding-pocket C$\alpha$ atoms as implemented in the repository. Small $s_1$ with moderate $s_2$ marks the native-like basin; larger $s_1$ or shifts in $s_2$ track pose slippage and pocket engagement changes. The published run used $\gamma=10$, barrier $5\,k_BT$, pace $1$, compression threshold $1.0$, ending with $1159$ depositions and $82$ compressed kernels.
+
+\subsection{Diagnostic CVs only}
+
+The file \texttt{collective\_variables.py} logs additional geometry and model-confidence scalars to \texttt{cv\_values.json} without feeding OPES. They include contact order, steric clash counts, lDDT \citep{mariani2013lddt}, Ramachandran outlier fractions, radius of gyration, Boltz mean pLDDT, and (for some pipelines) OpenMM-relaxed C$\alpha$ RMSD. These are filters on physical plausibility and memorization, not terms in $P(\mathcal{X})$.
+
+\subsection{Marginal statistics for the two-dimensional OPES-TPS run}
+
+Table~\ref{tab:cv-stats-si} reproduces the summary computed by \texttt{scripts/summarize\_opes\_2d\_cv.py} on \texttt{opes\_tps\_out\_case1\_2d}: $11\,590$ logged Monte Carlo steps and $3\,184$ acceptances ($27.5\%$).
+
+\begin{table}[t]
+\centering
+\caption{Marginal CV statistics for the OPES-TPS two-dimensional run (case~1). ``All'' includes every logged step; ``Acc.'' conditions on accepted moves.}
+\label{tab:cv-stats-si}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{Ligand RMSD $s_1$ (\AA)} & \multicolumn{3}{c}{Pocket distance $s_2$ (\AA)} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Subset & Mean $\pm$ SD & Median & $p_{95}$ & Mean $\pm$ SD & Median & $p_{95}$ \\
+\midrule
+All  & $0.49 \pm 0.35$ & $0.49$ & $1.19$ & $5.44 \pm 0.11$ & $5.40$ & $5.62$ \\
+Acc. & $0.38 \pm 0.32$ & $0.26$ & $0.95$ & $5.41 \pm 0.10$ & $5.37$ & $5.61$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Among all logged steps, $48.9\%$ have $s_1 > 0.5$\,\AA, $23.5\%$ exceed $0.75$\,\AA, $8.8\%$ exceed $1.0$\,\AA, and $1.7\%$ exceed $1.25$\,\AA. Accepted paths show lower tail mass at the same thresholds ($36.6\%$, $14.7\%$, $4.5\%$, $0.9\%$), which is the intended tension between bias toward high RMSD and the Metropolis filter that still favors paths with reasonable TPS weights.
+
+Run-length analysis on the stored chain shows that excursions with $s_1 > 0.5$\,\AA\ appear in sustained segments (mean length $39$ steps, maximum $299$ over all logs), rather than isolated spikes. On accepted steps alone, the mean run length above the same threshold is about $8$, still indicating metastable dwell rather than single-point noise.
+
+Two-dimensional histograms show a dominant peak near $(0.07\,\text{\AA},\,5.37\,\text{\AA})$ and secondary structure near $(0.70\,\text{\AA},\,5.55\,\text{\AA})$ and $(0.83\,\text{\AA},\,5.61\,\text{\AA})$, consistent with the basin assignments discussed in the main text.

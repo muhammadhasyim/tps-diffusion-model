@@ -1,0 +1,89 @@
+\section{OPES, OPES-METAD, and Biased TPS}
+\label{sec:opes-theory}
+
+Unbiased TPS targets $P_{AB} \propto H_{AB}\,P$ and typically concentrates on
+dominant reactive modes. To study projected free-energy structure along
+low-dimensional observables of the terminal frame, we follow OPES
+\citep{invernizzi2020,invernizzi2022} and multiply the TPS acceptance by a
+Boltzmann factor in the bias evaluated on those collective variables. This
+section defines the OPES kernel mixture and bias, comments on PLUMED variants,
+and proves the Metropolis correction for a fixed bias; we then record the
+standard caveat when the bias is updated on the fly.
+
+\subsection{Goal of OPES}
+
+On-the-fly probability enhanced sampling (OPES) builds a bias potential $V_n(s)$ along a low-dimensional collective variable (CV) $s = S(x)$ so that a molecular dynamics trajectory visits CV regions in proportion closer to a chosen target than the unbiased Boltzmann law would allow \citep{invernizzi2020,invernizzi2022}. The method estimates a marginal density over $s$ from a kernel mixture built online and applies a well-tempered transformation controlled by a bias factor $\gamma > 1$.
+
+The marginal estimate is built from Gaussian kernels with user-chosen
+normalization between ``convergence'' and ``explore'' behavior.
+
+\subsection{Kernel Mixture and Normalization Modes}
+
+Let $\{c_k, h_k, \Sigma_k\}_{k=1}^{n_k}$ denote kernel centers, nonnegative heights after compression, and bandwidths (diagonal covariances in the simplest setting). Write $G$ for a localized Gaussian kernel in each CV dimension. The OPES estimate of the marginal is
+\begin{equation}
+  \label{eq:opes-pn}
+  P_n(s) = \frac{1}{W} \sum_{k=1}^{n_k} h_k \prod_{d=1}^D G(s^d; c_k^d, (\Sigma_k^d)^2),
+\end{equation}
+where in \emph{convergence} mode one sets $W = \sum_k h_k$ \citep{invernizzi2022}. In \emph{explore} mode one instead divides by the raw kernel count $n_k$ (or an implementation-defined variant tied to uniform kernel weighting) so that newly visited regions retain higher effective weight in the mixture numerator. The practical effect is that explore mode resists collapsing the estimate toward the already-visited mass and keeps pushing the outer shells of the CV space longer, whereas convergence mode tracks the running empirical marginal more aggressively. Both are consistent with the original OPES construction once reweighting formulas are adjusted accordingly; the user-facing choice is documented in PLUMED's OPES module \citep{plumed2024}.
+
+Given $P_n$, OPES defines a bias through a well-tempered log transform with a
+floor and an implementation barrier.
+
+\subsection{Bias Potential and Barrier}
+
+Given $P_n$ and a normalization constant $Z_n$ for the mixture, OPES defines
+\begin{equation}
+  \label{eq:opes-vn}
+  V_n(s) = \Bigl(1 - \frac{1}{\gamma}\Bigr) k_BT\,
+           \log\Bigl( \frac{P_n(s)}{Z_n} + \epsilon \Bigr),
+\end{equation}
+with a small floor $\epsilon > 0$ to regularize unsampled regions. A \emph{barrier} height caps $V_n$ in implementations so the bias cannot diverge on spurious kernel artifacts. The bias factor $\gamma$ controls how close the targeted marginal is to a flat histogram over the visited range: as $\gamma \downarrow 1$, the method reduces toward unbiased sampling; large $\gamma$ sharpens the flattening.
+
+PLUMED implements several OPES variants that differ in scheduling and kernel
+deposition; we summarize the naming for readers who compare against molecular
+dynamics stacks.
+
+\subsection{OPES versus OPES-METAD in PLUMED}
+
+PLUMED exposes several OPES variants \citep{plumed2024}. The plain OPES target is phrased in terms of estimating the marginal distribution of CVs and steering with~\eqref{eq:opes-vn}. OPES-METAD hybridizes this idea with metadynamics-style biasing on a smaller set of ``slow'' CVs while OPES tracks a larger set or a different projection; the effective update of the bias can resemble metadynamics accumulation when the implementation deposits hills on a grid or uses METAD-like schedules. OPES-METAD with an \texttt{EXPLORE} flag combines that structure with explore-style normalization for aggressive outer-shell sampling. Because naming follows software releases, the precise algebraic map from PLUMED input lines to~\eqref{eq:opes-pn} should be checked against the manual version pinned in a simulation repository. For the generative TPS runs reported here, the Python-side OPES matches~\eqref{eq:opes-pn}--\eqref{eq:opes-vn} with the two-dimensional ligand CV and the convergence/explore switch implemented as $W$ versus $n_k$ in~\eqref{eq:opes-pn}.
+
+We now connect a fixed OPES bias to the TPS Metropolis acceptance on paths.
+
+\subsection{TPS with an External Bias on the Terminal Frame}
+
+Let $s_L = S(x_L)$ denote the CV vector evaluated on the terminal coordinates. Suppose that at Monte Carlo time $t$ the chain holds path $\mathcal{X}$ and OPES has produced a bias $V_t(\cdot)$ computed from the kernel history up to time $t$. Consider a proposal $\mathcal{X}'$ generated by any unbiased-in-isolation TPS kernel (forward shoot, backward shoot, reshuffle) with acceptance ratio $a_{\mathrm{TPS}}(\mathcal{X}, \mathcal{X}')$ that would preserve $\pi(\mathcal{X}) \propto H_{AB}(\mathcal{X}) P(\mathcal{X})$ without bias.
+
+\begin{lemma}[Metropolis with multiplicative Boltzmann bias]
+\label{lem:opes-mh}
+Fix a function $V$ on CV space. Define the target $\tilde{\pi}(\mathcal{X}) \propto H_{AB}(\mathcal{X}) P(\mathcal{X}) \exp\{- V(S(x_L)) / k_BT\}$. Consider a proposal $Q(\mathcal{X}'\mid \mathcal{X})$ symmetric in the sense that detailed balance already holds for $\pi$ with acceptance $\min\{1, \pi(\mathcal{X}')Q(\mathcal{X}\mid\mathcal{X}')/(\pi(\mathcal{X})Q(\mathcal{X}'\mid\mathcal{X}))\}$. Then detailed balance for $\tilde{\pi}$ holds if the acceptance is multiplied by
+\[
+  \exp\Bigl\{ - \frac{V(S(x'_L)) - V(S(x_L))}{k_BT} \Bigr\}.
+\]
+\end{lemma}
+
+\begin{proof}
+Routine substitution into the detailed balance equations for the Metropolis--Hastings chain with target $\tilde{\pi}$.
+\end{proof}
+
+Lemma~\ref{lem:opes-mh} matches the OPES-modified TPS acceptance used in our experiments: $r_{\mathrm{TPS}}$ collects log path weights, and the exponential factor corrects for the bias on the terminal CV. Writing $\mathbf{s}^{\mathrm{n}} = S(x_L')$ and $\mathbf{s}^{\mathrm{o}} = S(x_L)$ for the CV vectors on the proposed and current terminal coordinates,
+\begin{equation}
+  \label{eq:tps-opes}
+  p_{\mathrm{acc}}^{\mathrm{OPES}}
+  = H_{AB}(\mathcal{X}')\,
+    \min\!\left[
+      1,\;
+      \exp\!\Bigl(
+        \Delta_{\mathrm{TPS}}
+        - \frac{V(\mathbf{s}^{\mathrm{n}}) - V(\mathbf{s}^{\mathrm{o}})}{k_BT}
+      \Bigr)
+    \right],
+\end{equation}
+where $\Delta_{\mathrm{TPS}}$ denotes the unbiased TPS log-acceptance (e.g., forward, backward, or reshuffle contributions from Section~\ref{sec:tps-foundations}).
+
+\begin{remark}[Bias updates break strict time homogeneity]
+In practice $V_t$ changes after every deposition event (every \texttt{pace} steps in the code). The process $(\mathcal{X}_t, V_t)$ is then a Markov chain on an enlarged state. Lemma~\ref{lem:opes-mh} applies exactly at indices where $V$ is held fixed across the proposal and acceptance decision. When $V$ changes deterministically from accepted history, the chain is only approximately described by a single $\tilde{\pi}$; the standard justification is that slow bias evolution lets one treat $V_t$ as an external field or uses two-stage arguments from adaptive biasing literature \citep{invernizzi2022}. The empirical FES-like summaries below should be read with that caveat: they are OPES estimands at the chosen $(\gamma, \mathrm{barrier}, \mathrm{pace})$, not unique infinite-time free energies without further reweighting checks.
+\end{remark}
+
+Before turning to experiments, we relate the explicit SE(3) augmentation in
+the path snapshot to rigid-body symmetry of molecular coordinates and to
+equivariant architectures used in structure prediction.
