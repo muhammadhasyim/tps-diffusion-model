@@ -25,6 +25,9 @@ ignored.  For OneOPES (``pp.proj``, ``cmap``), when the user does not pass two
 ``sigma`` values, :func:`reweighting_kwargs_from_colvar_path` defaults the KDE
 bandwidth to the **mean kernel widths** read from ``KERNELS`` (falling back to
 ``0.09,0.16``) so the ``.dat`` is not grossly over-smoothed relative to OPES.
+For three-CV OPES (``lig_rmsd``, ``lig_dist``, ``lig_contacts``), missing or
+wrong-length ``sigma`` falls back to **mean widths from 3D** ``KERNELS`` (else
+``0.3,0.5,1.0``).
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ from pathlib import Path
 
 import numpy as np
 
-from genai_tps.simulation.fes_io import load_plumed_kernels_2d
+from genai_tps.simulation.fes_io import load_plumed_kernels_2d, load_plumed_kernels_3d
 from genai_tps.subprocess_support import repository_root
 
 
@@ -72,6 +75,36 @@ def _default_sigma_2d_from_kernels_mean(kernels_path: Path) -> str:
         return "0.09,0.16"
 
 
+def _default_sigma_3d_from_kernels_mean(kernels_path: Path) -> str:
+    """Mean per-CV Gaussian widths from PLUMED 3D ``KERNELS`` for reweighting defaults.
+
+    Mirrors :func:`_default_sigma_2d_from_kernels_mean` for three-bias-cv OPES so
+    Stage-1 FES KDE bandwidth tracks the deposited kernel geometry instead of a
+    fixed ``0.3,0.5,1.0`` guess.
+    """
+    if not kernels_path.is_file():
+        return "0.3,0.5,1.0"
+    try:
+        _, _, sigmas, _ = load_plumed_kernels_3d(kernels_path)
+        if sigmas.size == 0:
+            return "0.3,0.5,1.0"
+        s0 = float(np.mean(sigmas[:, 0]))
+        s1 = float(np.mean(sigmas[:, 1]))
+        s2 = float(np.mean(sigmas[:, 2]))
+        if not (
+            np.isfinite(s0)
+            and np.isfinite(s1)
+            and np.isfinite(s2)
+            and s0 > 0.0
+            and s1 > 0.0
+            and s2 > 0.0
+        ):
+            return "0.3,0.5,1.0"
+        return f"{s0:.10g},{s1:.10g},{s2:.10g}"
+    except (OSError, ValueError, IndexError):
+        return "0.3,0.5,1.0"
+
+
 def reweighting_kwargs_from_colvar_path(
     colvar_path: Path,
     *,
@@ -99,7 +132,11 @@ def reweighting_kwargs_from_colvar_path(
             "outfile": parent / "fes_reweighted_2d.dat",
         }
     if "lig_contacts" in field_names:
-        sigma_use = sigma_arg if n_sig == 3 else "0.3,0.5,1.0"
+        sigma_use = (
+            sigma_arg
+            if n_sig == 3
+            else _default_sigma_3d_from_kernels_mean(parent / "KERNELS")
+        )
         return {
             "cv_names": "lig_rmsd,lig_dist,lig_contacts",
             "sigma": sigma_use,
