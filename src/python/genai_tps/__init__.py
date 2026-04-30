@@ -21,26 +21,24 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+<<<<<<< Updated upstream
     if name == "paths":
         import openpathsampling as paths
 
         return paths
     if name == "BoltzDiffusionEngine":
         from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
+=======
+    if name in (
+        "BoltzDiffusionEngine",
+        "BoltzSamplerCore",
+        "BoltzSnapshot",
+        "boltz_snapshot_descriptor",
+    ):
+        from genai_tps.backends import boltz as _boltz_backend
+>>>>>>> Stashed changes
 
-        return BoltzDiffusionEngine
-    if name == "BoltzSamplerCore":
-        from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
-
-        return BoltzSamplerCore
-    if name == "BoltzSnapshot":
-        from genai_tps.backends.boltz.snapshot import BoltzSnapshot
-
-        return BoltzSnapshot
-    if name == "boltz_snapshot_descriptor":
-        from genai_tps.backends.boltz.snapshot import boltz_snapshot_descriptor
-
-        return boltz_snapshot_descriptor
+        return getattr(_boltz_backend, name)
     if name == "DynamicsEngine":
         from openpathsampling.engines import DynamicsEngine
 

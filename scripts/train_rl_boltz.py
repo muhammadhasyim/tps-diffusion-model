@@ -20,7 +20,6 @@ import argparse
 import csv
 import json
 import sys
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -49,6 +48,7 @@ def _exit_if_rl_excluded() -> None:
         sys.exit(2)
 
 
+<<<<<<< Updated upstream
 def _build_boltz_session(
     *,
     yaml_path: Path,
@@ -223,6 +223,8 @@ def _cv_reward_from_coords(
     return float(reward), cv_dict
 
 
+=======
+>>>>>>> Stashed changes
 def main() -> None:
     _exit_if_rl_excluded()
     parser = argparse.ArgumentParser(description="RLDiff-style offline RL for Boltz-2 diffusion (classic FES CVs).")
@@ -260,9 +262,15 @@ def main() -> None:
         sys.exit(1)
 
     try:
+<<<<<<< Updated upstream
         from genai_tps.io.boltz_npz_export import load_topo
         from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
         from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
+=======
+        from genai_tps.analysis.boltz_npz_export import load_topo
+        from genai_tps.backends.boltz.session import boltz_prep_run_dir, build_boltz_session
+        from genai_tps.backends.boltz.snapshot import BoltzSnapshot, snapshot_frame_numpy_copy
+>>>>>>> Stashed changes
         from genai_tps.rl.config import BoltzRLConfig
         from genai_tps.rl.ppo_surrogate import normalize_rewards_per_trajectory
         from genai_tps.rl.rollout import rollout_forward_trajectory
@@ -280,10 +288,11 @@ def main() -> None:
     work_root = args.out.expanduser().resolve()
     work_root.mkdir(parents=True, exist_ok=True)
 
-    model, core, _batch, processed_dir, topo_auto, _prep_dir = _build_boltz_session(
+    boltz_run_dir = boltz_prep_run_dir(work_root, yaml_path.stem)
+    model, core, _batch, processed_dir, topo_auto, _prep_dir, _ = build_boltz_session(
         yaml_path=yaml_path,
         cache=cache,
-        boltz_prep_dir=work_root,
+        boltz_run_dir=boltz_run_dir,
         device=device,
         diffusion_steps=args.diffusion_steps,
         recycling_steps=args.recycling_steps,

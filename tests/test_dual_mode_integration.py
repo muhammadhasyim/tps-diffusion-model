@@ -25,7 +25,7 @@ from genai_tps.backends.boltz.tps_sampling import run_tps_path_sampling
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.backends.boltz.snapshot import boltz_snapshot_descriptor
-from tests.mock_boltz_diffusion import MockDiffusion
+from tests.mock_boltz_diffusion import MockDiffusion, RecordingEnhancedBias
 
 
 # ---------------------------------------------------------------------------
@@ -78,23 +78,6 @@ def _clash_count_cv(traj) -> float:
 
 
 # ---------------------------------------------------------------------------
-# _RecordingEnhancedBias minimal stub
-# ---------------------------------------------------------------------------
-
-class _RecordingEnhancedBias:
-    """Minimal bias that records updates and always accepts (factor=1.0)."""
-
-    def __init__(self):
-        self.updates: list[tuple[float, int]] = []
-
-    def compute_acceptance_factor(self, cv_old: float, cv_new: float) -> float:
-        return 1.0
-
-    def update(self, cv_accepted: float, mc_step: int) -> None:
-        self.updates.append((cv_accepted, mc_step))
-
-
-# ---------------------------------------------------------------------------
 # TestDiagnosticCVLogging
 # ---------------------------------------------------------------------------
 
@@ -120,7 +103,7 @@ class TestDiagnosticCVLogging:
         """TPS-OPES: both 'cv_value' and 'diag_*' keys must appear in log."""
         engine, init_traj = _build_engine_traj()
         log_file = tmp_path / "shoot.log"
-        bias = _RecordingEnhancedBias()
+        bias = RecordingEnhancedBias()
         diag_fns = {"contact_order": _contact_order_cv, "clash_count": _clash_count_cv}
 
         _, log = run_tps_path_sampling(
@@ -164,7 +147,7 @@ class TestDiagnosticCVLogging:
         """OPES updates must only be called for the primary CV (not diagnostics)."""
         engine, init_traj = _build_engine_traj()
         log_file = tmp_path / "shoot.log"
-        bias = _RecordingEnhancedBias()
+        bias = RecordingEnhancedBias()
 
         def _always_finite_cv(traj):
             return 1.5
@@ -211,7 +194,7 @@ class TestFullStackDualMode:
         """TPS-OPES with n_fixed_point=2 + diagnostic CVs: bias updates occur."""
         engine, init_traj = _build_engine_traj(n_fixed_point=2)
         log_file = tmp_path / "shoot.log"
-        bias = _RecordingEnhancedBias()
+        bias = RecordingEnhancedBias()
         diag_fns = {"contact_order": _contact_order_cv, "clash_count": _clash_count_cv}
 
         _, log = run_tps_path_sampling(
@@ -250,7 +233,7 @@ class TestNFixedPointDualMode:
         """TPS-OPES with n_fixed_point=2 must complete, bias updates recorded."""
         engine, init_traj = _build_engine_traj(n_fixed_point=2)
         log_file = tmp_path / "shoot.log"
-        bias = _RecordingEnhancedBias()
+        bias = RecordingEnhancedBias()
         _, log = run_tps_path_sampling(
             engine, init_traj, n_rounds=5, log_path=log_file,
             forward_only=True,

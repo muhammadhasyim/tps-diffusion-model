@@ -1,25 +1,37 @@
 #!/usr/bin/env python3
-"""FES-guided RL for Boltz-2: OpenMM+OPES teacher vs Boltz student (CV KL surrogate).
+"""Bidirectional FES-guided RL: OpenMM+OPES and Boltz diffusion in a mutual feedback loop.
 
-Each iteration:
+Each iteration has six steps:
 
-1. Run a short OpenMM Langevin burst with on-the-fly OPES bias (refines target CV density).
-2. Roll out Boltz diffusion trajectories; map terminal frames to pose CVs.
-3. Update a running KDE over student CVs; compute clipped advantages
-   ``log p_target - log p_Boltz`` from the teacher OPES estimate.
-4. Apply the DDPO-IS / PPO clipped surrogate (:mod:`genai_tps.rl.training`).
+1. **MD burst** -- Run short OpenMM Langevin dynamics with OPES kernel deposition
+   (refines the physics-based FES reference).
+2. **Boltz rollouts** -- Generate diffusion trajectories and compute terminal CVs.
+3. **Generative OPES deposit** -- Inject Boltz terminal CVs into the shared OPES bias
+   at reduced weight (``generative_deposit_weight``), so the target density
+   incorporates regions the generator has explored.
+4. **Disagreement map** -- Score each Boltz sample by
+   ``|log p_target(cv) - log p_student(cv)|``.  Identify the highest-disagreement
+   structure as the most informative starting point for physics validation.
+5. **Warm-start MD** -- (Optional, controlled by ``--disagreement-warmstart``)
+   Teleport OpenMM to the Boltz structure with maximal disagreement, minimise, and
+   let the next MD burst physically explore that neighbourhood.
+6. **PPO update** -- Standard DDPO-IS clipped surrogate loss using the now-updated
+   OPES target and student KDE baseline.
+
+The loop is self-correcting: if Boltz proposes implausible structures, the MD burst
+at that location produces low ``log_p_target``, yielding a negative advantage that
+pushes the generator away.
 
 Example::
 
-    pip install -e ".[boltz,dev]" && pip install -e ./boltz
-    python scripts/train_fes_guided_boltz.py \\
-        --out ./fes_rl_out \\
+    python scripts/train_bidirectional_fes_boltz.py \\
+        --out ./bidir_fes_out \\
         --yaml examples/cofolding_multimer_msa_empty.yaml \\
-        --n-iters 2 \\
-        --rollouts-per-iter 1 \\
-        --diffusion-steps 8
-
-Requires OpenMM (+ optional PDBFixer / openff for ligands) and a Boltz-2 checkpoint.
+        --n-iters 500 \\
+        --rollouts-per-iter 4 \\
+        --diffusion-steps 16 \\
+        --disagreement-warmstart \\
+        --generative-deposit-weight 0.2
 """
 
 from __future__ import annotations
@@ -31,60 +43,35 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.nn.utils import clip_grad_norm_
 from torch.optim import Adam
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
-from genai_tps.utils.compute_device import (  # noqa: E402
-    maybe_set_torch_cuda_current_device,
-    parse_torch_device,
-)
-
-
-def _exit_if_rl_excluded() -> None:
-    try:
-        import genai_tps.rl.config  # noqa: F401
-    except ImportError:
-        print(
-            "This script requires the optional genai_tps.rl package.\n"
-            "Restore it with: git checkout HEAD -- src/python/genai_tps/rl",
-            file=sys.stderr,
-        )
-        sys.exit(2)
-
 
 def main() -> None:
-    _exit_if_rl_excluded()
-    parser = argparse.ArgumentParser(description="FES-guided RL (OpenMM+OPES teacher, Boltz student).")
-    parser.add_argument("--yaml", type=Path, default=None, help="Boltz input YAML (co-folding).")
-    parser.add_argument("--cache", type=Path, default=None, help="Boltz cache dir (default ~/.boltz).")
-    parser.add_argument("--out", type=Path, required=True, help="Output directory.")
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda",
-        help="PyTorch device: cpu, cuda, or cuda:N (default: cuda).",
+    parser = argparse.ArgumentParser(
+        description="Bidirectional FES-guided RL (OpenMM <-> Boltz feedback loop).",
     )
+    parser.add_argument("--yaml", type=Path, default=None)
+    parser.add_argument("--cache", type=Path, default=None)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--diffusion-steps", type=int, default=16)
     parser.add_argument("--recycling-steps", type=int, default=1)
     parser.add_argument("--kernels", action="store_true")
-    parser.add_argument("--n-iters", type=int, default=1000)
+    parser.add_argument("--n-iters", type=int, default=500)
     parser.add_argument("--md-steps-per-burst", type=int, default=2000)
     parser.add_argument("--md-deposit-pace", type=int, default=10)
     parser.add_argument("--rollouts-per-iter", type=int, default=8)
     parser.add_argument("--learning-rate", type=float, default=1e-5)
     parser.add_argument("--clip-range", type=float, default=0.2)
     parser.add_argument("--tau-sq", type=float, default=1e-2)
-    parser.add_argument("--topo-npz", type=Path, default=None, help="structures/*.npz topology.")
-    parser.add_argument("--ref-pdb", type=Path, default=None, help="Heavy-atom PDB for OpenMM (default: write from topo).")
-    parser.add_argument(
-        "--ligand-smiles-json",
-        type=Path,
-        default=None,
-        help='JSON dict of chain_id → SMILES (same convention as compute_cv_rmsd).',
-    )
+    parser.add_argument("--topo-npz", type=Path, default=None)
+    parser.add_argument("--ref-pdb", type=Path, default=None)
+    parser.add_argument("--ligand-smiles-json", type=Path, default=None)
     parser.add_argument("--openmm-platform", type=str, default="CUDA")
     parser.add_argument("--opes-barrier", type=float, default=5.0)
     parser.add_argument("--opes-biasfactor", type=float, default=10.0)
@@ -94,6 +81,25 @@ def main() -> None:
     parser.add_argument("--teacher-minimize-steps", type=int, default=0)
     parser.add_argument("--pocket-radius", type=float, default=6.0)
     parser.add_argument("--train-full-model", action="store_true", default=False)
+
+    # Bidirectional loop parameters
+    parser.add_argument(
+        "--generative-deposit-weight", type=float, default=0.2,
+        help="OPES kernel height scale for generative-model deposits (0, 1]. Default: 0.2.",
+    )
+    parser.add_argument(
+        "--disagreement-warmstart", action="store_true", default=False,
+        help="Teleport OpenMM to highest-disagreement Boltz structure each warm-start iteration.",
+    )
+    parser.add_argument(
+        "--warmstart-minimize-steps", type=int, default=200,
+        help="Energy minimisation iterations after warm-start position set. Default: 200.",
+    )
+    parser.add_argument(
+        "--warmstart-fraction", type=float, default=0.5,
+        help="Fraction of iterations that perform warm-start (0=never, 1=every). Default: 0.5.",
+    )
+
     args = parser.parse_args()
 
     yaml_path = args.yaml or (_REPO_ROOT / "examples" / "cofolding_multimer_msa_empty.yaml")
@@ -102,19 +108,14 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        from genai_tps.io.boltz_npz_export import load_topo
-        from genai_tps.backends.boltz.cache_paths import default_boltz_cache_dir
+        from genai_tps.analysis.boltz_npz_export import load_topo
         from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
-<<<<<<< Updated upstream
-        from genai_tps.simulation import OPESBias
-=======
         from genai_tps.backends.boltz.session import (
             boltz_prep_run_dir,
             build_boltz_session,
             write_ref_pdb_from_structure,
         )
         from genai_tps.enhanced_sampling.opes_bias import OPESBias
->>>>>>> Stashed changes
         from genai_tps.rl.config import BoltzRLConfig, FESTeacherConfig
         from genai_tps.rl.fes_teacher import OpenMMTeacher, boltz_terminal_pose_cv_numpy
         from genai_tps.rl.rollout import rollout_forward_trajectory
@@ -124,12 +125,8 @@ def main() -> None:
         print(f"Import error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
-    if torch.cuda.is_available():
-        device = parse_torch_device(args.device)
-        maybe_set_torch_cuda_current_device(device)
-    else:
-        device = torch.device("cpu")
+    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     work_root = args.out.expanduser().resolve()
     work_root.mkdir(parents=True, exist_ok=True)
 
@@ -173,6 +170,10 @@ def main() -> None:
         advantage_clip=float(args.advantage_clip),
         teacher_minimize_steps=int(args.teacher_minimize_steps),
         pocket_radius=float(args.pocket_radius),
+        generative_deposit_weight=float(args.generative_deposit_weight),
+        disagreement_warmstart=bool(args.disagreement_warmstart),
+        warmstart_minimize_steps=int(args.warmstart_minimize_steps),
+        warmstart_fraction=float(args.warmstart_fraction),
     )
     rl_cfg = BoltzRLConfig(
         learning_rate=float(args.learning_rate),
@@ -204,6 +205,9 @@ def main() -> None:
         bandwidth=fes_cfg.student_kde_bandwidth,
     )
 
+    gen_deposit_counter = 0
+    warmstart_every = max(1, int(round(1.0 / fes_cfg.warmstart_fraction))) if fes_cfg.warmstart_fraction > 0 else 0
+
     train_full = bool(args.train_full_model)
     params = list(model.parameters()) if train_full else list(model.structure_module.parameters())
     optimizer = Adam(params, lr=rl_cfg.learning_rate)
@@ -211,10 +215,18 @@ def main() -> None:
     for it in range(1, fes_cfg.n_iters + 1):
         if str(device).startswith("cuda"):
             torch.cuda.empty_cache()
+
+        # ------------------------------------------------------------------
+        # Step 1: Physics MD burst (deposits OPES kernels from Langevin MD)
+        # ------------------------------------------------------------------
         teacher.run_md_burst(fes_cfg.md_steps_per_burst, fes_cfg.md_deposit_pace)
 
+        # ------------------------------------------------------------------
+        # Step 2: Boltz rollouts + terminal CVs and coordinates
+        # ------------------------------------------------------------------
         trajectories: list = []
         cvs: list[np.ndarray] = []
+        terminal_coords: list[np.ndarray] = []
         model.eval()
         with torch.inference_mode():
             core.diffusion.eval()
@@ -223,10 +235,53 @@ def main() -> None:
                 trajectories.append(tr)
                 cv = boltz_terminal_pose_cv_numpy(tr[-1].x_next, int(n_struct), indexer)
                 cvs.append(cv)
+                terminal_coords.append(
+                    tr[-1].x_next[:, : int(n_struct), :].detach().cpu().numpy()
+                )
 
+        # ------------------------------------------------------------------
+        # Step 3: Generative OPES deposits (weighted)
+        # ------------------------------------------------------------------
+        gen_deposits = 0
+        for cv in cvs:
+            if np.all(np.isfinite(cv)):
+                gen_deposit_counter += 1
+                teacher.opes.update(
+                    cv,
+                    gen_deposit_counter,
+                    height_scale=fes_cfg.generative_deposit_weight,
+                )
+                gen_deposits += 1
+
+        # ------------------------------------------------------------------
+        # Step 4: Update student KDE + disagreement-driven warm-start
+        # ------------------------------------------------------------------
         for cv in cvs:
             student_kde.update(cv)
 
+        warmstarted = False
+        max_disagreement = 0.0
+        if (
+            fes_cfg.disagreement_warmstart
+            and warmstart_every > 0
+            and it % warmstart_every == 0
+        ):
+            disagreements = []
+            for cv in cvs:
+                log_pt = teacher.log_p_target(cv)
+                log_ps = student_kde.log_density(cv)
+                disagreements.append(abs(log_pt - log_ps))
+            best_k = int(np.argmax(disagreements))
+            max_disagreement = disagreements[best_k]
+            teacher.set_positions_from_boltz(
+                terminal_coords[best_k],
+                minimize_steps=fes_cfg.warmstart_minimize_steps,
+            )
+            warmstarted = True
+
+        # ------------------------------------------------------------------
+        # Step 5: PPO update
+        # ------------------------------------------------------------------
         model.train()
         if not train_full:
             model.structure_module.train()
@@ -247,18 +302,27 @@ def main() -> None:
             total_loss = total_loss + loss
         total_loss.backward()
         if rl_cfg.max_grad_norm is not None:
-            torch.nn.utils.clip_grad_norm_(params, rl_cfg.max_grad_norm)
+            clip_grad_norm_(params, rl_cfg.max_grad_norm)
         optimizer.step()
 
+        # ------------------------------------------------------------------
+        # Logging
+        # ------------------------------------------------------------------
+        ws_tag = f" warmstart(d={max_disagreement:.3g})" if warmstarted else ""
         print(
-            f"[FES-RL] iter {it}/{fes_cfg.n_iters} loss={float(total_loss.detach().cpu()):.6f} "
-            f"openmm_platform={teacher.platform_used}",
+            f"[BiDir-FES] iter {it}/{fes_cfg.n_iters} "
+            f"loss={float(total_loss.detach().cpu()):.6f} "
+            f"gen_deposits={gen_deposits} "
+            f"opes_kernels={teacher.opes.n_kernels} "
+            f"student_n={len(student_kde._buf)}"
+            f"{ws_tag}",
             flush=True,
         )
         if it % max(1, fes_cfg.n_iters // 10) == 0 or it == fes_cfg.n_iters:
-            ckpt_path = work_root / f"boltz2_fes_rl_iter_{it}.pt"
+            ckpt_path = work_root / f"boltz2_bidir_fes_iter_{it}.pt"
             torch.save(model.state_dict(), ckpt_path)
-            print(f"[FES-RL] saved {ckpt_path}", flush=True)
+            teacher.opes.save_state(work_root / f"opes_state_iter_{it}.json")
+            print(f"[BiDir-FES] saved {ckpt_path}", flush=True)
 
 
 if __name__ == "__main__":

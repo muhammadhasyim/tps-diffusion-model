@@ -47,6 +47,8 @@ _LOG_OVERFLOW_GUARD = 700.0
 # Type alias for a CV value: scalar or 1-D array.
 CVType = Union[float, np.ndarray]
 
+__all__ = ["CVType", "Kernel", "OPESBias"]
+
 
 def _to_array(v: CVType, ndim: int) -> np.ndarray:
     """Convert a scalar or array CV value to a float64 array of shape (ndim,)."""
@@ -439,7 +441,13 @@ class OPESBias:
     # Update
     # ------------------------------------------------------------------
 
-    def update(self, cv_accepted: CVType, mc_step: int) -> None:
+    def update(
+        self,
+        cv_accepted: CVType,
+        mc_step: int,
+        *,
+        height_scale: float = 1.0,
+    ) -> None:
         """Deposit a kernel (every ``pace`` steps) and update the bias.
 
         Parameters
@@ -448,6 +456,11 @@ class OPESBias:
             CV value of the currently accepted path.  Scalar for 1-D.
         mc_step : int
             Current MC step number (1-indexed).
+        height_scale : float
+            Multiplicative factor applied to the kernel height **before** the
+            standard ``sigma_0 / sigma`` rescaling.  Use values in ``(0, 1)``
+            to down-weight deposits from noisy / non-physical sources (e.g.
+            generative-model proposals in a bidirectional FES loop).
         """
         if not _all_finite(cv_accepted):
             return
@@ -458,7 +471,7 @@ class OPESBias:
             return
 
         sigma = self._current_sigma()
-        height = self._compute_height(cv)
+        height = self._compute_height(cv) * float(height_scale)
 
         self.counter += 1
         self.sum_weights += height

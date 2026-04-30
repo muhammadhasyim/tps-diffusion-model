@@ -18,14 +18,22 @@ import pytest
 
 # All genai_tps submodules to verify
 _MODULES = [
+<<<<<<< Updated upstream
     # Boltz backend
+=======
+    "genai_tps.backends.boltz.boltz2_trunk",
+>>>>>>> Stashed changes
     "genai_tps.backends.boltz.collective_variables",
+    "genai_tps.backends.boltz.constants",
     "genai_tps.backends.boltz.engine",
     "genai_tps.backends.boltz.gpu_core",
     "genai_tps.backends.boltz.path_probability",
+    "genai_tps.backends.boltz.session",
     "genai_tps.backends.boltz.snapshot",
     "genai_tps.backends.boltz.states",
+    "genai_tps.backends.boltz.tps_checkpoint",
     "genai_tps.backends.boltz.tps_sampling",
+<<<<<<< Updated upstream
     # Simulation
     "genai_tps.simulation.openmm_cv",
     "genai_tps.simulation.openmm_boltz_bridge",
@@ -49,6 +57,14 @@ _MODULES = [
     "genai_tps.training.config",
     "genai_tps.training.dataset",
     "genai_tps.training.diagnostics",
+=======
+    "genai_tps.backends.boltz.utils",
+    "genai_tps.enhanced_sampling.openmm_cv",
+    "genai_tps.enhanced_sampling.opes_bias",
+    "genai_tps.enhanced_sampling.exponential_tilting",
+    "genai_tps.enhanced_sampling.mbar_analysis",
+    "genai_tps.analysis.boltz_npz_export",
+>>>>>>> Stashed changes
 ]
 
 

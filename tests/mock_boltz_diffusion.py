@@ -41,3 +41,16 @@ class MockDiffusion(torch.nn.Module):
 
     def preconditioned_network_forward(self, noised_atom_coords, sigma, network_condition_kwargs=None):
         return noised_atom_coords
+
+
+class RecordingEnhancedBias:
+    """Minimal enhanced-sampling bias stub: records :meth:`update` calls; acceptance factor 1."""
+
+    def __init__(self) -> None:
+        self.updates: list[tuple[float, int]] = []
+
+    def compute_acceptance_factor(self, cv_old: float, cv_new: float) -> float:
+        return 1.0
+
+    def update(self, cv_accepted: float, mc_step: int) -> None:
+        self.updates.append((cv_accepted, mc_step))

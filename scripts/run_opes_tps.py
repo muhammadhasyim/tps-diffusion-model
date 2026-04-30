@@ -35,13 +35,13 @@ import json
 import os
 import sys
 from collections.abc import Callable
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 import torch
 from openpathsampling.engines.trajectory import Trajectory
 
+<<<<<<< Updated upstream
 from genai_tps.utils.compute_device import (
     cuda_device_index_for_openmm,
     maybe_set_torch_cuda_current_device,
@@ -49,6 +49,10 @@ from genai_tps.utils.compute_device import (
 )
 
 from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
+=======
+from genai_tps.backends.boltz.session import boltz_results_run_dir, build_boltz_session
+from genai_tps.backends.boltz.tps_checkpoint import initial_trajectory, trajectory_checkpoint_callback
+>>>>>>> Stashed changes
 from genai_tps.backends.boltz.collective_variables import (
     PoseCVIndexer,
     ca_contact_count,
@@ -502,6 +506,35 @@ def _make_multi_cv_function(
     return _vector_cv, ndim
 
 
+<<<<<<< Updated upstream
+=======
+def _opes_state_checkpoint_callback(
+    bias: OPESBias,
+    work_root: Path,
+    every: int,
+    bias_cv: str,
+    bias_cv_names: list[str],
+) -> Callable[[int, Trajectory], None]:
+    """Periodic OPES state checkpoints for restart and analysis."""
+    def cb(mc_step: int, _traj: Trajectory) -> None:
+        if every <= 0 or mc_step % every != 0:
+            return
+        state_dir = work_root / "opes_states"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        tagged = state_dir / f"opes_state_{mc_step:08d}.json"
+        bias.save_state(
+            tagged, bias_cv=bias_cv, bias_cv_names=bias_cv_names,
+        )
+        latest = state_dir / "opes_state_latest.json"
+        shutil.copyfile(tagged, latest)
+        print(
+            f"[TPS-OPES] OPES state checkpoint MC step {mc_step} "
+            f"({bias.n_kernels} kernels, {bias.counter} depositions)",
+            file=sys.stderr, flush=True,
+        )
+    return cb
+
+>>>>>>> Stashed changes
 def _build_diagnostic_cv_functions(
     names_csv: str | None,
 ) -> dict[str, "Callable[[Trajectory], float]"] | None:
@@ -932,22 +965,12 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        from boltz.data.module.inferencev2 import Boltz2InferenceDataModule
-        from boltz.data.types import Manifest
-        from boltz.main import (
-            Boltz2DiffusionParams,
-            BoltzSteeringParams,
-            MSAModuleArgs,
-            PairformerArgsV2,
-            check_inputs,
-            download_boltz2,
-            process_inputs,
-        )
-        from boltz.model.models.boltz2 import Boltz2
+        import boltz  # noqa: F401
     except ImportError as e:
         print(f"Boltz is required: pip install -e ./boltz\n{e}", file=sys.stderr)
         sys.exit(1)
 
+<<<<<<< Updated upstream
     cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     cache.mkdir(parents=True, exist_ok=True)
     mol_dir = cache / "mols"
@@ -1048,16 +1071,37 @@ def main() -> None:
         }
 
     diffusion = model.structure_module
+=======
+    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    work_root = args.out.expanduser().resolve()
+    work_root.mkdir(parents=True, exist_ok=True)
+    boltz_run_dir = boltz_results_run_dir(work_root, yaml_path.stem)
+>>>>>>> Stashed changes
     _dtype_map = {"float32": torch.float32, "bfloat16": torch.bfloat16}
     inference_dtype = _dtype_map.get(args.inference_dtype) if args.inference_dtype else None
-    core = BoltzSamplerCore(
-        diffusion, atom_mask, network_kwargs, multiplicity=1,
-        compile_model=args.compile_model,
-        n_fixed_point=args.n_fixed_point,
-        inference_dtype=inference_dtype,
-    )
-    core.build_schedule(args.diffusion_steps)
-    n_atoms = int(atom_mask.shape[1])
+    try:
+        model, core, batch, processed_dir, _, boltz_run_dir, _ = build_boltz_session(
+            yaml_path=yaml_path,
+            cache=cache,
+            boltz_run_dir=boltz_run_dir,
+            device=device,
+            diffusion_steps=args.diffusion_steps,
+            recycling_steps=args.recycling_steps,
+            kernels=args.kernels,
+            use_msa_server=bool(args.use_msa_server),
+            model_eval_mode=True,
+            sampler_core_extra_kwargs={
+                "compile_model": args.compile_model,
+                "n_fixed_point": args.n_fixed_point,
+                "inference_dtype": inference_dtype,
+            },
+        )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
+
+    n_atoms = int(core.atom_mask.shape[1])
 
     torch.manual_seed(0)
     init_traj = initial_trajectory(core)
@@ -1461,7 +1505,13 @@ def main() -> None:
     save_traj_every = max(0, int(args.save_trajectory_every))
     periodic_extra: list[tuple[Callable[[int, Trajectory], None], int]] = []
     if save_traj_every > 0:
+<<<<<<< Updated upstream
         periodic_extra.append((trajectory_checkpoint_callback(work_root), save_traj_every))
+=======
+        periodic_extra.append(
+            (trajectory_checkpoint_callback(work_root, bracket_tag="[TPS-OPES]"), save_traj_every)
+        )
+>>>>>>> Stashed changes
 
     save_opes_every = max(0, int(args.save_opes_state_every))
     if save_opes_every > 0:

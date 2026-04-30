@@ -11,9 +11,10 @@ import torch
 
 from openpathsampling.collectivevariable import FunctionCV
 
-# Boltz chain_type_ids: {"PROTEIN": 0, "DNA": 1, "RNA": 2, "NONPOLYMER": 3}
-_PROTEIN_MOL_TYPE: int = 0
-_NONPOLYMER_MOL_TYPE: int = 3
+from genai_tps.backends.boltz.constants import NONPOLYMER_MOL_TYPE, PROTEIN_MOL_TYPE
+
+_PROTEIN_MOL_TYPE: int = PROTEIN_MOL_TYPE
+_NONPOLYMER_MOL_TYPE: int = NONPOLYMER_MOL_TYPE
 
 
 def _coords_torch(snapshot) -> torch.Tensor:

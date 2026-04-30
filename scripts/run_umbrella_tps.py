@@ -35,13 +35,13 @@ import os
 import shutil
 import sys
 from collections.abc import Callable
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 import torch
 from openpathsampling.engines.trajectory import Trajectory
 
+<<<<<<< Updated upstream:scripts/run_umbrella_tps.py
 from genai_tps.utils.compute_device import (
     cuda_device_index_for_openmm,
     maybe_set_torch_cuda_current_device,
@@ -50,6 +50,10 @@ from genai_tps.utils.compute_device import (
 
 from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
 from genai_tps.backends.boltz.bridge import snapshot_from_gpu
+=======
+from genai_tps.backends.boltz.session import boltz_results_run_dir, build_boltz_session
+from genai_tps.backends.boltz.tps_checkpoint import initial_trajectory, trajectory_checkpoint_callback
+>>>>>>> Stashed changes:scripts/run_tilted_tps.py
 from genai_tps.backends.boltz.collective_variables import (
     radius_of_gyration,
     rmsd_to_reference,
@@ -166,6 +170,7 @@ def _make_cv_function(
         raise ValueError(f"Unknown CV type: {cv_type!r}. Use 'rmsd', 'rg', or 'openmm'.")
 
 
+<<<<<<< Updated upstream:scripts/run_umbrella_tps.py
 def _write_tps_checkpoint_npz(traj: Trajectory, out_npz: Path, *, mc_step: int) -> bool:
     """Save accepted path coordinates for post-processing."""
     stack = []
@@ -232,6 +237,8 @@ def _initial_trajectory(core: BoltzSamplerCore, n_steps: int | None = None) -> T
     return Trajectory(snaps)
 
 
+=======
+>>>>>>> Stashed changes:scripts/run_tilted_tps.py
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Harmonic-umbrella enhanced TPS on Boltz-2 co-folding",
@@ -338,22 +345,12 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        from boltz.data.module.inferencev2 import Boltz2InferenceDataModule
-        from boltz.data.types import Manifest
-        from boltz.main import (
-            Boltz2DiffusionParams,
-            BoltzSteeringParams,
-            MSAModuleArgs,
-            PairformerArgsV2,
-            check_inputs,
-            download_boltz2,
-            process_inputs,
-        )
-        from boltz.model.models.boltz2 import Boltz2
+        import boltz  # noqa: F401
     except ImportError as e:
         print(f"Boltz is required: pip install -e ./boltz\n{e}", file=sys.stderr)
         sys.exit(1)
 
+<<<<<<< Updated upstream:scripts/run_umbrella_tps.py
     cache = Path(args.cache).expanduser() if args.cache else default_boltz_cache_dir()
     cache.mkdir(parents=True, exist_ok=True)
     mol_dir = cache / "mols"
@@ -369,88 +366,34 @@ def main() -> None:
         if args.openmm_device_index is not None
         else cuda_device_index_for_openmm(device)
     )
+=======
+    cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
+    mol_dir = cache / "mols"
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+>>>>>>> Stashed changes:scripts/run_tilted_tps.py
     work_root = args.out.expanduser().resolve()
     work_root.mkdir(parents=True, exist_ok=True)
-    boltz_run_dir = work_root / f"boltz_results_{yaml_path.stem}"
-    boltz_run_dir.mkdir(parents=True, exist_ok=True)
-
-    data_list = check_inputs(yaml_path)
-    process_inputs(
-        data=data_list, out_dir=boltz_run_dir,
-        ccd_path=cache / "ccd.pkl", mol_dir=mol_dir,
-        msa_server_url="https://api.colabfold.com",
-        msa_pairing_strategy="greedy", use_msa_server=False,
-        boltz2=True, preprocessing_threads=1,
-    )
-
-    manifest = Manifest.load(boltz_run_dir / "processed" / "manifest.json")
-    if not manifest.records:
-        print("No records in manifest after preprocessing.", file=sys.stderr)
+    boltz_run_dir = boltz_results_run_dir(work_root, yaml_path.stem)
+    try:
+        model, core, batch, processed_dir, _, boltz_run_dir, _ = build_boltz_session(
+            yaml_path=yaml_path,
+            cache=cache,
+            boltz_run_dir=boltz_run_dir,
+            device=device,
+            diffusion_steps=args.diffusion_steps,
+            recycling_steps=args.recycling_steps,
+            kernels=args.kernels,
+            use_msa_server=False,
+            model_eval_mode=True,
+        )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
         sys.exit(1)
 
-    processed_dir = boltz_run_dir / "processed"
-    dm = Boltz2InferenceDataModule(
-        manifest=manifest,
-        target_dir=processed_dir / "structures",
-        msa_dir=processed_dir / "msa",
-        mol_dir=mol_dir, num_workers=0,
-        constraints_dir=processed_dir / "constraints" if (processed_dir / "constraints").exists() else None,
-        template_dir=processed_dir / "templates" if (processed_dir / "templates").exists() else None,
-        extra_mols_dir=processed_dir / "mols" if (processed_dir / "mols").exists() else None,
-    )
-    loader = dm.predict_dataloader()
-    batch = next(iter(loader))
-    batch = dm.transfer_batch_to_device(batch, device, dataloader_idx=0)
-
-    diffusion_params = Boltz2DiffusionParams()
-    pairformer_args = PairformerArgsV2()
-    msa_args = MSAModuleArgs(subsample_msa=True, num_subsampled_msa=1024, use_paired_feature=True)
-    steering = BoltzSteeringParams()
-    steering.fk_steering = False
-    steering.physical_guidance_update = False
-    steering.contact_guidance_update = False
-
-    ckpt = cache / "boltz2_conf.ckpt"
-    predict_args = {
-        "recycling_steps": args.recycling_steps,
-        "sampling_steps": args.diffusion_steps,
-        "diffusion_samples": 1,
-        "max_parallel_samples": None,
-        "write_confidence_summary": True,
-        "write_full_pae": False,
-        "write_full_pde": False,
-    }
-
-    model = Boltz2.load_from_checkpoint(
-        str(ckpt), strict=True, predict_args=predict_args,
-        map_location="cpu", diffusion_process_args=asdict(diffusion_params),
-        ema=False, use_kernels=args.kernels,
-        pairformer_args=asdict(pairformer_args),
-        msa_args=asdict(msa_args),
-        steering_args=asdict(steering),
-    )
-    model.to(device)
-    model.eval()
-
-    atom_mask, network_kwargs = boltz2_trunk_to_network_kwargs(
-        model, batch, recycling_steps=args.recycling_steps,
-    )
-    for k, v in list(network_kwargs.items()):
-        if hasattr(v, "to"):
-            network_kwargs[k] = v.to(device)
-    if isinstance(network_kwargs.get("feats"), dict):
-        network_kwargs["feats"] = {
-            fk: fv.to(device) if hasattr(fv, "to") else fv
-            for fk, fv in network_kwargs["feats"].items()
-        }
-
-    diffusion = model.structure_module
-    core = BoltzSamplerCore(diffusion, atom_mask, network_kwargs, multiplicity=1)
-    core.build_schedule(args.diffusion_steps)
-    n_atoms = int(atom_mask.shape[1])
+    n_atoms = int(core.atom_mask.shape[1])
 
     torch.manual_seed(0)
-    init_traj = _initial_trajectory(core)
+    init_traj = initial_trajectory(core)
 
     last_snap = init_traj[-1]
     ref_coords = None
@@ -497,7 +440,12 @@ def main() -> None:
     save_traj_every = max(0, int(args.save_trajectory_every))
     periodic_extra: list[tuple[Callable[[int, Trajectory], None], int]] = []
     if save_traj_every > 0:
-        periodic_extra.append((_trajectory_checkpoint_callback(work_root), save_traj_every))
+        periodic_extra.append(
+            (
+                trajectory_checkpoint_callback(work_root, bracket_tag="[TPS-TILTED]"),
+                save_traj_every,
+            )
+        )
 
     if args.annealing_schedule is not None:
         anneal_schedule = _parse_annealing_schedule(args.annealing_schedule)
