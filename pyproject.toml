@@ -33,6 +33,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+profiling = [
+  # NVTX Python markers for NVIDIA Nsight Systems timelines (set GENAI_TPS_NVTX=1).
+  "nvtx",
+]
 boltz = [
   "torch>=2.2",
   # pytorch-lightning==2.5.0 (pinned by boltz) requires torchmetrics; listed

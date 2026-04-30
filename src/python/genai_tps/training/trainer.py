@@ -6,7 +6,9 @@ import argparse
 import copy
 import csv
 import json
+import os
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,17 @@ from genai_tps.training.loss import (
     true_quotient_dsm_loss,
 )
 from genai_tps.training.noise_schedule import EDMNoiseParams
+
+
+def _nvtx_enabled() -> bool:
+    return os.environ.get("GENAI_TPS_NVTX", "").strip().lower() in ("1", "true", "yes")
+
+
+def _nvtx_range(name: str):
+    """Nsight Systems NVTX range; no-op unless GENAI_TPS_NVTX is set and CUDA nvtx exists."""
+    if _nvtx_enabled() and torch.cuda.is_available() and hasattr(torch.cuda, "nvtx"):
+        return torch.cuda.nvtx.range(name)
+    return nullcontext()
 
 
 def run_weighted_dsm_training(
@@ -146,62 +159,63 @@ def run_weighted_dsm_training(
             if n_batches <= skip_batches:
                 continue
 
-            x0 = batch["coords"].float().to(device)
-            lw = batch["logw"].float().to(device)
-            am = batch["atom_mask"].float().to(device)
+            with _nvtx_range(f"wdsm_train_e{epoch}_b{n_batches}"):
+                x0 = batch["coords"].float().to(device)
+                lw = batch["logw"].float().to(device)
+                am = batch["atom_mask"].float().to(device)
 
-            optimizer.zero_grad()
-            batch_nck = {**nck, "multiplicity": x0.shape[0]}
-            if args.loss_type == "true-quotient":
-                loss = true_quotient_dsm_loss(
-                    model.structure_module,
-                    x0,
-                    lw,
-                    am,
-                    noise_params,
-                    frozen_model=frozen_diffusion if cfg.beta > 0 else None,
-                    beta=cfg.beta,
-                    network_condition_kwargs=batch_nck,
+                optimizer.zero_grad()
+                batch_nck = {**nck, "multiplicity": x0.shape[0]}
+                if args.loss_type == "true-quotient":
+                    loss = true_quotient_dsm_loss(
+                        model.structure_module,
+                        x0,
+                        lw,
+                        am,
+                        noise_params,
+                        frozen_model=frozen_diffusion if cfg.beta > 0 else None,
+                        beta=cfg.beta,
+                        network_condition_kwargs=batch_nck,
+                    )
+                elif args.loss_type == "quotient":
+                    loss = alignment_weighted_dsm_loss(
+                        model.structure_module,
+                        x0,
+                        lw,
+                        am,
+                        noise_params,
+                        frozen_model=frozen_diffusion if cfg.beta > 0 else None,
+                        beta=cfg.beta,
+                        network_condition_kwargs=batch_nck,
+                    )
+                else:
+                    loss = regularized_weighted_dsm_loss(
+                        model.structure_module,
+                        frozen_diffusion,
+                        x0,
+                        lw,
+                        am,
+                        noise_params,
+                        cfg,
+                        network_condition_kwargs=batch_nck,
+                    )
+                loss.backward()
+
+                grad_norm = torch.nn.utils.clip_grad_norm_(params, cfg.max_grad_norm)
+                optimizer.step()
+
+                loss_val = float(loss.detach().cpu())
+                epoch_loss += loss_val
+
+                writer.writerow(
+                    {
+                        "epoch": epoch,
+                        "batch": n_batches,
+                        "loss": f"{loss_val:.6f}",
+                        "grad_norm": f"{float(grad_norm):.4f}",
+                        "val_loss": "",
+                    }
                 )
-            elif args.loss_type == "quotient":
-                loss = alignment_weighted_dsm_loss(
-                    model.structure_module,
-                    x0,
-                    lw,
-                    am,
-                    noise_params,
-                    frozen_model=frozen_diffusion if cfg.beta > 0 else None,
-                    beta=cfg.beta,
-                    network_condition_kwargs=batch_nck,
-                )
-            else:
-                loss = regularized_weighted_dsm_loss(
-                    model.structure_module,
-                    frozen_diffusion,
-                    x0,
-                    lw,
-                    am,
-                    noise_params,
-                    cfg,
-                    network_condition_kwargs=batch_nck,
-                )
-            loss.backward()
-
-            grad_norm = torch.nn.utils.clip_grad_norm_(params, cfg.max_grad_norm)
-            optimizer.step()
-
-            loss_val = float(loss.detach().cpu())
-            epoch_loss += loss_val
-
-            writer.writerow(
-                {
-                    "epoch": epoch,
-                    "batch": n_batches,
-                    "loss": f"{loss_val:.6f}",
-                    "grad_norm": f"{float(grad_norm):.4f}",
-                    "val_loss": "",
-                }
-            )
 
             if args.save_every_batches > 0 and n_batches % args.save_every_batches == 0:
                 mid_ckpt = work_root / f"boltz2_wdsm_e{epoch:03d}_b{n_batches:06d}.pt"
@@ -225,45 +239,46 @@ def run_weighted_dsm_training(
             val_n = 0
             with torch.no_grad():
                 for vbatch in val_loader:
-                    vx0 = vbatch["coords"].float().to(device)
-                    vlw = vbatch["logw"].float().to(device)
-                    vam = vbatch["atom_mask"].float().to(device)
-                    vbatch_nck = {**nck, "multiplicity": vx0.shape[0]}
-                    if args.loss_type == "true-quotient":
-                        vloss = true_quotient_dsm_loss(
-                            model.structure_module,
-                            vx0,
-                            vlw,
-                            vam,
-                            noise_params,
-                            frozen_model=frozen_diffusion if cfg.beta > 0 else None,
-                            beta=cfg.beta,
-                            network_condition_kwargs=vbatch_nck,
-                        )
-                    elif args.loss_type == "quotient":
-                        vloss = alignment_weighted_dsm_loss(
-                            model.structure_module,
-                            vx0,
-                            vlw,
-                            vam,
-                            noise_params,
-                            frozen_model=frozen_diffusion if cfg.beta > 0 else None,
-                            beta=cfg.beta,
-                            network_condition_kwargs=vbatch_nck,
-                        )
-                    else:
-                        vloss = regularized_weighted_dsm_loss(
-                            model.structure_module,
-                            frozen_diffusion,
-                            vx0,
-                            vlw,
-                            vam,
-                            noise_params,
-                            cfg,
-                            network_condition_kwargs=vbatch_nck,
-                        )
-                    val_total += float(vloss.detach().cpu())
-                    val_n += 1
+                    with _nvtx_range("wdsm_val_batch"):
+                        vx0 = vbatch["coords"].float().to(device)
+                        vlw = vbatch["logw"].float().to(device)
+                        vam = vbatch["atom_mask"].float().to(device)
+                        vbatch_nck = {**nck, "multiplicity": vx0.shape[0]}
+                        if args.loss_type == "true-quotient":
+                            vloss = true_quotient_dsm_loss(
+                                model.structure_module,
+                                vx0,
+                                vlw,
+                                vam,
+                                noise_params,
+                                frozen_model=frozen_diffusion if cfg.beta > 0 else None,
+                                beta=cfg.beta,
+                                network_condition_kwargs=vbatch_nck,
+                            )
+                        elif args.loss_type == "quotient":
+                            vloss = alignment_weighted_dsm_loss(
+                                model.structure_module,
+                                vx0,
+                                vlw,
+                                vam,
+                                noise_params,
+                                frozen_model=frozen_diffusion if cfg.beta > 0 else None,
+                                beta=cfg.beta,
+                                network_condition_kwargs=vbatch_nck,
+                            )
+                        else:
+                            vloss = regularized_weighted_dsm_loss(
+                                model.structure_module,
+                                frozen_diffusion,
+                                vx0,
+                                vlw,
+                                vam,
+                                noise_params,
+                                cfg,
+                                network_condition_kwargs=vbatch_nck,
+                            )
+                        val_total += float(vloss.detach().cpu())
+                        val_n += 1
             avg_val = val_total / max(val_n, 1)
             val_loss_str = f"  val_loss={avg_val:.6f}"
             writer.writerow(

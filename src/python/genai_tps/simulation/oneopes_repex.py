@@ -38,10 +38,11 @@ import hashlib
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Sequence
+from typing import Any, Callable, Literal, Sequence
 
 import numpy as np
 
+from genai_tps.simulation.nvtx_util import nvtx_range
 from genai_tps.simulation.oneopes_upstream_reference import neighbor_hrex_pairs_for_phase
 
 ReplicaDevicePolicy = Literal["round-robin", "packed", "explicit"]
@@ -294,11 +295,43 @@ def step_replicas_parallel(
     sims_list = list(sims)
     workers = resolve_replica_step_workers(max_workers, n_replicas=len(sims_list))
     t0 = time.time()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(sim.step, chunk_i) for sim in sims_list]
-        for future in futures:
-            future.result()
+    with nvtx_range(
+        f"repex_step_parallel n={len(sims_list)} chunk={chunk_i} workers={workers}"
+    ):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(sim.step, chunk_i) for sim in sims_list]
+            for future in futures:
+                future.result()
     return time.time() - t0
+
+
+def initialize_replicas_parallel(
+    initializers: Sequence[Callable[[], Any]],
+    *,
+    max_workers: int | None = None,
+) -> tuple[list[Any], float]:
+    """Run independent replica setup/minimization callables concurrently.
+
+    The returned list preserves replica order, even when workers finish out of
+    order, so callers can pass packs directly into the REPEX ladder.
+    """
+    init_list = list(initializers)
+    if not init_list:
+        raise ValueError("at least one replica initializer is required.")
+    workers = resolve_replica_step_workers(max_workers, n_replicas=len(init_list))
+    results: list[Any] = [None] * len(init_list)
+    t0 = time.time()
+    with nvtx_range(
+        f"repex_init_parallel n={len(init_list)} workers={workers}"
+    ):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_index = {
+                executor.submit(initializer): idx
+                for idx, initializer in enumerate(init_list)
+            }
+            for future in concurrent.futures.as_completed(future_to_index):
+                results[future_to_index[future]] = future.result()
+    return results, time.time() - t0
 
 
 __all__ = [
@@ -312,6 +345,7 @@ __all__ = [
     "assign_replicas_to_devices",
     "build_stratified_replica_plumed_kwargs",
     "copy_opes_state_snapshot",
+    "initialize_replicas_parallel",
     "LITERATURE_AUXILIARY_OPES_PACE_STEPS",
     "LITERATURE_EXCHANGE_ATTEMPT_STRIDE_STEPS",
     "LITERATURE_MAIN_OPES_PACE_STEPS_HOSTGUEST",
@@ -548,6 +582,7 @@ def build_stratified_replica_plumed_kwargs(
     thermostat_temperature_k: float,
     oneopes_protocol: str = "legacy_boltz",
     paper_multithermal_pace: int | None = None,
+    enable_energy_multithermal: bool = True,
 ) -> dict[str, Any]:
     """Map stratification metadata to :func:`build_plumed_extra_forces_callback` kwargs.
 
@@ -568,7 +603,7 @@ def build_stratified_replica_plumed_kwargs(
         strat = paper_host_guest_replica_strats()[replica_index]
         exp_max: float | None = None
         pace_ov: int | None = None
-        if strat.multithermal:
+        if strat.multithermal and bool(enable_energy_multithermal):
             if user_expanded_temp_max is not None:
                 exp_max = multithermal_temp_max_k_for_replica(
                     replica_index,
@@ -800,6 +835,25 @@ def relocate_plumed_deck_paths(script_text: str, src_root: Path, dst_root: Path)
     return script_text.replace(a, b)
 
 
+def _add_state_rfiles_for_evaluator_restart(script_text: str) -> str:
+    """Mirror non-empty PLUMED ``STATE_WFILE`` files as evaluator ``STATE_RFILE`` inputs."""
+    lines: list[str] = []
+    for line in script_text.splitlines():
+        lines.append(line)
+        stripped = line.strip()
+        if not stripped.startswith("STATE_WFILE="):
+            continue
+        state_path = stripped.split("=", 1)[1]
+        state_file = Path(state_path).expanduser()
+        if not state_file.is_file() or state_file.stat().st_size == 0:
+            continue
+        indent = line[: len(line) - len(line.lstrip())]
+        lines.append(f"{indent}STATE_RFILE={state_path}")
+    if script_text.endswith("\n"):
+        return "\n".join(lines) + "\n"
+    return "\n".join(lines)
+
+
 def prepare_evaluator_scratch_tree(
     *,
     production_rep_root: Path,
@@ -814,6 +868,7 @@ def prepare_evaluator_scratch_tree(
     production_rep_root = production_rep_root.expanduser().resolve()
     raw = (production_rep_root / "plumed_opes.dat").read_text(encoding="utf-8")
     fixed = relocate_plumed_deck_paths(raw, production_rep_root, scratch_root)
+    fixed = _add_state_rfiles_for_evaluator_restart(fixed)
     sp = scratch_root / "plumed_opes.dat"
     sp.write_text(fixed, encoding="utf-8")
     ref_src = production_rep_root / "plumed_rmsd_reference.pdb"
@@ -931,26 +986,27 @@ def refresh_evaluator_context(
 
     from genai_tps.simulation.plumed_opes import add_plumed_opes_to_system
 
-    system = _deserialize_system(template_system_xml)
-    system.removeForce(int(plumed_force_index))
-    script = plumed_script_path.read_text(encoding="utf-8")
-    add_plumed_opes_to_system(
-        system,
-        script,
-        temperature=float(temperature_k),
-        force_group=int(force_group),
-        restart=True,
-    )
-    integrator = mm.LangevinMiddleIntegrator(
-        float(temperature_k) * u.kelvin,
-        1.0 / u.picosecond,
-        2.0 * u.femtoseconds,
-    )
-    ctx = mm.Context(system, integrator, platform, platform_properties or {})
-    ctx.setPositions(positions)
-    if box_vectors is not None:
-        ctx.setPeriodicBoxVectors(*box_vectors)
-    return ctx
+    with nvtx_range(f"eval_ctx_build plumed_fg={int(force_group)}"):
+        system = _deserialize_system(template_system_xml)
+        system.removeForce(int(plumed_force_index))
+        script = plumed_script_path.read_text(encoding="utf-8")
+        add_plumed_opes_to_system(
+            system,
+            script,
+            temperature=float(temperature_k),
+            force_group=int(force_group),
+            restart="STATE_RFILE=" in script,
+        )
+        integrator = mm.LangevinMiddleIntegrator(
+            float(temperature_k) * u.kelvin,
+            1.0 / u.picosecond,
+            2.0 * u.femtoseconds,
+        )
+        ctx = mm.Context(system, integrator, platform, platform_properties or {})
+        ctx.setPositions(positions)
+        if box_vectors is not None:
+            ctx.setPeriodicBoxVectors(*box_vectors)
+        return ctx
 
 
 def _bias_energy_kj_mol(context: Any, force_group: int) -> float:
@@ -1065,103 +1121,112 @@ def run_two_replica_oneopes_repex(
 
         while step < n_steps:
             chunk = min(int(exchange_every), n_steps - step)
-            md_elapsed = step_replicas_parallel(
-                [sim0, sim1],
-                chunk,
-                max_workers=step_workers,
-            )
+            step_after_md = step + chunk
+            with nvtx_range(f"repex2_md_chunk step_end={step_after_md} chunk={chunk}"):
+                md_elapsed = step_replicas_parallel(
+                    [sim0, sim1],
+                    chunk,
+                    max_workers=step_workers,
+                )
             step += chunk
 
-            t_exchange0 = time.time()
-            st0 = sim0.context.getState(getPositions=True, getVelocities=True, getEnergy=True)
-            st1 = sim1.context.getState(getPositions=True, getVelocities=True, getEnergy=True)
-            pos0 = st0.getPositions()
-            pos1 = st1.getPositions()
-            bv0 = sim0.context.getState(getEnergy=True, groups={fg0}).getPotentialEnergy().value_in_unit(
-                u.kilojoule_per_mole
-            )
-            bv1 = sim1.context.getState(getEnergy=True, groups={fg1}).getPotentialEnergy().value_in_unit(
-                u.kilojoule_per_mole
-            )
-
-            scratch0 = scratch_root / f"eval_h0_step{step:010d}"
-            scratch1 = scratch_root / f"eval_h1_step{step:010d}"
-            for s in (scratch0, scratch1):
-                if s.exists():
-                    shutil.rmtree(s)
-            scratch0.mkdir(parents=True)
-            scratch1.mkdir(parents=True)
-            (scratch0 / "opes_states").mkdir(parents=True)
-            (scratch1 / "opes_states").mkdir(parents=True)
-            copy_opes_state_snapshot(rep_dirs[0] / "opes_states", scratch0 / "opes_states")
-            copy_opes_state_snapshot(rep_dirs[1] / "opes_states", scratch1 / "opes_states")
-            script_scratch0 = prepare_evaluator_scratch_tree(
-                production_rep_root=rep_dirs[0],
-                scratch_root=scratch0,
-            )
-            script_scratch1 = prepare_evaluator_scratch_tree(
-                production_rep_root=rep_dirs[1],
-                scratch_root=scratch1,
-            )
-
-            plat0, prop0 = _make_platform_for_device(evaluator_devices[0])
-            plat1, prop1 = _make_platform_for_device(evaluator_devices[1])
-            try:
-                boxv1 = st1.getPeriodicBoxVectors()
-            except Exception:
-                boxv1 = None
-            try:
-                boxv0 = st0.getPeriodicBoxVectors()
-            except Exception:
-                boxv0 = None
-            ctx_cross01 = refresh_evaluator_context(
-                template_system_xml=sys_xml0,
-                plumed_force_index=idx0,
-                plumed_script_path=script_scratch0,
-                temperature_k=float(args.temperature),
-                force_group=fg0,
-                platform=plat0,
-                platform_properties=prop0,
-                positions=pos1,
-                box_vectors=boxv1,
-            )
-            ctx_cross10 = refresh_evaluator_context(
-                template_system_xml=sys_xml1,
-                plumed_force_index=idx1,
-                plumed_script_path=script_scratch1,
-                temperature_k=float(args.temperature),
-                force_group=fg1,
-                platform=plat1,
-                platform_properties=prop1,
-                positions=pos0,
-                box_vectors=boxv0,
-            )
-
-            eb01 = _bias_energy_kj_mol(ctx_cross01, fg0)
-            eb10 = _bias_energy_kj_mol(ctx_cross10, fg1)
-            del ctx_cross01
-            del ctx_cross10
-
-            if mm_energy_in_exchange:
-                # Total MM+PLUMED — requires cloning full contexts; not implemented fast path.
-                raise NotImplementedError(
-                    "mm_energy_in_exchange=True requires consistent total-energy evaluation; "
-                    "use bias-only exchange (default) when MM Hamiltonians match."
+            with nvtx_range(f"repex2_exchange step={step}"):
+                t_exchange0 = time.time()
+                st0 = sim0.context.getState(
+                    getPositions=True, getVelocities=True, getEnergy=True
                 )
-            u00 = _reduced_u(bv0, kbt_kjmol=kbt)
-            u11 = _reduced_u(bv1, kbt_kjmol=kbt)
-            u01 = _reduced_u(eb01, kbt_kjmol=kbt)
-            u10 = _reduced_u(eb10, kbt_kjmol=kbt)
+                st1 = sim1.context.getState(
+                    getPositions=True, getVelocities=True, getEnergy=True
+                )
+                pos0 = st0.getPositions()
+                pos1 = st1.getPositions()
+                bv0 = sim0.context.getState(
+                    getEnergy=True, groups={fg0}
+                ).getPotentialEnergy().value_in_unit(u.kilojoule_per_mole)
+                bv1 = sim1.context.getState(
+                    getEnergy=True, groups={fg1}
+                ).getPotentialEnergy().value_in_unit(u.kilojoule_per_mole)
 
-            accepted, log_a, ru = metropolis_accept_two_replica_hrex(u00, u01, u10, u11, rng)
-            if accepted:
-                sim0.context.setPositions(pos1)
-                sim1.context.setPositions(pos0)
-                v0 = st0.getVelocities()
-                v1 = st1.getVelocities()
-                sim0.context.setVelocities(v1)
-                sim1.context.setVelocities(v0)
-            exchange_elapsed = time.time() - t_exchange0
+                scratch0 = scratch_root / f"eval_h0_step{step:010d}"
+                scratch1 = scratch_root / f"eval_h1_step{step:010d}"
+                for s in (scratch0, scratch1):
+                    if s.exists():
+                        shutil.rmtree(s)
+                scratch0.mkdir(parents=True)
+                scratch1.mkdir(parents=True)
+                (scratch0 / "opes_states").mkdir(parents=True)
+                (scratch1 / "opes_states").mkdir(parents=True)
+                copy_opes_state_snapshot(rep_dirs[0] / "opes_states", scratch0 / "opes_states")
+                copy_opes_state_snapshot(rep_dirs[1] / "opes_states", scratch1 / "opes_states")
+                script_scratch0 = prepare_evaluator_scratch_tree(
+                    production_rep_root=rep_dirs[0],
+                    scratch_root=scratch0,
+                )
+                script_scratch1 = prepare_evaluator_scratch_tree(
+                    production_rep_root=rep_dirs[1],
+                    scratch_root=scratch1,
+                )
+
+                plat0, prop0 = _make_platform_for_device(evaluator_devices[0])
+                plat1, prop1 = _make_platform_for_device(evaluator_devices[1])
+                try:
+                    boxv1 = st1.getPeriodicBoxVectors()
+                except Exception:
+                    boxv1 = None
+                try:
+                    boxv0 = st0.getPeriodicBoxVectors()
+                except Exception:
+                    boxv0 = None
+                ctx_cross01 = refresh_evaluator_context(
+                    template_system_xml=sys_xml0,
+                    plumed_force_index=idx0,
+                    plumed_script_path=script_scratch0,
+                    temperature_k=float(args.temperature),
+                    force_group=fg0,
+                    platform=plat0,
+                    platform_properties=prop0,
+                    positions=pos1,
+                    box_vectors=boxv1,
+                )
+                ctx_cross10 = refresh_evaluator_context(
+                    template_system_xml=sys_xml1,
+                    plumed_force_index=idx1,
+                    plumed_script_path=script_scratch1,
+                    temperature_k=float(args.temperature),
+                    force_group=fg1,
+                    platform=plat1,
+                    platform_properties=prop1,
+                    positions=pos0,
+                    box_vectors=boxv0,
+                )
+
+                eb01 = _bias_energy_kj_mol(ctx_cross01, fg0)
+                eb10 = _bias_energy_kj_mol(ctx_cross10, fg1)
+                del ctx_cross01
+                del ctx_cross10
+
+                if mm_energy_in_exchange:
+                    # Total MM+PLUMED — requires cloning full contexts; not implemented fast path.
+                    raise NotImplementedError(
+                        "mm_energy_in_exchange=True requires consistent total-energy evaluation; "
+                        "use bias-only exchange (default) when MM Hamiltonians match."
+                    )
+                u00 = _reduced_u(bv0, kbt_kjmol=kbt)
+                u11 = _reduced_u(bv1, kbt_kjmol=kbt)
+                u01 = _reduced_u(eb01, kbt_kjmol=kbt)
+                u10 = _reduced_u(eb10, kbt_kjmol=kbt)
+
+                accepted, log_a, ru = metropolis_accept_two_replica_hrex(
+                    u00, u01, u10, u11, rng
+                )
+                if accepted:
+                    sim0.context.setPositions(pos1)
+                    sim1.context.setPositions(pos0)
+                    v0 = st0.getVelocities()
+                    v1 = st1.getVelocities()
+                    sim0.context.setVelocities(v1)
+                    sim1.context.setVelocities(v0)
+                exchange_elapsed = time.time() - t_exchange0
 
             w.writerow(
                 [
@@ -1292,152 +1357,161 @@ def run_multi_replica_neighbor_oneopes_hrex(
 
         while step < n_steps:
             chunk = min(int(exchange_every), n_steps - step)
-            md_elapsed = step_replicas_parallel(
-                sims_list,
-                chunk,
-                max_workers=step_workers,
-            )
+            step_after_md = step + chunk
+            with nvtx_range(
+                f"repex8_md_chunk step_end={step_after_md} chunk={chunk}"
+            ):
+                md_elapsed = step_replicas_parallel(
+                    sims_list,
+                    chunk,
+                    max_workers=step_workers,
+                )
             step += chunk
 
             phase = ((step // int(exchange_every)) - 1) % 2
             pairs = neighbor_hrex_pairs_for_phase(phase)
-            t_exchange0 = time.time()
-            accepted_count = 0
+            with nvtx_range(f"repex8_exchange step={step} phase={phase}"):
+                t_exchange0 = time.time()
+                accepted_count = 0
+                for i, j in pairs:
+                    with nvtx_range(f"repex8_pair i={i} j={j} step={step}"):
+                        t_pair0 = time.time()
+                        st_i = sims_list[i].context.getState(
+                            getPositions=True,
+                            getVelocities=True,
+                            getEnergy=True,
+                        )
+                        st_j = sims_list[j].context.getState(
+                            getPositions=True,
+                            getVelocities=True,
+                            getEnergy=True,
+                        )
+                        pos_i = st_i.getPositions()
+                        pos_j = st_j.getPositions()
+                        bv_i = (
+                            sims_list[i]
+                            .context.getState(getEnergy=True, groups={fgs[i]})
+                            .getPotentialEnergy()
+                            .value_in_unit(u.kilojoule_per_mole)
+                        )
+                        bv_j = (
+                            sims_list[j]
+                            .context.getState(getEnergy=True, groups={fgs[j]})
+                            .getPotentialEnergy()
+                            .value_in_unit(u.kilojoule_per_mole)
+                        )
 
-            for i, j in pairs:
-                t_pair0 = time.time()
-                st_i = sims_list[i].context.getState(
-                    getPositions=True,
-                    getVelocities=True,
-                    getEnergy=True,
-                )
-                st_j = sims_list[j].context.getState(
-                    getPositions=True,
-                    getVelocities=True,
-                    getEnergy=True,
-                )
-                pos_i = st_i.getPositions()
-                pos_j = st_j.getPositions()
-                bv_i = (
-                    sims_list[i]
-                    .context.getState(getEnergy=True, groups={fgs[i]})
-                    .getPotentialEnergy()
-                    .value_in_unit(u.kilojoule_per_mole)
-                )
-                bv_j = (
-                    sims_list[j]
-                    .context.getState(getEnergy=True, groups={fgs[j]})
-                    .getPotentialEnergy()
-                    .value_in_unit(u.kilojoule_per_mole)
-                )
+                        ev_i, ev_j = plan_evaluator_devices_for_neighbor_pair(
+                            replica_devices,
+                            i,
+                            j,
+                            placement=evaluator_placement,
+                        )
 
-                ev_i, ev_j = plan_evaluator_devices_for_neighbor_pair(
-                    replica_devices,
-                    i,
-                    j,
-                    placement=evaluator_placement,
-                )
+                        scratch_i = scratch_root / f"eval_step{step:010d}_h{i}_coords{j}"
+                        scratch_j = scratch_root / f"eval_step{step:010d}_h{j}_coords{i}"
+                        for sdir in (scratch_i, scratch_j):
+                            if sdir.exists():
+                                shutil.rmtree(sdir)
+                            sdir.mkdir(parents=True)
+                            (sdir / "opes_states").mkdir(parents=True)
+                        copy_opes_state_snapshot(
+                            rep_dirs[i] / "opes_states", scratch_i / "opes_states"
+                        )
+                        copy_opes_state_snapshot(
+                            rep_dirs[j] / "opes_states", scratch_j / "opes_states"
+                        )
+                        script_scratch_i = prepare_evaluator_scratch_tree(
+                            production_rep_root=rep_dirs[i],
+                            scratch_root=scratch_i,
+                        )
+                        script_scratch_j = prepare_evaluator_scratch_tree(
+                            production_rep_root=rep_dirs[j],
+                            scratch_root=scratch_j,
+                        )
 
-                scratch_i = scratch_root / f"eval_step{step:010d}_h{i}_coords{j}"
-                scratch_j = scratch_root / f"eval_step{step:010d}_h{j}_coords{i}"
-                for sdir in (scratch_i, scratch_j):
-                    if sdir.exists():
-                        shutil.rmtree(sdir)
-                    sdir.mkdir(parents=True)
-                    (sdir / "opes_states").mkdir(parents=True)
-                copy_opes_state_snapshot(rep_dirs[i] / "opes_states", scratch_i / "opes_states")
-                copy_opes_state_snapshot(rep_dirs[j] / "opes_states", scratch_j / "opes_states")
-                script_scratch_i = prepare_evaluator_scratch_tree(
-                    production_rep_root=rep_dirs[i],
-                    scratch_root=scratch_i,
-                )
-                script_scratch_j = prepare_evaluator_scratch_tree(
-                    production_rep_root=rep_dirs[j],
-                    scratch_root=scratch_j,
-                )
+                        plat_i, prop_i = _make_platform_for_device(ev_i)
+                        plat_j, prop_j = _make_platform_for_device(ev_j)
+                        try:
+                            box_j = st_j.getPeriodicBoxVectors()
+                        except Exception:
+                            box_j = None
+                        try:
+                            box_i = st_i.getPeriodicBoxVectors()
+                        except Exception:
+                            box_i = None
 
-                plat_i, prop_i = _make_platform_for_device(ev_i)
-                plat_j, prop_j = _make_platform_for_device(ev_j)
-                try:
-                    box_j = st_j.getPeriodicBoxVectors()
-                except Exception:
-                    box_j = None
-                try:
-                    box_i = st_i.getPeriodicBoxVectors()
-                except Exception:
-                    box_i = None
+                        ctx_ij = refresh_evaluator_context(
+                            template_system_xml=sys_xmls[i],
+                            plumed_force_index=idxs[i],
+                            plumed_script_path=script_scratch_i,
+                            temperature_k=float(args.temperature),
+                            force_group=fgs[i],
+                            platform=plat_i,
+                            platform_properties=prop_i,
+                            positions=pos_j,
+                            box_vectors=box_j,
+                        )
+                        ctx_ji = refresh_evaluator_context(
+                            template_system_xml=sys_xmls[j],
+                            plumed_force_index=idxs[j],
+                            plumed_script_path=script_scratch_j,
+                            temperature_k=float(args.temperature),
+                            force_group=fgs[j],
+                            platform=plat_j,
+                            platform_properties=prop_j,
+                            positions=pos_i,
+                            box_vectors=box_i,
+                        )
 
-                ctx_ij = refresh_evaluator_context(
-                    template_system_xml=sys_xmls[i],
-                    plumed_force_index=idxs[i],
-                    plumed_script_path=script_scratch_i,
-                    temperature_k=float(args.temperature),
-                    force_group=fgs[i],
-                    platform=plat_i,
-                    platform_properties=prop_i,
-                    positions=pos_j,
-                    box_vectors=box_j,
-                )
-                ctx_ji = refresh_evaluator_context(
-                    template_system_xml=sys_xmls[j],
-                    plumed_force_index=idxs[j],
-                    plumed_script_path=script_scratch_j,
-                    temperature_k=float(args.temperature),
-                    force_group=fgs[j],
-                    platform=plat_j,
-                    platform_properties=prop_j,
-                    positions=pos_i,
-                    box_vectors=box_i,
-                )
+                        eb_ij = _bias_energy_kj_mol(ctx_ij, fgs[i])
+                        eb_ji = _bias_energy_kj_mol(ctx_ji, fgs[j])
+                        del ctx_ij
+                        del ctx_ji
 
-                eb_ij = _bias_energy_kj_mol(ctx_ij, fgs[i])
-                eb_ji = _bias_energy_kj_mol(ctx_ji, fgs[j])
-                del ctx_ij
-                del ctx_ji
+                        if mm_energy_in_exchange:
+                            raise NotImplementedError(
+                                "mm_energy_in_exchange=True is not implemented for eight-replica H-REX."
+                            )
 
-                if mm_energy_in_exchange:
-                    raise NotImplementedError(
-                        "mm_energy_in_exchange=True is not implemented for eight-replica H-REX."
-                    )
+                        u_ii = _reduced_u(bv_i, kbt_kjmol=kbt)
+                        u_jj = _reduced_u(bv_j, kbt_kjmol=kbt)
+                        u_ij = _reduced_u(eb_ij, kbt_kjmol=kbt)
+                        u_ji = _reduced_u(eb_ji, kbt_kjmol=kbt)
 
-                u_ii = _reduced_u(bv_i, kbt_kjmol=kbt)
-                u_jj = _reduced_u(bv_j, kbt_kjmol=kbt)
-                u_ij = _reduced_u(eb_ij, kbt_kjmol=kbt)
-                u_ji = _reduced_u(eb_ji, kbt_kjmol=kbt)
+                        accepted, log_a, ru = metropolis_accept_two_replica_hrex(
+                            u_ii, u_ij, u_ji, u_jj, rng
+                        )
+                        if accepted:
+                            accepted_count += 1
+                            sims_list[i].context.setPositions(pos_j)
+                            sims_list[j].context.setPositions(pos_i)
+                            vi = st_i.getVelocities()
+                            vj = st_j.getVelocities()
+                            sims_list[i].context.setVelocities(vj)
+                            sims_list[j].context.setVelocities(vi)
+                        pair_elapsed = time.time() - t_pair0
 
-                accepted, log_a, ru = metropolis_accept_two_replica_hrex(
-                    u_ii, u_ij, u_ji, u_jj, rng
-                )
-                if accepted:
-                    accepted_count += 1
-                    sims_list[i].context.setPositions(pos_j)
-                    sims_list[j].context.setPositions(pos_i)
-                    vi = st_i.getVelocities()
-                    vj = st_j.getVelocities()
-                    sims_list[i].context.setVelocities(vj)
-                    sims_list[j].context.setVelocities(vi)
-                pair_elapsed = time.time() - t_pair0
-
-                w.writerow(
-                    [
-                        step,
-                        int(phase),
-                        int(i),
-                        int(j),
-                        f"{u_ii:.8g}",
-                        f"{u_jj:.8g}",
-                        f"{u_ij:.8g}",
-                        f"{u_ji:.8g}",
-                        f"{log_a:.8g}",
-                        int(accepted),
-                        f"{ru:.8g}",
-                        f"{md_elapsed:.3f}",
-                        f"{pair_elapsed:.3f}",
-                        f"{time.time() - t_run0:.3f}",
-                    ]
-                )
-                fcsv.flush()
-            exchange_elapsed = time.time() - t_exchange0
+                        w.writerow(
+                            [
+                                step,
+                                int(phase),
+                                int(i),
+                                int(j),
+                                f"{u_ii:.8g}",
+                                f"{u_jj:.8g}",
+                                f"{u_ij:.8g}",
+                                f"{u_ji:.8g}",
+                                f"{log_a:.8g}",
+                                int(accepted),
+                                f"{ru:.8g}",
+                                f"{md_elapsed:.3f}",
+                                f"{pair_elapsed:.3f}",
+                                f"{time.time() - t_run0:.3f}",
+                            ]
+                        )
+                        fcsv.flush()
+                exchange_elapsed = time.time() - t_exchange0
             with barrier_log.open("a", encoding="utf-8") as fbar:
                 fbar.write(
                     json.dumps(

@@ -55,13 +55,17 @@ def _diagnostic_energy_and_large_forces(
     *,
     large_force_threshold: float = 100_000.0,
     max_print: int = 30,
+    groups: set[int] | None = None,
 ) -> None:
     """Log potential energy and OpenMM particles with very large forces (OpenMM FAQ)."""
     from math import sqrt
 
     import openmm.unit as u
 
-    st = sim.context.getState(getEnergy=True, getForces=True)
+    state_kwargs = {"getEnergy": True, "getForces": True}
+    if groups is not None:
+        state_kwargs["groups"] = groups
+    st = sim.context.getState(**state_kwargs)
     pe = st.getPotentialEnergy().value_in_unit(u.kilojoule_per_mole)
     print(f"[MD-OPES] {tag}: potential_energy={pe:.3f} kJ/mol", flush=True)
     forces = st.getForces().value_in_unit(u.kilojoules_per_mole / u.nanometer)
@@ -1145,13 +1149,16 @@ def run_opes_md(
     omm_props = openmm_device_index_properties(
         args.platform, args.openmm_device_index
     )
+    prepared_pdb = getattr(args, "openmm_prepared_pdb", None)
+    build_pdb_path = Path(prepared_pdb).expanduser().resolve() if prepared_pdb else pdb_path
     sim, meta = build_md(
-        pdb_path,
+        build_pdb_path,
         platform_name=args.platform,
         temperature_k=args.temperature,
         ligand_smiles=ligand_smiles,
         extra_forces=_add_plumed_force if args.opes_mode == "plumed" else None,
         platform_properties=omm_props if omm_props else None,
+        input_is_prepared_solvated=bool(prepared_pdb),
         **md_boltz_pose,
     )
     print(f"[MD-OPES] Platform: {meta['platform_used']}", flush=True)
@@ -1207,7 +1214,16 @@ def run_opes_md(
     state0 = sim.context.getState(getPositions=True)
     pos_nm = state0.getPositions(asNumpy=True)
     _log_coord_stats_np("checkpoint_after_build_set_positions", pos_nm, unit_label="nm")
-    _diagnostic_energy_and_large_forces(sim, "after_build_set_positions")
+    diagnostic_groups: set[int] | None = None
+    if args.opes_mode == "plumed":
+        plumed_force_group = int(plumed_context["force_group"])
+        diagnostic_groups = set(range(32))
+        diagnostic_groups.discard(plumed_force_group)
+    _diagnostic_energy_and_large_forces(
+        sim,
+        "after_build_set_positions",
+        groups=diagnostic_groups,
+    )
 
     if args.opes_mode == "plumed":
         if "omm_idx" not in plumed_context:

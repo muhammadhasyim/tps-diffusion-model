@@ -17,6 +17,7 @@ from genai_tps.simulation.oneopes_repex import (
     copy_opes_state_snapshot,
     count_active_contexts_per_device,
     default_expanded_temp_max_for_replica,
+    initialize_replicas_parallel,
     literature_oneopes_replica_specs,
     multithermal_temp_max_k_for_replica,
     log_acceptance_two_replica_hrex,
@@ -168,6 +169,41 @@ def test_step_replicas_parallel_propagates_failures() -> None:
     assert started == set(range(8))
 
 
+def test_initialize_replicas_parallel_runs_concurrently_and_preserves_order() -> None:
+    started: set[int] = set()
+    lock = threading.Lock()
+
+    def _make_initializer(replica_index: int):
+        def _initializer() -> dict[str, int]:
+            with lock:
+                started.add(replica_index)
+            time.sleep(0.05)
+            return {"replica": replica_index}
+
+        return _initializer
+
+    initializers = [_make_initializer(i) for i in range(8)]
+    t0 = time.perf_counter()
+    packs, elapsed = initialize_replicas_parallel(initializers, max_workers=8)
+    wall = time.perf_counter() - t0
+
+    assert [p["replica"] for p in packs] == list(range(8))
+    assert started == set(range(8))
+    assert elapsed <= wall
+    assert wall < 0.20
+
+
+def test_initialize_replicas_parallel_propagates_failures() -> None:
+    def _ok() -> str:
+        return "ok"
+
+    def _bad() -> str:
+        raise RuntimeError("initialization failed")
+
+    with pytest.raises(RuntimeError, match="initialization failed"):
+        initialize_replicas_parallel([_ok, _bad], max_workers=2)
+
+
 def test_plan_evaluator_devices() -> None:
     assert plan_evaluator_device_assignments([0, 1], placement="same-device") == [0, 1]
     assert plan_evaluator_device_assignments([2, 2], placement="serial") == [2, 2]
@@ -218,6 +254,21 @@ def test_stratified_paper_host_guest_kwargs() -> None:
     assert k7["opes_expanded_pace_override"] == LITERATURE_MULTITHERMAL_OPES_EXPANDED_PACE_STEPS
 
 
+def test_stratified_paper_host_guest_can_disable_energy_multithermal() -> None:
+    k7 = build_stratified_replica_plumed_kwargs(
+        7,
+        n_replicas=8,
+        user_expanded_temp_max=None,
+        user_expanded_pace=None,
+        thermostat_temperature_k=298.15,
+        oneopes_protocol="paper_host_guest",
+        enable_energy_multithermal=False,
+    )
+    assert k7["oneopes_protocol"] == "paper_host_guest"
+    assert k7["opes_expanded_temp_max_override"] is None
+    assert k7["opes_expanded_pace_override"] is None
+
+
 def test_opes_states_fingerprint_stable_on_copy(tmp_path: Path) -> None:
     src = tmp_path / "opes_states"
     src.mkdir()
@@ -264,8 +315,17 @@ def test_relocate_and_prepare_evaluator_script(tmp_path: Path) -> None:
     opes = prod / "opes_states"
     opes.mkdir()
     (opes / "STATE").write_text("state", encoding="utf-8")
+    (opes / "STATE_AUX_L4").write_text("state aux", encoding="utf-8")
     (opes / "KERNELS").write_text("k", encoding="utf-8")
-    raw = f"REF={prod / 'plumed_rmsd_reference.pdb'}\nFILE={opes / 'KERNELS'}\n"
+    raw = "\n".join(
+        [
+            f"REF={prod / 'plumed_rmsd_reference.pdb'}",
+            f"FILE={opes / 'KERNELS'}",
+            f"  STATE_WFILE={opes / 'STATE'}",
+            f"  STATE_WFILE={opes / 'STATE_AUX_L4'}",
+            "",
+        ]
+    )
     (prod / "plumed_opes.dat").write_text(raw, encoding="utf-8")
     (prod / "plumed_rmsd_reference.pdb").write_text("HEADER\n", encoding="utf-8")
 
@@ -276,6 +336,33 @@ def test_relocate_and_prepare_evaluator_script(tmp_path: Path) -> None:
     text = sp.read_text(encoding="utf-8")
     assert str(scratch) in text
     assert str(prod) not in text
+    assert f"STATE_RFILE={scratch / 'opes_states' / 'STATE'}" in text
+    assert f"STATE_RFILE={scratch / 'opes_states' / 'STATE_AUX_L4'}" in text
+
+
+def test_prepare_evaluator_script_skips_empty_state_rfile(tmp_path: Path) -> None:
+    prod = tmp_path / "rep000"
+    prod.mkdir()
+    opes = prod / "opes_states"
+    opes.mkdir()
+    (opes / "STATE").write_text("", encoding="utf-8")
+    raw = "\n".join(
+        [
+            f"FILE={opes / 'KERNELS'}",
+            f"  STATE_WFILE={opes / 'STATE'}",
+            "",
+        ]
+    )
+    (prod / "plumed_opes.dat").write_text(raw, encoding="utf-8")
+
+    scratch = tmp_path / "scratch_eval"
+    (scratch / "opes_states").mkdir(parents=True)
+    copy_opes_state_snapshot(opes, scratch / "opes_states")
+    sp = prepare_evaluator_scratch_tree(production_rep_root=prod, scratch_root=scratch)
+    text = sp.read_text(encoding="utf-8")
+
+    assert f"STATE_WFILE={scratch / 'opes_states' / 'STATE'}" in text
+    assert "STATE_RFILE=" not in text
 
 
 def test_copy_snapshot_leaves_source_mtime(tmp_path: Path) -> None:

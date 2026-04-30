@@ -831,6 +831,7 @@ def build_md_simulation_from_pdb(
     ligand_pose_policy: LigandPosePolicy = "pdb_only",
     ligand_pose_debug_sdf_dir: Path | None = None,
     platform_properties: dict[str, str] | None = None,
+    input_is_prepared_solvated: bool = False,
 ) -> tuple[object, dict]:
     """Build AMBER14 + explicit TIP3P Langevin :class:`openmm.app.Simulation` without minimising.
 
@@ -868,6 +869,10 @@ def build_md_simulation_from_pdb(
         path including gas-phase fallback.
     ligand_pose_debug_sdf_dir:
         Optional directory for per-chain debug SDF files after Boltz placement.
+    input_is_prepared_solvated:
+        Treat *pdb_path* as an already hydrogenated, explicitly solvated OpenMM
+        topology.  This is required for HREX replicas that must share identical
+        atom counts and ordering.
 
     Returns
     -------
@@ -953,7 +958,11 @@ def build_md_simulation_from_pdb(
                 stacklevel=2,
             )
 
-    if not _pdbfixer_ok:
+    if bool(input_is_prepared_solvated):
+        h_topology = orig_topology
+        h_positions = orig_positions
+        _pdbfixer_ok = True
+    elif not _pdbfixer_ok:
         modeller = openmm.app.Modeller(orig_topology, orig_positions)
         if has_ligand:
             non_protein = [
@@ -1120,10 +1129,12 @@ def build_md_simulation_from_pdb(
         h_topology = modeller.topology
         h_positions = modeller.positions
 
-    h_topology, h_positions = _add_explicit_tip3p_solvent(
-        h_topology, h_positions, ff
-    )
+    if not bool(input_is_prepared_solvated):
+        h_topology, h_positions = _add_explicit_tip3p_solvent(
+            h_topology, h_positions, ff
+        )
     meta["explicit_solvent"] = "tip3p"
+    meta["input_is_prepared_solvated"] = bool(input_is_prepared_solvated)
     meta["nonbonded_method"] = "PME"
 
     ca_h_idx = select_ca_indices(h_topology)
