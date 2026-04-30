@@ -58,8 +58,9 @@ def _make_fake_trajectory(coords_np: np.ndarray):
 class TestPersistentOpenMMContext:
     """Tests requiring a real OpenMM install; use ALA-ALA (no ligand) for speed."""
 
-    def _make_cv(self, topo_npz: Path) -> "OpenMMLocalMinRMSD":
+    def _make_cv(self, topo_npz: Path):
         from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
+
         return OpenMMLocalMinRMSD(topo_npz=topo_npz, platform="CPU", max_iter=100)
 
     def test_simulation_is_none_before_first_call(self, tmp_path):
@@ -95,11 +96,6 @@ class TestPersistentOpenMMContext:
         pytest.importorskip("pdbfixer")
 
         from genai_tps.simulation.openmm_cv import OpenMMLocalMinRMSD
-
-        # Build a minimal npz by patching the underlying minimize call so we
-        # don't need a real checkpoint
-        coords1 = np.random.default_rng(0).standard_normal((4, 3)).astype(np.float32) * 3.0
-        coords2 = coords1 + 0.1
 
         cv = MagicMock(spec=OpenMMLocalMinRMSD)
         cv._simulation = None
@@ -192,18 +188,12 @@ class TestOpenMMEnergyAttributes:
         assert abs(s["cache_hit_rate"] - 0.3) < 1e-9
 
     def test_registered_in_run_opes_tps(self):
-        import importlib
-        import sys
-        scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
-        if str(scripts_dir) not in sys.path:
-            sys.path.insert(0, str(scripts_dir))
-        # Just check the CV name list is importable
-        spec = importlib.util.spec_from_file_location(
-            "run_opes_tps", scripts_dir / "run_opes_tps.py"
+        root = Path(__file__).resolve().parents[1]
+        cv_factory = (
+            root / "src" / "python" / "genai_tps" / "backends" / "boltz" / "cv_factory.py"
         )
-        # Read the file to check for the string
-        src = (scripts_dir / "run_opes_tps.py").read_text(encoding="utf-8")
-        assert '"openmm_energy"' in src, "openmm_energy must be in _SINGLE_CV_NAMES"
+        src = cv_factory.read_text(encoding="utf-8")
+        assert '"openmm_energy"' in src, "openmm_energy must be in SINGLE_CV_NAMES (cv_factory)"
 
 
 class TestOpenMMEnergyCacheBehavior:

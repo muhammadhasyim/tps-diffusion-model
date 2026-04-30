@@ -18,6 +18,39 @@ def _minimal_colvar_text(*, n_rows: int = 48) -> str:
     return "\n".join(lines) + "\n"
 
 
+def test_reweighting_kwargs_oneopes_fields(tmp_path: Path) -> None:
+    from genai_tps.simulation.plumed_colvar_fes import reweighting_kwargs_from_colvar_path
+
+    opes_dir = tmp_path / "opes_states"
+    opes_dir.mkdir(parents=True)
+    colvar = opes_dir / "COLVAR"
+    colvar.write_text(
+        "#! FIELDS time lig_rmsd lig_dist pp.proj pp.ext cmap opes.bias\n"
+        "0.0 1 2 0.5 1.0 3.0 0.0\n",
+        encoding="utf-8",
+    )
+    kw = reweighting_kwargs_from_colvar_path(colvar, sigma_arg="0.2,0.4")
+    assert kw["cv_names"] == "pp.proj,cmap"
+    assert kw["sigma"] == "0.2,0.4"
+    assert kw["grid_bin"] == "100,100"
+    assert kw["outfile"] == opes_dir / "fes_reweighted_2d.dat"
+
+
+def test_reweighting_kwargs_falls_back_sigma_for_oneopes(tmp_path: Path) -> None:
+    from genai_tps.simulation.plumed_colvar_fes import reweighting_kwargs_from_colvar_path
+
+    opes_dir = tmp_path / "opes_states"
+    opes_dir.mkdir(parents=True)
+    colvar = opes_dir / "COLVAR"
+    colvar.write_text(
+        "#! FIELDS time lig_rmsd lig_dist pp.proj cmap opes.bias\n0 1 2 0 0 0\n",
+        encoding="utf-8",
+    )
+    kw = reweighting_kwargs_from_colvar_path(colvar, sigma_arg="0.3,0.5,1.0")
+    assert kw["cv_names"] == "pp.proj,cmap"
+    assert kw["sigma"] == "0.3,0.5"
+
+
 def test_run_fes_from_reweighting_script_synthetic_colvar(tmp_path: Path) -> None:
     from genai_tps.simulation.plumed_colvar_fes import (
         fes_from_reweighting_script_path,

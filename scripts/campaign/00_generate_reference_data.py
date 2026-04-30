@@ -251,6 +251,10 @@ def _run_openmm_md(
     oneopes_water_barrier: float = 3.0,
     oneopes_water_biasfactor: float = 5.0,
     oneopes_water_sigma: float = 0.15,
+    oneopes_auto_hydration: bool = True,
+    oneopes_hydration_max_sites: int = 5,
+    oneopes_hydration_use_3drism: bool = True,
+    oneopes_hydration_min_density: float = 0.5,
 ) -> None:
     """Invoke the OpenMM OPES-MD runner via subprocess for isolation."""
     md_script = _REPO_ROOT / "scripts" / "run_openmm_opes_md.py"
@@ -339,7 +343,15 @@ def _run_openmm_md(
             str(float(oneopes_water_biasfactor)),
             "--oneopes-water-sigma",
             str(float(oneopes_water_sigma)),
+            "--oneopes-hydration-max-sites",
+            str(int(oneopes_hydration_max_sites)),
+            "--oneopes-hydration-min-density",
+            str(float(oneopes_hydration_min_density)),
         ]
+        if not oneopes_auto_hydration:
+            cmd.append("--no-oneopes-auto-hydration")
+        if not oneopes_hydration_use_3drism:
+            cmd.append("--no-oneopes-hydration-use-3drism")
 
     print(f"  [md] Command: {' '.join(cmd)}", flush=True)
     result = subprocess.run(cmd, check=False, env=child_env_with_repo_src_python())
@@ -486,6 +498,30 @@ def main() -> None:
     parser.add_argument("--oneopes-water-barrier", type=float, default=3.0)
     parser.add_argument("--oneopes-water-biasfactor", type=float, default=5.0)
     parser.add_argument("--oneopes-water-sigma", type=float, default=0.15)
+    parser.add_argument(
+        "--oneopes-auto-hydration",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Forwarded (--bias-cv oneopes): infer hydration spots when list omitted.",
+    )
+    parser.add_argument(
+        "--oneopes-hydration-max-sites",
+        type=int,
+        default=5,
+        help="Forwarded: cap on auto-inferred hydration spots.",
+    )
+    parser.add_argument(
+        "--oneopes-hydration-use-3drism",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Forwarded: try 3D-RISM blob picking before geometric fallback.",
+    )
+    parser.add_argument(
+        "--oneopes-hydration-min-density",
+        type=float,
+        default=0.5,
+        help="Forwarded: metatwist --threshold for RISM blob picking.",
+    )
     parser.add_argument("--temperature", type=float, default=300.0,
                         help="Langevin temperature (K).")
     parser.add_argument("--pocket-radius", type=float, default=6.0,
@@ -603,6 +639,8 @@ def main() -> None:
         parser.error("--bias-cv oneopes requires exactly two comma-separated values in --opes-sigma")
     if args.bias_cv == "oneopes" and args.opes_mode != "plumed":
         parser.error("--bias-cv oneopes requires --opes-mode plumed")
+    if int(args.oneopes_hydration_max_sites) < 1:
+        parser.error("--oneopes-hydration-max-sites must be >= 1")
 
     if args.opes_expanded_temp_max is not None:
         if args.opes_mode != "plumed":
@@ -751,6 +789,10 @@ def main() -> None:
             oneopes_water_barrier=float(args.oneopes_water_barrier),
             oneopes_water_biasfactor=float(args.oneopes_water_biasfactor),
             oneopes_water_sigma=float(args.oneopes_water_sigma),
+            oneopes_auto_hydration=bool(args.oneopes_auto_hydration),
+            oneopes_hydration_max_sites=int(args.oneopes_hydration_max_sites),
+            oneopes_hydration_use_3drism=bool(args.oneopes_hydration_use_3drism),
+            oneopes_hydration_min_density=float(args.oneopes_hydration_min_density),
         )
 
         # Count output shards

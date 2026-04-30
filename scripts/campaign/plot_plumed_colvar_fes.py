@@ -17,6 +17,10 @@ same 3×3 layout with **volume slices** and the OPES-style columns (normalized k
 ``-ln(ρ/ρ_max)``, hexbin + *F* contours).  Use ``--dashboard-3d`` for
 orthogonal **slices** through the 3D reweighted FES plus kernel mixture and
 deposit histograms.
+
+**Note:** The middle FES panel is intentionally smooth: OPES merges kernels in
+CV space (watch ``opes.nker`` in ``COLVAR``), and reweighting convolves with a
+KDE bandwidth — many kernel markers in the left panel do not imply a jagged FES.
 """
 
 from __future__ import annotations

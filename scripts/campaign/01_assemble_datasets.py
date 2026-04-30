@@ -56,31 +56,10 @@ _CASE_NAMES = [
 
 
 def _plumed_fes_kwargs_from_colvar(colvar: Path, sigma_arg: str) -> dict:
-    """Choose 2D vs 3D reweighting targets from COLVAR ``#! FIELDS`` (3D if ``lig_contacts``)."""
-    field_names: list[str] = []
-    with colvar.open(encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            s = line.strip()
-            if s.startswith("#! FIELDS"):
-                field_names = s.split()[2:]
-                break
-    if not field_names:
-        raise ValueError(f"No #! FIELDS line in {colvar}")
-    if "lig_contacts" in field_names:
-        n_sig = len([p for p in sigma_arg.split(",") if p.strip()])
-        sigma_use = sigma_arg if n_sig == 3 else "0.3,0.5,1.0"
-        return {
-            "cv_names": "lig_rmsd,lig_dist,lig_contacts",
-            "sigma": sigma_use,
-            "grid_bin": "40,40,40",
-            "outfile": colvar.parent / "fes_reweighted_3d.dat",
-        }
-    return {
-        "cv_names": "lig_rmsd,lig_dist",
-        "sigma": sigma_arg,
-        "grid_bin": "100,100",
-        "outfile": colvar.parent / "fes_reweighted_2d.dat",
-    }
+    """Choose reweighting targets from COLVAR ``#! FIELDS`` (delegates to plumed_colvar_fes)."""
+    from genai_tps.simulation.plumed_colvar_fes import reweighting_kwargs_from_colvar_path
+
+    return dict(reweighting_kwargs_from_colvar_path(colvar, sigma_arg=sigma_arg))
 
 
 def _find_topo_npz(md_out_dir: Path) -> Path:

@@ -29,23 +29,84 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
 
 __all__ = [
+    "OpesPlumedDeckConfig",
     "add_plumed_opes_to_system",
     "compute_oneopes_pp_ext_angstrom",
+    "compute_oneopes_pp_proj_cmap_from_boltz_coords",
     "default_oneopes_axis_boltz_indices",
     "default_oneopes_contact_pairs_boltz",
     "default_oneopes_contact_pairs_plumed",
     "generate_plumed_opes_script",
+    "generate_plumed_opes_script_from_config",
     "write_rmsd_reference_pdb",
 ]
 
 OpesCvMode = Literal["2d", "3d", "oneopes"]
 OpesMetadVariant = Literal["metad", "explore"]
+
+
+@dataclass(frozen=True)
+class OpesPlumedDeckConfig:
+    """Frozen configuration for :func:`generate_plumed_opes_script_from_config`."""
+
+    ligand_plumed_idx: Sequence[int]
+    pocket_ca_plumed_idx: Sequence[int]
+    rmsd_reference_pdb: Path
+    sigma: Sequence[float]
+    pace: int
+    barrier: float
+    biasfactor: float
+    temperature: float
+    save_opes_every: int
+    progress_every: int
+    out_dir: Path
+    state_rfile: Path | None = None
+    whole_molecule_plumed_idx: Sequence[int] | None = None
+    kernel_cutoff: float | None = None
+    nlist_parameters: tuple[float, float] | None = None
+    print_colvar_heavy_flush: bool = False
+    cv_mode: OpesCvMode = "2d"
+    pocket_heavy_plumed_idx: Sequence[int] | None = None
+    coordination_r0: float = 4.5
+    coordination_nn: int = 6
+    coordination_mm: int = 12
+    opes_variant: OpesMetadVariant = "metad"
+    upper_wall_dist: float | None = None
+    upper_wall_kappa: float = 200.0
+    use_pbc: bool = False
+    opes_expanded_temp_max: float | None = None
+    opes_expanded_pace: int = 50
+    opes_expanded_observation_steps: int = 100
+    opes_expanded_print_stride: int = 100
+    opes_expanded_state_rfile: Path | None = None
+    oneopes_axis_p0_plumed_idx: Sequence[int] | None = None
+    oneopes_axis_p1_plumed_idx: Sequence[int] | None = None
+    oneopes_contactmap_pairs_plumed: Sequence[tuple[int, int]] | None = None
+    contactmap_switch_r0: float = 5.5
+    contactmap_switch_d0: float = 0.0
+    contactmap_switch_nn: int = 4
+    contactmap_switch_mm: int = 10
+    oneopes_hydration_spot_plumed_idx: Sequence[int] | None = None
+    water_oxygen_plumed_idx: Sequence[int] | None = None
+    oneopes_water_pace: int = 40_000
+    oneopes_water_barrier: float = 3.0
+    oneopes_water_biasfactor: float = 5.0
+    oneopes_water_sigma: float = 0.15
+    oneopes_water_switch_r0: float = 2.5
+    oneopes_water_switch_d0: float = 0.0
+    oneopes_water_switch_nn: int = 6
+    oneopes_water_switch_mm: int = 10
+    oneopes_water_switch_d_max: float = 6.0
+    oneopes_water_nl_cutoff: float = 16.0
+    oneopes_water_nl_stride: int = 20
+    oneopes_water_kernel_cutoff: float | None = None
 
 
 def _format_float(value: float) -> str:
@@ -125,6 +186,88 @@ def compute_oneopes_pp_ext_angstrom(
     along = float(np.dot(v, axis_u))
     perp = v - along * axis_u
     return float(np.linalg.norm(perp))
+
+
+def _do_rational_plumed(rdist: float, nn: int, mm: int) -> float:
+    """Reproduce PLUMED ``SwitchingFunction::do_rational`` (scalar value only)."""
+    if 2 * nn == mm:
+        r_n = rdist ** (nn - 1)
+        return 1.0 / (1.0 + r_n * rdist)
+    epsilon = 1e-14
+    if (1.0 - 5.0e10 * epsilon) < rdist < (1.0 + 5.0e10 * epsilon):
+        x = rdist - 1.0
+        sec_dev = (nn * (mm * mm - 3.0 * mm * (-1 + nn) + nn * (-3 + 2 * nn))) / (6.0 * mm)
+        dfunc = 0.5 * nn * float(nn - mm) / mm
+        return float(nn) / float(mm) + x * (dfunc + 0.5 * x * sec_dev)
+    r_n = rdist ** (nn - 1)
+    r_m = rdist ** (mm - 1)
+    num = 1.0 - r_n * rdist
+    iden = 1.0 / (1.0 - r_m * rdist)
+    return float(num * iden)
+
+
+def _plumed_rational_contact_switch(
+    distance: float,
+    *,
+    r0: float,
+    d0: float,
+    nn: int,
+    mm: int,
+) -> float:
+    """MATCH PLUMED ``SwitchingFunction::calculate`` for ``SWITCH={RATIONAL ...}``."""
+    nn_i, mm_i = int(nn), int(mm)
+    if mm_i == 0:
+        mm_i = 2 * nn_i
+    if r0 <= 0.0:
+        raise ValueError("contactmap_switch_r0 must be positive.")
+    invr0 = 1.0 / r0
+    dmax = d0 + r0 * (0.00001 ** (1.0 / float(nn_i - mm_i)))
+    if distance > dmax:
+        return 0.0
+    rdist = (distance - d0) * invr0
+    if rdist <= 0.0:
+        return 1.0
+    return _do_rational_plumed(rdist, nn_i, mm_i)
+
+
+def compute_oneopes_pp_proj_cmap_from_boltz_coords(
+    coords_angstrom: np.ndarray,
+    *,
+    axis_p0_boltz: Sequence[int],
+    axis_p1_boltz: Sequence[int],
+    ligand_boltz: Sequence[int],
+    contact_pairs_boltz: Sequence[tuple[int, int]],
+    contactmap_switch_r0: float = 5.5,
+    contactmap_switch_d0: float = 0.0,
+    contactmap_switch_nn: int = 4,
+    contactmap_switch_mm: int = 10,
+) -> np.ndarray:
+    """Return ``[pp.proj, cmap]`` in Å / unitless sum, mirroring the PLUMED OneOPES deck.
+
+    *coords_angstrom* must be Boltz-ordered solute heavy-atom rows (same layout as
+    :func:`ligand_pose_rmsd` / the MD runner's ``get_coords_boltz_order`` slice).
+    """
+    cr = np.asarray(coords_angstrom, dtype=np.float64)
+    p0 = _com_mean(cr, axis_p0_boltz)
+    p1 = _com_mean(cr, axis_p1_boltz)
+    lig = _com_mean(cr, ligand_boltz)
+    axis = p1 - p0
+    norm = float(np.linalg.norm(axis))
+    if norm < 1e-12:
+        raise ValueError("OneOPES axis anchors are degenerate (zero-length axis).")
+    axis_u = axis / norm
+    pp_proj = float(np.dot(lig - p0, axis_u))
+    acc = 0.0
+    for pr, li in contact_pairs_boltz:
+        d = float(np.linalg.norm(cr[int(pr)] - cr[int(li)]))
+        acc += _plumed_rational_contact_switch(
+            d,
+            r0=float(contactmap_switch_r0),
+            d0=float(contactmap_switch_d0),
+            nn=int(contactmap_switch_nn),
+            mm=int(contactmap_switch_mm),
+        )
+    return np.array([pp_proj, acc], dtype=np.float64)
 
 
 def default_oneopes_axis_boltz_indices(
@@ -308,60 +451,7 @@ def write_rmsd_reference_pdb(
     return out
 
 
-def generate_plumed_opes_script(
-    *,
-    ligand_plumed_idx: Sequence[int],
-    pocket_ca_plumed_idx: Sequence[int],
-    rmsd_reference_pdb: Path,
-    sigma: Sequence[float],
-    pace: int,
-    barrier: float,
-    biasfactor: float,
-    temperature: float,
-    save_opes_every: int,
-    progress_every: int,
-    out_dir: Path,
-    state_rfile: Path | None = None,
-    whole_molecule_plumed_idx: Sequence[int] | None = None,
-    kernel_cutoff: float | None = None,
-    nlist_parameters: tuple[float, float] | None = None,
-    print_colvar_heavy_flush: bool = False,
-    cv_mode: OpesCvMode = "2d",
-    pocket_heavy_plumed_idx: Sequence[int] | None = None,
-    coordination_r0: float = 4.5,
-    coordination_nn: int = 6,
-    coordination_mm: int = 12,
-    opes_variant: OpesMetadVariant = "metad",
-    upper_wall_dist: float | None = None,
-    upper_wall_kappa: float = 200.0,
-    use_pbc: bool = False,
-    opes_expanded_temp_max: float | None = None,
-    opes_expanded_pace: int = 50,
-    opes_expanded_observation_steps: int = 100,
-    opes_expanded_print_stride: int = 100,
-    opes_expanded_state_rfile: Path | None = None,
-    oneopes_axis_p0_plumed_idx: Sequence[int] | None = None,
-    oneopes_axis_p1_plumed_idx: Sequence[int] | None = None,
-    oneopes_contactmap_pairs_plumed: Sequence[tuple[int, int]] | None = None,
-    contactmap_switch_r0: float = 5.5,
-    contactmap_switch_d0: float = 0.0,
-    contactmap_switch_nn: int = 4,
-    contactmap_switch_mm: int = 10,
-    oneopes_hydration_spot_plumed_idx: Sequence[int] | None = None,
-    water_oxygen_plumed_idx: Sequence[int] | None = None,
-    oneopes_water_pace: int = 40000,
-    oneopes_water_barrier: float = 3.0,
-    oneopes_water_biasfactor: float = 5.0,
-    oneopes_water_sigma: float = 0.15,
-    oneopes_water_switch_r0: float = 2.5,
-    oneopes_water_switch_d0: float = 0.0,
-    oneopes_water_switch_nn: int = 6,
-    oneopes_water_switch_mm: int = 10,
-    oneopes_water_switch_d_max: float = 6.0,
-    oneopes_water_nl_cutoff: float = 16.0,
-    oneopes_water_nl_stride: int = 20,
-    oneopes_water_kernel_cutoff: float | None = None,
-) -> str:
+def generate_plumed_opes_script_from_config(cfg: OpesPlumedDeckConfig) -> str:
     """Generate a PLUMED ``OPES_METAD`` or ``OPES_METAD_EXPLORE`` input script.
 
     Parameters use PLUMED units: Angstrom for lengths, Kelvin for temperature,
@@ -427,6 +517,57 @@ def generate_plumed_opes_script(
     *oneopes_hydration_spot_plumed_idx* with water oxygens in
     *water_oxygen_plumed_idx* (a ``GROUP`` labeled ``WO``).
     """
+    ligand_plumed_idx = cfg.ligand_plumed_idx
+    pocket_ca_plumed_idx = cfg.pocket_ca_plumed_idx
+    rmsd_reference_pdb = cfg.rmsd_reference_pdb
+    sigma = cfg.sigma
+    pace = cfg.pace
+    barrier = cfg.barrier
+    biasfactor = cfg.biasfactor
+    temperature = cfg.temperature
+    save_opes_every = cfg.save_opes_every
+    progress_every = cfg.progress_every
+    out_dir = cfg.out_dir
+    state_rfile = cfg.state_rfile
+    whole_molecule_plumed_idx = cfg.whole_molecule_plumed_idx
+    kernel_cutoff = cfg.kernel_cutoff
+    nlist_parameters = cfg.nlist_parameters
+    print_colvar_heavy_flush = cfg.print_colvar_heavy_flush
+    cv_mode = cfg.cv_mode
+    pocket_heavy_plumed_idx = cfg.pocket_heavy_plumed_idx
+    coordination_r0 = cfg.coordination_r0
+    coordination_nn = cfg.coordination_nn
+    coordination_mm = cfg.coordination_mm
+    opes_variant = cfg.opes_variant
+    upper_wall_dist = cfg.upper_wall_dist
+    upper_wall_kappa = cfg.upper_wall_kappa
+    use_pbc = cfg.use_pbc
+    opes_expanded_temp_max = cfg.opes_expanded_temp_max
+    opes_expanded_pace = cfg.opes_expanded_pace
+    opes_expanded_observation_steps = cfg.opes_expanded_observation_steps
+    opes_expanded_print_stride = cfg.opes_expanded_print_stride
+    opes_expanded_state_rfile = cfg.opes_expanded_state_rfile
+    oneopes_axis_p0_plumed_idx = cfg.oneopes_axis_p0_plumed_idx
+    oneopes_axis_p1_plumed_idx = cfg.oneopes_axis_p1_plumed_idx
+    oneopes_contactmap_pairs_plumed = cfg.oneopes_contactmap_pairs_plumed
+    contactmap_switch_r0 = cfg.contactmap_switch_r0
+    contactmap_switch_d0 = cfg.contactmap_switch_d0
+    contactmap_switch_nn = cfg.contactmap_switch_nn
+    contactmap_switch_mm = cfg.contactmap_switch_mm
+    oneopes_hydration_spot_plumed_idx = cfg.oneopes_hydration_spot_plumed_idx
+    water_oxygen_plumed_idx = cfg.water_oxygen_plumed_idx
+    oneopes_water_pace = cfg.oneopes_water_pace
+    oneopes_water_barrier = cfg.oneopes_water_barrier
+    oneopes_water_biasfactor = cfg.oneopes_water_biasfactor
+    oneopes_water_sigma = cfg.oneopes_water_sigma
+    oneopes_water_switch_r0 = cfg.oneopes_water_switch_r0
+    oneopes_water_switch_d0 = cfg.oneopes_water_switch_d0
+    oneopes_water_switch_nn = cfg.oneopes_water_switch_nn
+    oneopes_water_switch_mm = cfg.oneopes_water_switch_mm
+    oneopes_water_switch_d_max = cfg.oneopes_water_switch_d_max
+    oneopes_water_nl_cutoff = cfg.oneopes_water_nl_cutoff
+    oneopes_water_nl_stride = cfg.oneopes_water_nl_stride
+    oneopes_water_kernel_cutoff = cfg.oneopes_water_kernel_cutoff
     if cv_mode not in ("2d", "3d", "oneopes"):
         raise ValueError('cv_mode must be "2d", "3d", or "oneopes".')
     if opes_variant not in ("metad", "explore"):
@@ -792,6 +933,15 @@ def generate_plumed_opes_script(
         ]
     )
     return "\n".join(lines)
+
+
+def generate_plumed_opes_script(**kwargs: Any) -> str:
+    """Generate a PLUMED deck from keyword arguments (backward-compatible API).
+
+    Prefer :func:`generate_plumed_opes_script_from_config` with an
+    :class:`OpesPlumedDeckConfig` instance for clearer call sites.
+    """
+    return generate_plumed_opes_script_from_config(OpesPlumedDeckConfig(**kwargs))
 
 
 def add_plumed_opes_to_system(

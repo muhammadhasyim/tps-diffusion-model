@@ -552,6 +552,29 @@ def test_compute_oneopes_pp_ext_and_default_axis() -> None:
     assert set(p0.tolist()) | set(p1.tolist()) == {10, 11, 12, 13}
 
 
+def test_compute_oneopes_pp_proj_cmap_from_boltz_coords() -> None:
+    import numpy as np
+
+    from genai_tps.simulation.plumed_opes import (
+        compute_oneopes_pp_proj_cmap_from_boltz_coords,
+    )
+
+    cr = np.zeros((10, 3), dtype=np.float64)
+    cr[0] = (0.0, 0.0, 0.0)
+    cr[1] = (0.0, 0.0, 10.0)
+    cr[2] = (0.0, 0.0, 5.0)
+    out = compute_oneopes_pp_proj_cmap_from_boltz_coords(
+        cr,
+        axis_p0_boltz=[0],
+        axis_p1_boltz=[1],
+        ligand_boltz=[2],
+        contact_pairs_boltz=[(0, 2)],
+        contactmap_switch_r0=100.0,
+    )
+    assert out[0] == pytest.approx(5.0)
+    assert out[1] == pytest.approx(1.0, rel=1e-5)
+
+
 def test_build_md_simulation_from_pdb_exposes_extra_forces_hook() -> None:
     import compute_cv_rmsd
 

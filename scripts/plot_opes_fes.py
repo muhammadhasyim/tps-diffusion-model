@@ -75,6 +75,18 @@ def _ensure_genai_tps_path() -> None:
 _ensure_genai_tps_path()
 
 from genai_tps.simulation import OPESBias  # noqa: E402
+from genai_tps.simulation.fes_math import (  # noqa: E402
+    integrate_trapezoid_1d,
+    integrate_trapezoid_2d,
+    pdf_on_grid_1d,
+    pdf_on_mesh_2d,
+)
+
+# Backward-compatible names for tests and external callers.
+_integrate_trapezoid = integrate_trapezoid_1d
+_integrate_trapezoid_2d = integrate_trapezoid_2d
+_pdf_on_grid = pdf_on_grid_1d
+_pdf_on_mesh = pdf_on_mesh_2d
 
 # Matplotlib mathtext on axes (explicit sizes override rcParams after _apply_plot_rcparams).
 _MPL_LABEL_FS = 18
@@ -505,41 +517,6 @@ def _resolve_cv_path(run_dir: Path) -> Path | None:
     return None
 
 
-def _integrate_trapezoid(y: np.ndarray, x: np.ndarray) -> float:
-    """∫ y(x) dx with NumPy 1.x/2.x compatible API."""
-    if hasattr(np, "trapezoid"):
-        return float(np.trapezoid(y, x))
-    return float(np.trapz(y, x))
-
-
-def _pdf_on_grid(grid: np.ndarray, density: np.ndarray) -> np.ndarray:
-    """Divide *density* by ∫ density dx on *grid* so the result integrates to ~1."""
-    y = np.asarray(density, dtype=np.float64)
-    integ = _integrate_trapezoid(y, grid)
-    if integ <= 0.0 or not np.isfinite(integ):
-        return np.zeros_like(y)
-    return y / integ
-
-
-def _integrate_trapezoid_2d(Z: np.ndarray, x: np.ndarray, y: np.ndarray) -> float:
-    """∬ Z(x,y) dx dy with Z shape ``(len(y), len(x))`` (``meshgrid(..., indexing='xy')``)."""
-    zx = Z.astype(np.float64, copy=False)
-    if hasattr(np, "trapezoid"):
-        inner = np.trapezoid(zx, x, axis=1)
-        return float(np.trapezoid(inner, y))
-    inner = np.trapz(zx, x, axis=1)
-    return float(np.trapz(inner, y))
-
-
-def _pdf_on_mesh(Z: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Divide *Z* by ∬ Z dx dy on the tensor-product grid so the integral is ~1."""
-    zz = np.asarray(Z, dtype=np.float64)
-    integ = _integrate_trapezoid_2d(zz, x, y)
-    if integ <= 0.0 or not np.isfinite(integ):
-        return np.zeros_like(zz)
-    return zz / integ
-
-
 def _neg_ln_rho_relative(density: np.ndarray) -> np.ndarray:
     """Dimensionless ``-ln(ρ̂)`` with ``ρ̂ = p / max(p)`` (minimum 0 at the mode)."""
     p = np.asarray(density, dtype=np.float64)
@@ -679,7 +656,7 @@ def plot_opes_fes(
     if opes_raw_scale:
         p_opes_plot = p_opes_internal
     else:
-        p_opes_plot = _pdf_on_grid(grid, p_opes_internal)
+        p_opes_plot = pdf_on_grid_1d(grid, p_opes_internal)
 
     # Biased ensemble: unweighted KDE of CV samples along the chain
     try:
@@ -883,7 +860,7 @@ def plot_opes_fes_2d(
     if opes_raw_scale:
         p_opes_plot = p_opes_internal
     else:
-        p_opes_plot = _pdf_on_mesh(p_opes_internal, gx, gy)
+        p_opes_plot = pdf_on_mesh_2d(p_opes_internal, gx, gy)
 
     w = bias.reweight_samples(arr)
     try:

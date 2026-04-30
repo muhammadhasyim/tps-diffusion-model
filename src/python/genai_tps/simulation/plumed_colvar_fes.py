@@ -12,6 +12,16 @@ Typical Stage-0 layout::
 
 Output is written next to ``COLVAR`` (same directory as *outfile* basename
 when *cwd* is set to ``colvar_path.parent``).
+
+**Why a reweighted FES can look smooth while ``KERNELS`` looks busy**
+
+PLUMED OPES stores a **compressed** kernel representation: the ``KERNELS``
+history can list many deposition events, but ``opes.nker`` in ``COLVAR`` is the
+**current** number of merged kernels in CV space. Reweighting then applies a
+**KDE** (or PLUMED's equivalent script) with finite bandwidth, so the estimated
+free energy is a **smooth** functional of the biased histogram, not a raw sum
+of spiky Gaussians. That is expected behaviour, not a sign that the bias was
+ignored.
 """
 
 from __future__ import annotations
@@ -21,6 +31,55 @@ import sys
 from pathlib import Path
 
 from genai_tps.subprocess_support import repository_root
+
+
+def read_colvar_field_names(colvar_path: Path) -> list[str]:
+    """Return column names from the first ``#! FIELDS`` line in a PLUMED COLVAR."""
+    colvar_path = colvar_path.expanduser().resolve()
+    with colvar_path.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            s = line.strip()
+            if s.startswith("#! FIELDS"):
+                return s.split()[2:]
+    raise ValueError(f"No #! FIELDS line in {colvar_path}")
+
+
+def reweighting_kwargs_from_colvar_path(
+    colvar_path: Path,
+    *,
+    sigma_arg: str,
+) -> dict[str, object]:
+    """Infer ``run_fes_from_reweighting_script`` kwargs from COLVAR ``FIELDS``.
+
+    Recognizes OneOPES-style columns (``pp.proj`` + ``cmap``), 3D ligand–pocket
+    OPES (``lig_contacts``), and the default 2D pair (``lig_rmsd``, ``lig_dist``).
+    """
+    colvar_path = colvar_path.expanduser().resolve()
+    field_names = read_colvar_field_names(colvar_path)
+    parent = colvar_path.parent
+    n_sig = len([p for p in sigma_arg.split(",") if p.strip()])
+    if "pp.proj" in field_names and "cmap" in field_names:
+        sigma_use = sigma_arg if n_sig == 2 else "0.3,0.5"
+        return {
+            "cv_names": "pp.proj,cmap",
+            "sigma": sigma_use,
+            "grid_bin": "100,100",
+            "outfile": parent / "fes_reweighted_2d.dat",
+        }
+    if "lig_contacts" in field_names:
+        sigma_use = sigma_arg if n_sig == 3 else "0.3,0.5,1.0"
+        return {
+            "cv_names": "lig_rmsd,lig_dist,lig_contacts",
+            "sigma": sigma_use,
+            "grid_bin": "40,40,40",
+            "outfile": parent / "fes_reweighted_3d.dat",
+        }
+    return {
+        "cv_names": "lig_rmsd,lig_dist",
+        "sigma": sigma_arg,
+        "grid_bin": "100,100",
+        "outfile": parent / "fes_reweighted_2d.dat",
+    }
 
 
 def fes_from_reweighting_script_path(repo_root: Path | None = None) -> Path:

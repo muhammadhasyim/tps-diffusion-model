@@ -3,14 +3,34 @@
 from __future__ import annotations
 
 import argparse
+from argparse import Namespace
 import json
 import shutil
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+
+
+def _read_latest_plain_colvar_row(
+    colvar_path: Path, *, max_chars: int = 220
+) -> str | None:
+    """Return the last non-comment row from a PLUMED COLVAR file (truncated)."""
+    if not colvar_path.is_file() or colvar_path.stat().st_size < 8:
+        return None
+    try:
+        text = colvar_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in reversed(text.splitlines()):
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        return s if len(s) <= max_chars else s[: max_chars - 3] + "..."
+    return None
 
 
 def _log_coord_stats_np(tag: str, coords: np.ndarray, *, unit_label: str) -> None:
@@ -185,7 +205,7 @@ def _next_observer_event_step(
     return nxt if nxt is not None else n_steps
 
 
-def main() -> None:
+def build_opes_md_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="OPES-biased OpenMM MD for WDSM data collection")
     parser.add_argument("--topo-npz", type=Path, required=True, help="Boltz processed structures NPZ")
     parser.add_argument("--frame-npz", type=Path, default=None, help="NPZ with initial coords (default: same as topo)")
@@ -412,7 +432,49 @@ def main() -> None:
     parser.add_argument("--oneopes-water-barrier", type=float, default=3.0)
     parser.add_argument("--oneopes-water-biasfactor", type=float, default=5.0)
     parser.add_argument("--oneopes-water-sigma", type=float, default=0.15)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--oneopes-auto-hydration",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "When --bias-cv oneopes: if --oneopes-hydration-boltz is omitted, infer "
+            "hydration spot Boltz indices (3D-RISM+blobs when possible, else geometric "
+            "N/O interface atoms). Use --no-oneopes-auto-hydration to disable auxiliary "
+            "water OPES unless you pass explicit --oneopes-hydration-boltz."
+        ),
+    )
+    parser.add_argument(
+        "--oneopes-hydration-max-sites",
+        type=int,
+        default=5,
+        help="Cap on inferred hydration spots (--oneopes-auto-hydration).",
+    )
+    parser.add_argument(
+        "--oneopes-hydration-use-3drism",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Try AmberTools tleap+rism3d+metatwist before geometric fallback when "
+            "auto-inferring hydration spots. Use --no-oneopes-hydration-use-3drism to "
+            "skip RISM (faster, topology-independent)."
+        ),
+    )
+    parser.add_argument(
+        "--oneopes-hydration-min-density",
+        type=float,
+        default=0.5,
+        help=(
+            "metatwist --threshold for Laplacian blob picking when using 3D-RISM "
+            "(larger = fewer blobs; Amber tutorial often uses ~0.5)."
+        ),
+    )
+    return parser
+
+
+def parse_opes_md_args(argv: list[str] | None = None) -> Namespace:
+    """Parse CLI arguments for :func:`run_opes_md` (used by ``run_openmm_opes_md.py``)."""
+    parser = build_opes_md_argument_parser()
+    args = parser.parse_args(argv)
 
     if args.bias_cv == "oneopes" and args.opes_mode != "plumed":
         parser.error("--bias-cv oneopes requires --opes-mode plumed")
@@ -430,6 +492,13 @@ def main() -> None:
 
         assert_plumed_opes_metad_available()
 
+    if int(args.oneopes_hydration_max_sites) < 1:
+        parser.error("--oneopes-hydration-max-sites must be >= 1")
+
+    return args
+
+
+def run_opes_md(args: argparse.Namespace) -> None:
     from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
     from genai_tps.io.boltz_npz_export import coords_frame_from_npz, load_topo, npz_to_pdb
     from genai_tps.simulation.openmm_boltz_bridge import (
@@ -712,7 +781,30 @@ def main() -> None:
                 pp_i = boltz_to_plumed_indices([int(pr)], omm_idx_cb)[0]
                 li_i = boltz_to_plumed_indices([int(li)], omm_idx_cb)[0]
                 cmap_pairs.append((int(pp_i), int(li_i)))
-            hydr_b = list(args.oneopes_hydration_boltz or [])
+            hydr_explicit = args.oneopes_hydration_boltz
+            if hydr_explicit is not None and len(hydr_explicit) > 0:
+                hydr_b = [int(x) for x in hydr_explicit]
+            elif bool(args.oneopes_auto_hydration):
+                from genai_tps.simulation.hydration_site_inference import (
+                    default_oneopes_hydration_boltz_indices,
+                )
+
+                hydr_b = default_oneopes_hydration_boltz_indices(
+                    ref_coords[:n_s],
+                    indexer,
+                    pdb_path=pdb_path,
+                    max_sites=int(args.oneopes_hydration_max_sites),
+                    use_3drism=bool(args.oneopes_hydration_use_3drism),
+                    rism_min_density=float(args.oneopes_hydration_min_density),
+                )
+                if hydr_b:
+                    print(
+                        "[MD-OPES] OneOPES auto hydration spots (Boltz global indices): "
+                        f"{hydr_b}",
+                        flush=True,
+                    )
+            else:
+                hydr_b = []
             hydr_pl = (
                 boltz_to_plumed_indices(hydr_b, omm_idx_cb) if hydr_b else []
             )
@@ -739,6 +831,16 @@ def main() -> None:
                 "oneopes_water_barrier": float(args.oneopes_water_barrier),
                 "oneopes_water_biasfactor": float(args.oneopes_water_biasfactor),
                 "oneopes_water_sigma": float(args.oneopes_water_sigma),
+            }
+            meta["oneopes_cv_params"] = {
+                "axis_p0_boltz": np.asarray(bp0, dtype=np.int64).tolist(),
+                "axis_p1_boltz": np.asarray(bp1, dtype=np.int64).tolist(),
+                "ligand_boltz": np.asarray(indexer.ligand_idx, dtype=np.int64).tolist(),
+                "contact_pairs_boltz": [(int(pr), int(li)) for pr, li in pairs_b],
+                "contactmap_switch_r0": 5.5,
+                "contactmap_switch_d0": 0.0,
+                "contactmap_switch_nn": 4,
+                "contactmap_switch_mm": 10,
             }
 
         script = generate_plumed_opes_script(
@@ -815,6 +917,50 @@ def main() -> None:
     )
     print(f"[MD-OPES] Platform: {meta['platform_used']}", flush=True)
 
+    if args.opes_mode == "plumed":
+        colvar_p = opes_dir / "COLVAR"
+        if args.bias_cv == "oneopes":
+            cv_fes = "pp.proj,cmap"
+            grid_hint = "100,100"
+            fes_name = "fes_reweighted_2d.dat"
+        elif args.bias_cv == "3d":
+            cv_fes = "lig_rmsd,lig_dist,lig_contacts"
+            grid_hint = "40,40,40"
+            fes_name = "fes_reweighted_3d.dat"
+        else:
+            cv_fes = "lig_rmsd,lig_dist"
+            grid_hint = "100,100"
+            fes_name = "fes_reweighted_2d.dat"
+        print(
+            "[MD-OPES] PLUMED COLVAR (PRINT every "
+            f"{int(args.progress_every)} steps) -> {colvar_p}",
+            flush=True,
+        )
+        print(
+            "[MD-OPES] FES reweighting (after data accumulates; outfile next to COLVAR): "
+            f"cv_names={cv_fes!r}  sigma={args.opes_sigma!r}  bias_name=\"opes.bias\"  "
+            f"temperature_k={float(args.temperature)}  grid_bin={grid_hint!r}  "
+            f"-> {fes_name}",
+            flush=True,
+        )
+        print(
+            "[MD-OPES] Note: COLVAR column opes.nker is the merged kernel count in CV "
+            "space; reweighted FES KDEs are smooth even when KERNELS lists many "
+            "historical depositions.",
+            flush=True,
+        )
+        print(
+            "[MD-OPES] Python API: "
+            "genai_tps.simulation.plumed_colvar_fes.run_fes_from_reweighting_script("
+            f"colvar_path=Path(...), outfile=Path(...)/{fes_name}, ...)",
+            flush=True,
+        )
+        print(
+            "[MD-OPES] During the run, latest plain COLVAR row is echoed on each "
+            f"progress line (every {int(args.progress_every)} MD steps).",
+            flush=True,
+        )
+
     state0 = sim.context.getState(getPositions=True)
     pos_nm = state0.getPositions(asNumpy=True)
     _log_coord_stats_np("checkpoint_after_build_set_positions", pos_nm, unit_label="nm")
@@ -876,7 +1022,26 @@ def main() -> None:
     )
     del _probe_boltz
 
+    oneopes_cv_params = meta.get("oneopes_cv_params")
+
     def compute_cv(coords):
+        if oneopes_cv_params is not None:
+            from genai_tps.simulation.plumed_opes import (
+                compute_oneopes_pp_proj_cmap_from_boltz_coords,
+            )
+
+            p = oneopes_cv_params
+            return compute_oneopes_pp_proj_cmap_from_boltz_coords(
+                coords,
+                axis_p0_boltz=p["axis_p0_boltz"],
+                axis_p1_boltz=p["axis_p1_boltz"],
+                ligand_boltz=p["ligand_boltz"],
+                contact_pairs_boltz=p["contact_pairs_boltz"],
+                contactmap_switch_r0=float(p["contactmap_switch_r0"]),
+                contactmap_switch_d0=float(p["contactmap_switch_d0"]),
+                contactmap_switch_nn=int(p["contactmap_switch_nn"]),
+                contactmap_switch_mm=int(p["contactmap_switch_mm"]),
+            )
         x = torch.from_numpy(coords[:n_s]).float().unsqueeze(0)
         from types import SimpleNamespace
 
@@ -1089,6 +1254,9 @@ def main() -> None:
                     f"bias={bias_energy_kj:.3f} kJ/mol | saved={n_saved}",
                     flush=True,
                 )
+                tail = _read_latest_plain_colvar_row(opes_dir / "COLVAR")
+                if tail:
+                    print(f"[MD-OPES] COLVAR (latest row): {tail}", flush=True)
                 while next_progress <= step:
                     next_progress += int(args.progress_every)
 
@@ -1133,6 +1301,11 @@ def main() -> None:
     else:
         print(f"  OPES: PLUMED force group {plumed_context.get('force_group')}")
     print(f"{'='*60}", flush=True)
+
+
+def main() -> None:
+    """Backward-compatible CLI entrypoint (prefer ``scripts/run_openmm_opes_md.py``)."""
+    run_opes_md(parse_opes_md_args(sys.argv[1:]))
 
 
 if __name__ == "__main__":

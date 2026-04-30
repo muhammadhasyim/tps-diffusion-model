@@ -2,14 +2,13 @@
 
 Includes ligand placement from Boltz NPZ coordinates plus CCD ``.pkl`` RDKit
 templates (``try_ligand_pose_from_boltz_ccd``), used when building systems from
-:func:`scripts.compute_cv_rmsd.build_md_simulation_from_pdb`.
+:func:`genai_tps.simulation.openmm_system_builder.build_md_simulation_from_pdb`.
 
 Used by :mod:`genai_tps.simulation.openmm_md_runner` without optional RL-only dependencies.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 import pickle
 from pathlib import Path
@@ -33,22 +32,13 @@ LigandPosePolicy = Literal["boltz_first", "pdb_only", "strict"]
 
 
 def load_build_md_simulation_from_pdb() -> Callable[..., tuple[Any, dict]]:
-    """Return :func:`build_md_simulation_from_pdb` from ``scripts/compute_cv_rmsd.py``."""
+    """Return :func:`build_md_simulation_from_pdb` from :mod:`genai_tps.simulation.openmm_system_builder`."""
 
-    here = Path(__file__).resolve()
-    repo_root = here.parents[4]
-    script_path = repo_root / "scripts" / "compute_cv_rmsd.py"
-    if not script_path.is_file():
-        raise FileNotFoundError(f"Expected OpenMM helper script at {script_path}")
-    spec = importlib.util.spec_from_file_location("compute_cv_rmsd", script_path)
-    if spec is None or spec.loader is None:
-        raise ImportError("Could not load compute_cv_rmsd module spec.")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    fn = getattr(mod, "build_md_simulation_from_pdb", None)
-    if fn is None:
-        raise AttributeError("compute_cv_rmsd.build_md_simulation_from_pdb missing.")
-    return fn
+    from genai_tps.simulation.openmm_system_builder import (  # noqa: PLC0415
+        build_md_simulation_from_pdb,
+    )
+
+    return build_md_simulation_from_pdb
 
 
 def _openmm_residue_sequence_number(residue: Any) -> int:

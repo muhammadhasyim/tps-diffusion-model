@@ -3,152 +3,57 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 
+from genai_tps.simulation.fes_io import (
+    load_plumed_colvar_three_cvs,
+    load_plumed_colvar_two_cvs,
+    load_plumed_fes_dat,
+    load_plumed_kernels_2d,
+    load_plumed_kernels_3d,
+    parse_genai_grid_bins_3d,
+)
+from genai_tps.simulation.fes_math import (
+    cell_edges_from_centers,
+    integrate_trapezoid_2d,
+    kernel_density_grid_2d,
+    kernel_mixture_slice_3d,
+    mask_marginal_fes_far_from_colvar,
+    pdf_on_mesh_2d,
+)
 
-def _parse_genai_grid_bins_3d(text: str) -> tuple[int, int, int] | None:
-    for line in text.splitlines():
-        s = line.strip()
-        if s.startswith("#! SET genai_grid_bins"):
-            parts = s.split()
-            if len(parts) >= 6:
-                return int(parts[3]), int(parts[4]), int(parts[5])
-    return None
+# Backward compatibility for tests and callers that used private names.
+_parse_genai_grid_bins_3d = parse_genai_grid_bins_3d
+_mask_marginal_fes_far_from_colvar = mask_marginal_fes_far_from_colvar
+_cell_edges_from_centers = cell_edges_from_centers
+_kernel_mixture_slice = kernel_mixture_slice_3d
+_integrate_trapezoid_2d = integrate_trapezoid_2d
+_pdf_on_mesh_2d = pdf_on_mesh_2d
+_kernel_density_grid = kernel_density_grid_2d
 
-
-def load_plumed_fes_dat(
-    path: Path,
-    text: str | None = None,
-) -> tuple[
-    Literal[1, 2, 3],
-    tuple[str, ...],
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-]:
-    """Parse PLUMED-style FES ``.dat`` with ``#! FIELDS`` header.
-
-    Returns
-    -------
-    dim
-        Number of CV dimensions (1, 2, or 3) before ``file.free``.
-    cv_names
-        CV column names (length *dim*).
-    x, y, z, fes
-        Flattened grid coordinates and free energies.  For ``dim < 3``, *z*
-        is an empty array.  For ``dim==1``, *y* is also empty.
-    """
-    text = (
-        path.read_text(encoding="utf-8", errors="replace")
-        if text is None
-        else text
-    )
-    fields_line = None
-    for line in text.splitlines():
-        if line.strip().startswith("#! FIELDS"):
-            fields_line = line.strip()
-            break
-    if fields_line is None:
-        raise ValueError(f"No #! FIELDS line in {path}")
-
-    toks = fields_line.split()
-    # #! FIELDS cv1 file.free  OR  #! FIELDS cv1 cv2 file.free  OR  + cv3
-    after = toks[2:]
-    if not after or after[-1] != "file.free":
-        raise ValueError(f"Expected ... file.free in FIELDS line: {fields_line}")
-    cv_names = tuple(after[:-1])
-    dim: Literal[1, 2, 3]
-    if len(cv_names) == 1:
-        dim = 1
-    elif len(cv_names) == 2:
-        dim = 2
-    elif len(cv_names) == 3:
-        dim = 3
-    else:
-        raise ValueError(
-            f"Only 1D, 2D, or 3D FES supported (before file.free), got CVs {cv_names!r}"
-        )
-
-    rows: list[list[float]] = []
-    for line in text.splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
-            continue
-        parts = s.split()
-        if dim == 1 and len(parts) >= 2:
-            try:
-                rows.append([float(parts[0]), float(parts[1])])
-            except ValueError:
-                continue
-        elif dim == 2 and len(parts) >= 3:
-            try:
-                rows.append([float(parts[0]), float(parts[1]), float(parts[2])])
-            except ValueError:
-                continue
-        elif dim == 3 and len(parts) >= 4:
-            try:
-                rows.append(
-                    [
-                        float(parts[0]),
-                        float(parts[1]),
-                        float(parts[2]),
-                        float(parts[3]),
-                    ]
-                )
-            except ValueError:
-                continue
-
-    if not rows:
-        raise ValueError(f"No numeric data rows in {path}")
-
-    arr = np.asarray(rows, dtype=np.float64)
-    if dim == 1:
-        return (
-            dim,
-            cv_names,
-            arr[:, 0],
-            np.empty(0, dtype=np.float64),
-            np.empty(0, dtype=np.float64),
-            arr[:, 1],
-        )
-    if dim == 2:
-        return dim, cv_names, arr[:, 0], arr[:, 1], np.empty(0, dtype=np.float64), arr[:, 2]
-    return dim, cv_names, arr[:, 0], arr[:, 1], arr[:, 2], arr[:, 3]
-
-
-def _mask_marginal_fes_far_from_colvar(
-    fm: np.ndarray,
-    gx: np.ndarray,
-    gy: np.ndarray,
-    samples_a: np.ndarray,
-    samples_b: np.ndarray,
-    sigma_a: float,
-    sigma_b: float,
-    nsigma: float,
-) -> np.ndarray:
-    """Set marginal FES to NaN where no COLVAR sample lies within *nsigma* (σ-scaled distance).
-
-    Distance for masking uses the same per-CV scaling as OPES kernels:
-    :math:`\\sqrt{((x-x')/\\sigma_a)^2 + ((y-y')/\\sigma_b)^2}` minimized over
-    trajectory samples.  Values above *nsigma* are treated as visually
-    unsampled (Ramachandran-style blank regions).
-    """
-    if samples_a.size == 0 or samples_b.size == 0:
-        return fm
-    tiny = 1e-12
-    sa = max(float(sigma_a), tiny)
-    sb = max(float(sigma_b), tiny)
-    gx_m, gy_m = np.meshgrid(gx, gy, indexing="ij")
-    # (nx, ny, N)
-    da = (gx_m[:, :, np.newaxis] - samples_a[np.newaxis, np.newaxis, :]) / sa
-    db = (gy_m[:, :, np.newaxis] - samples_b[np.newaxis, np.newaxis, :]) / sb
-    d_min = np.sqrt(np.min(da * da + db * db, axis=2))
-    out = np.array(fm, dtype=np.float64, copy=True)
-    out[d_min > float(nsigma)] = np.nan
-    return out
+__all__ = [
+    "load_plumed_fes_dat",
+    "load_plumed_colvar_two_cvs",
+    "load_plumed_colvar_three_cvs",
+    "load_plumed_kernels_2d",
+    "load_plumed_kernels_3d",
+    "parse_genai_grid_bins_3d",
+    "plot_fes_dat_to_png",
+    "plot_opes_2d_fes_triptych",
+    "plot_opes_2d_fes_triptych_opes_style",
+    "plot_opes_3d_fes_triptych",
+    "plot_opes_3d_fes_triptych_opes_style",
+    "plot_opes_3d_fes_slices_kde_deposits",
+    # Legacy private names (re-exported)
+    "_parse_genai_grid_bins_3d",
+    "_mask_marginal_fes_far_from_colvar",
+    "_cell_edges_from_centers",
+    "_kernel_mixture_slice",
+    "_integrate_trapezoid_2d",
+    "_pdf_on_mesh_2d",
+    "_kernel_density_grid",
+]
 
 
 def plot_fes_dat_to_png(
@@ -217,7 +122,7 @@ def plot_fes_dat_to_png(
     else:
         from scipy.special import logsumexp
 
-        bins = _parse_genai_grid_bins_3d(text)
+        bins = parse_genai_grid_bins_3d(text)
         if bins is None:
             raise ValueError(
                 "3D FES plotting needs '#! SET genai_grid_bins nx ny nz' in the .dat "
@@ -268,7 +173,7 @@ def plot_fes_dat_to_png(
                     skiprows=int(marginal_colvar_skiprows),
                 )
                 ia, ib = ij
-                fm = _mask_marginal_fes_far_from_colvar(
+                fm = mask_marginal_fes_far_from_colvar(
                     fm,
                     xa,
                     xb,
@@ -319,363 +224,6 @@ def plot_fes_dat_to_png(
     fig.tight_layout()
     fig.savefig(out_png, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
-
-
-def _plumed_fields_tokens_from_line(fields_line: str) -> list[str]:
-    toks = fields_line.split()
-    if len(toks) < 3 or toks[0] != "#!" or toks[1] != "FIELDS":
-        raise ValueError(f"Not a PLUMED FIELDS line: {fields_line!r}")
-    return toks[2:]
-
-
-def load_plumed_colvar_two_cvs(
-    colvar_path: Path,
-    cv_a: str,
-    cv_b: str,
-    *,
-    skiprows: int = 0,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Load two CV columns from a PLUMED ``COLVAR`` (first ``#! FIELDS`` line).
-
-    All non-comment lines are parsed as whitespace-separated floats; column
-    order matches the FIELDS list (excluding the ``#! FIELDS`` prefix).
-
-    Parameters
-    ----------
-    colvar_path
-        Path to ``COLVAR`` (or ``bck.*.COLVAR``) with a ``#! FIELDS`` header.
-    cv_a, cv_b
-        Names exactly as in the FIELDS line (e.g. ``lig_rmsd``, ``lig_dist``).
-    skiprows
-        Number of **data** rows to drop after the header (burn-in).
-    """
-    text = colvar_path.read_text(encoding="utf-8", errors="replace")
-    fields: list[str] | None = None
-    for line in text.splitlines():
-        s = line.strip()
-        if s.startswith("#! FIELDS"):
-            fields = _plumed_fields_tokens_from_line(s)
-            break
-    if fields is None:
-        raise ValueError(f"No #! FIELDS line in {colvar_path}")
-    try:
-        ia = fields.index(cv_a)
-        ib = fields.index(cv_b)
-    except ValueError as exc:
-        raise ValueError(
-            f"CV {cv_a!r} or {cv_b!r} not in FIELDS {fields!r} ({colvar_path})"
-        ) from exc
-
-    rows: list[tuple[float, float]] = []
-    for line in text.splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
-            continue
-        parts = s.split()
-        if len(parts) <= max(ia, ib):
-            continue
-        try:
-            xa = float(parts[ia])
-            xb = float(parts[ib])
-        except ValueError:
-            continue
-        rows.append((xa, xb))
-
-    if not rows:
-        raise ValueError(f"No numeric data rows in {colvar_path}")
-    if skiprows > 0:
-        rows = rows[int(skiprows) :]
-    arr = np.asarray(rows, dtype=np.float64)
-    return arr[:, 0], arr[:, 1]
-
-
-def load_plumed_colvar_three_cvs(
-    colvar_path: Path,
-    cv_a: str,
-    cv_b: str,
-    cv_c: str,
-    *,
-    skiprows: int = 0,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load three CV columns from a PLUMED ``COLVAR`` (first ``#! FIELDS`` line)."""
-    text = colvar_path.read_text(encoding="utf-8", errors="replace")
-    fields: list[str] | None = None
-    for line in text.splitlines():
-        s = line.strip()
-        if s.startswith("#! FIELDS"):
-            fields = _plumed_fields_tokens_from_line(s)
-            break
-    if fields is None:
-        raise ValueError(f"No #! FIELDS line in {colvar_path}")
-    try:
-        ia = fields.index(cv_a)
-        ib = fields.index(cv_b)
-        ic = fields.index(cv_c)
-    except ValueError as exc:
-        raise ValueError(
-            f"CV {cv_a!r}, {cv_b!r}, or {cv_c!r} not in FIELDS {fields!r} ({colvar_path})"
-        ) from exc
-
-    rows: list[tuple[float, float, float]] = []
-    for line in text.splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
-            continue
-        parts = s.split()
-        if len(parts) <= max(ia, ib, ic):
-            continue
-        try:
-            xa = float(parts[ia])
-            xb = float(parts[ib])
-            xc = float(parts[ic])
-        except ValueError:
-            continue
-        rows.append((xa, xb, xc))
-
-    if not rows:
-        raise ValueError(f"No numeric data rows in {colvar_path}")
-    if skiprows > 0:
-        rows = rows[int(skiprows) :]
-    arr = np.asarray(rows, dtype=np.float64)
-    return arr[:, 0], arr[:, 1], arr[:, 2]
-
-
-def _cell_edges_from_centers(c: np.ndarray) -> np.ndarray:
-    """Piecewise-linear cell boundaries so ``len(edges) == len(centers) + 1``."""
-    c = np.asarray(c, dtype=np.float64)
-    if c.size == 0:
-        raise ValueError("empty centers")
-    if c.size == 1:
-        return np.array([c[0] - 0.5, c[0] + 0.5], dtype=np.float64)
-    dif = np.diff(c)
-    left = c[0] - 0.5 * dif[0]
-    right = c[-1] + 0.5 * dif[-1]
-    mid = 0.5 * (c[:-1] + c[1:])
-    return np.concatenate([[left], mid, [right]])
-
-
-def _kernel_mixture_slice(
-    centers: np.ndarray,
-    sigmas: np.ndarray,
-    heights: np.ndarray,
-    *,
-    plane_axes: tuple[int, int],
-    fixed_axis: int,
-    fixed_value: float,
-    g0: np.ndarray,
-    g1: np.ndarray,
-) -> np.ndarray:
-    """Sum of 3D truncated Gaussians evaluated on a 2D plane (log-weights ignored).
-
-    Each kernel contributes ``height * exp(-0.5 Q)`` with ``Q`` the full 3-term
-    Mahalanobis sum along (axis0, axis1, fixed); *g0*, *g1* are 1-D grids for the
-    two free axes (meshgrid ``ij``).
-    """
-    ia, ib = int(plane_axes[0]), int(plane_axes[1])
-    ifixed = int(fixed_axis)
-    u, v = np.meshgrid(g0, g1, indexing="ij")
-    acc = np.zeros_like(u, dtype=np.float64)
-    tiny = 1e-30
-    for k in range(centers.shape[0]):
-        sa = max(float(sigmas[k, ia]), tiny)
-        sb = max(float(sigmas[k, ib]), tiny)
-        sf = max(float(sigmas[k, ifixed]), tiny)
-        h = float(heights[k]) * np.exp(
-            -0.5 * ((fixed_value - centers[k, ifixed]) / sf) ** 2
-        )
-        acc += h * np.exp(
-            -0.5 * ((u - centers[k, ia]) / sa) ** 2
-            - 0.5 * ((v - centers[k, ib]) / sb) ** 2
-        )
-    return acc
-
-
-def load_plumed_kernels_2d(
-    kernels_path: Path,
-) -> tuple[tuple[str, str], np.ndarray, np.ndarray, np.ndarray]:
-    """Parse OPES ``KERNELS`` (2 CVs) into centers, Gaussian widths, and heights.
-
-    Expected PLUMED layout (``#! FIELDS`` when present)::
-
-        time cv1 cv2 sigma_cv1 sigma_cv2 height logweight
-
-    If the file has no ``#! FIELDS`` line, the same 8-token numeric layout is
-    assumed and CVs are labeled ``cv1``, ``cv2``.
-
-    Returns
-    -------
-    cv_names
-        Names of the two collective variables.
-    centers
-        Shape ``(N, 2)`` — kernel centers in CV space.
-    sigmas
-        Shape ``(N, 2)`` — Gaussian standard deviations per CV.
-    height
-        Shape ``(N,)`` — kernel height prefactor (PLUMED ``height`` field).
-    """
-    text = kernels_path.read_text(encoding="utf-8", errors="replace")
-    fields: list[str] | None = None
-    for line in text.splitlines():
-        s = line.strip()
-        if s.startswith("#! FIELDS"):
-            fields = _plumed_fields_tokens_from_line(s)
-            break
-
-    if fields is not None:
-        n_cv = (len(fields) - 3) // 2
-        if n_cv != 2:
-            raise ValueError(
-                f"Only 2D kernels supported; FIELDS has {len(fields)} tokens "
-                f"({fields!r}) in {kernels_path}"
-            )
-        expected = 1 + 2 * n_cv + 2
-        if len(fields) != expected:
-            raise ValueError(f"Unexpected FIELDS width in {kernels_path}: {fields!r}")
-        cv_names = (fields[1], fields[2])
-    else:
-        cv_names = ("cv1", "cv2")
-
-    rows: list[list[float]] = []
-    for line in text.splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
-            continue
-        parts = s.split()
-        if len(parts) < 7:
-            continue
-        try:
-            vals = [float(parts[i]) for i in range(7)]
-        except ValueError:
-            continue
-        rows.append(vals)
-
-    if not rows:
-        raise ValueError(f"No kernel data rows in {kernels_path}")
-
-    arr = np.asarray(rows, dtype=np.float64)
-    centers = arr[:, 1:3]
-    sigmas = arr[:, 3:5]
-    heights = arr[:, 5]
-    _ = arr[:, 6]  # logweight (PLUMED); unused for plotting
-    return cv_names, centers, sigmas, heights
-
-
-def load_plumed_kernels_3d(
-    kernels_path: Path,
-    cv_names: tuple[str, str, str] | None = None,
-) -> tuple[tuple[str, str, str], np.ndarray, np.ndarray, np.ndarray]:
-    """Parse OPES ``KERNELS`` with three biased CVs into centers, widths, heights.
-
-    PLUMED layout (``#! FIELDS`` when present)::
-
-        time cv1 cv2 cv3 sigma_cv1 sigma_cv2 sigma_cv3 height logweight
-
-    If there is no ``#! FIELDS`` line, each non-comment line must contain nine
-    floats in that order; *cv_names* must then be supplied (or defaults
-    ``lig_rmsd``, ``lig_dist``, ``lig_contacts`` are used).
-
-    Returns
-    -------
-    cv_names
-        Three collective variable names.
-    centers
-        Shape ``(N, 3)`` — kernel centers in CV space.
-    sigmas
-        Shape ``(N, 3)`` — Gaussian standard deviations per CV.
-    height
-        Shape ``(N,)`` — kernel height prefactor (PLUMED ``height`` field).
-    """
-    text = kernels_path.read_text(encoding="utf-8", errors="replace")
-    fields: list[str] | None = None
-    for line in text.splitlines():
-        s = line.strip()
-        if s.startswith("#! FIELDS"):
-            fields = _plumed_fields_tokens_from_line(s)
-            break
-
-    names_resolved: tuple[str, str, str]
-    if fields is not None:
-        n_cv = (len(fields) - 3) // 2
-        if n_cv != 3:
-            raise ValueError(
-                f"Only 3D kernels supported here; FIELDS has {len(fields)} tokens "
-                f"({fields!r}) in {kernels_path}"
-            )
-        expected = 1 + 2 * n_cv + 2
-        if len(fields) != expected:
-            raise ValueError(f"Unexpected FIELDS width in {kernels_path}: {fields!r}")
-        names_resolved = (fields[1], fields[2], fields[3])
-    else:
-        names_resolved = (
-            cv_names
-            if cv_names is not None
-            else ("lig_rmsd", "lig_dist", "lig_contacts")
-        )
-
-    rows: list[list[float]] = []
-    for line in text.splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
-            continue
-        parts = s.split()
-        if len(parts) < 9:
-            continue
-        try:
-            vals = [float(parts[i]) for i in range(9)]
-        except ValueError:
-            continue
-        rows.append(vals)
-
-    if not rows:
-        raise ValueError(f"No 3D kernel data rows in {kernels_path}")
-
-    arr = np.asarray(rows, dtype=np.float64)
-    centers = arr[:, 1:4]
-    sigmas = arr[:, 4:7]
-    heights = arr[:, 7]
-    _ = arr[:, 8]
-    return names_resolved, centers, sigmas, heights
-
-
-def _integrate_trapezoid_2d(Z: np.ndarray, x: np.ndarray, y: np.ndarray) -> float:
-    """∬ Z(x,y) dx dy with *Z* shape ``(len(y), len(x))`` (``meshgrid(..., indexing='xy')``)."""
-    zx = Z.astype(np.float64, copy=False)
-    if hasattr(np, "trapezoid"):
-        inner = np.trapezoid(zx, x, axis=1)
-        return float(np.trapezoid(inner, y))
-    inner = np.trapz(zx, x, axis=1)
-    return float(np.trapz(inner, y))
-
-
-def _pdf_on_mesh_2d(Z: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Divide *Z* by ∬ Z dx dy on the tensor-product grid so the integral is ~1."""
-    zz = np.asarray(Z, dtype=np.float64)
-    integ = _integrate_trapezoid_2d(zz, x, y)
-    if integ <= 0.0 or not np.isfinite(integ):
-        return np.zeros_like(zz)
-    return zz / integ
-
-
-def _kernel_density_grid(
-    centers: np.ndarray,
-    sigmas: np.ndarray,
-    heights: np.ndarray,
-    gx: np.ndarray,
-    gy: np.ndarray,
-) -> np.ndarray:
-    """Sum of 2D Gaussians on a Cartesian grid (*gx*, *gy* are 1-D)."""
-    xg, yg = np.meshgrid(gx, gy, indexing="ij")
-    acc = np.zeros_like(xg, dtype=np.float64)
-    tiny = 1e-30
-    for k in range(centers.shape[0]):
-        cx, cy = centers[k, 0], centers[k, 1]
-        sx = max(sigmas[k, 0], tiny)
-        sy = max(sigmas[k, 1], tiny)
-        h = heights[k]
-        acc += h * np.exp(
-            -0.5 * ((xg - cx) / sx) ** 2 - 0.5 * ((yg - cy) / sy) ** 2
-        )
-    return acc
 
 
 def plot_opes_2d_fes_triptych(
@@ -751,7 +299,7 @@ def plot_opes_2d_fes_triptych(
     gy_edges = np.linspace(ymin, ymax, nxg + 1)
     gx_c = 0.5 * (gx_edges[:-1] + gx_edges[1:])
     gy_c = 0.5 * (gy_edges[:-1] + gy_edges[1:])
-    rho_k = _kernel_density_grid(k_centers, k_sigmas, k_heights, gx_c, gy_c)
+    rho_k = kernel_density_grid_2d(k_centers, k_sigmas, k_heights, gx_c, gy_c)
     rho_pos = np.maximum(rho_k, 1e-300)
     rho_vmin = float(np.percentile(rho_pos[rho_pos > 0], 5)) if np.any(rho_pos > 0) else 1e-30
     rho_vmin = max(rho_vmin, float(rho_pos.max()) * 1e-6)
@@ -921,9 +469,9 @@ def plot_opes_2d_fes_triptych_opes_style(
     gy = np.linspace(ymin, ymax, n_axis, dtype=np.float64)
     X, Y = np.meshgrid(gx, gy, indexing="xy")
 
-    rho_ij = _kernel_density_grid(k_centers, k_sigmas, k_heights, gx, gy)
+    rho_ij = kernel_density_grid_2d(k_centers, k_sigmas, k_heights, gx, gy)
     p_kernel = rho_ij.T.astype(np.float64)
-    p_hat = _pdf_on_mesh_2d(p_kernel, gx, gy)
+    p_hat = pdf_on_mesh_2d(p_kernel, gx, gy)
 
     kbt_kjmol = 0.0083144621 * float(temperature_k)
     F_grid = griddata(
@@ -1132,7 +680,7 @@ def plot_opes_3d_fes_triptych(
         else (cv_names_fes[0], cv_names_fes[1], cv_names_fes[2])
     )
 
-    bins = _parse_genai_grid_bins_3d(text)
+    bins = parse_genai_grid_bins_3d(text)
     if bins is None:
         raise ValueError(
             "3D triptych needs '#! SET genai_grid_bins nx ny nz' in the FES .dat header."
@@ -1213,7 +761,7 @@ def plot_opes_3d_fes_triptych(
         gy_edges = np.linspace(ymin, ymax, nxg + 1)
         gx_c = 0.5 * (gx_edges[:-1] + gx_edges[1:])
         gy_c = 0.5 * (gy_edges[:-1] + gy_edges[1:])
-        rho_k = _kernel_density_grid(k2, s2, k_heights, gx_c, gy_c)
+        rho_k = kernel_density_grid_2d(k2, s2, k_heights, gx_c, gy_c)
         rho_pos = np.maximum(rho_k, 1e-300)
         rho_vmin = (
             float(np.percentile(rho_pos[rho_pos > 0], 5))
@@ -1340,7 +888,7 @@ def plot_opes_3d_fes_triptych_opes_style(
 
     For each canonical slice (``lig_rmsd``–``lig_dist`` at mid ``lig_contacts``, etc.):
 
-    1. **Normalized** 3D kernel mixture on that plane (:func:`_kernel_mixture_slice`)
+    1. **Normalized** 3D kernel mixture on that plane (:func:`kernel_mixture_slice_3d`)
        with trapezoid-normalized :math:`\\hat{P}` and orange-edge kernel markers
        (opacity ``kernel_center_alpha`` so dense deposits remain readable).
     2. :math:`-\\ln(\\hat{\\rho}/\\hat{\\rho}_{\\mathrm{max}})` from the **same** 3D FES
@@ -1367,7 +915,7 @@ def plot_opes_3d_fes_triptych_opes_style(
         else (cv_names_fes[0], cv_names_fes[1], cv_names_fes[2])
     )
 
-    bins = _parse_genai_grid_bins_3d(text)
+    bins = parse_genai_grid_bins_3d(text)
     if bins is None:
         raise ValueError(
             "3D OPES-style triptych needs '#! SET genai_grid_bins nx ny nz' in the FES .dat header."
@@ -1435,7 +983,7 @@ def plot_opes_3d_fes_triptych_opes_style(
         ymin -= pad_y
         ymax += pad_y
 
-        rho = _kernel_mixture_slice(
+        rho = kernel_mixture_slice_3d(
             k_centers,
             k_sigmas,
             k_heights,
@@ -1447,7 +995,7 @@ def plot_opes_3d_fes_triptych_opes_style(
         )
         X, Y = np.meshgrid(ga, gb, indexing="xy")
         rho_plot = rho.T.astype(np.float64)
-        p_hat = _pdf_on_mesh_2d(rho_plot, ga, gb)
+        p_hat = pdf_on_mesh_2d(rho_plot, ga, gb)
 
         F_plot = np.asarray(f_sl.T, dtype=np.float64)
         fin_f = F_plot[np.isfinite(F_plot)]
@@ -1646,7 +1194,7 @@ def plot_opes_3d_fes_slices_kde_deposits(
         else (cv_names_fes[0], cv_names_fes[1], cv_names_fes[2])
     )
 
-    bins = _parse_genai_grid_bins_3d(text)
+    bins = parse_genai_grid_bins_3d(text)
     if bins is None:
         raise ValueError(
             "3D slice dashboard needs '#! SET genai_grid_bins nx ny nz' in the FES .dat."
@@ -1678,9 +1226,9 @@ def plot_opes_3d_fes_slices_kde_deposits(
     y0 = float(gy[iy])
     x0 = float(gx[ix])
 
-    ex = _cell_edges_from_centers(gx)
-    ey = _cell_edges_from_centers(gy)
-    ez = _cell_edges_from_centers(gz)
+    ex = cell_edges_from_centers(gx)
+    ey = cell_edges_from_centers(gy)
+    ez = cell_edges_from_centers(gz)
 
     out_png = Path(out_png)
     out_png.parent.mkdir(parents=True, exist_ok=True)
@@ -1699,7 +1247,7 @@ def plot_opes_3d_fes_slices_kde_deposits(
         f_sl, ga, gb, na, nb, plane_axes, i_fix, u_fix, (e0, e1) = spec
         ia, ib = plane_axes
 
-        rho = _kernel_mixture_slice(
+        rho = kernel_mixture_slice_3d(
             k_centers,
             k_sigmas,
             k_heights,

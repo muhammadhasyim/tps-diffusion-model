@@ -73,20 +73,38 @@ def test_shape_acylindricity_symmetric_rod() -> None:
 
 
 def test_new_geometric_names_in_run_opes_single_cv_list() -> None:
-    """Bias CV strings in run_opes_tps must include the gyration / contact CV names."""
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "run_opes_tps.py"
-    tree = ast.parse(script_path.read_text(encoding="utf-8"))
+    """Bias CV strings in ``cv_factory.SINGLE_CV_NAMES`` must include geometric CV names."""
+    factory_path = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "python"
+        / "genai_tps"
+        / "backends"
+        / "boltz"
+        / "cv_factory.py"
+    )
+    tree = ast.parse(factory_path.read_text(encoding="utf-8"))
     names: list[str] | None = None
     for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
+        if isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == "SINGLE_CV_NAMES":
+                if isinstance(node.value, ast.List):
+                    names = [
+                        elt.value
+                        for elt in node.value.elts
+                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                    ]
+                    break
+        elif isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "_SINGLE_CV_NAMES":
+                if isinstance(target, ast.Name) and target.id == "SINGLE_CV_NAMES":
                     if isinstance(node.value, ast.List):
                         names = [
                             elt.value
                             for elt in node.value.elts
                             if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
                         ]
+                        break
     assert names is not None
     for key in (
         "end_to_end",
