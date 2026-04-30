@@ -655,3 +655,87 @@ PRINT STRIDE=1 FILE={colvar} ARG=d,opes.bias
 
     assert np.isfinite(bias_energy)
     assert abs(bias_energy) > 1e-12
+
+
+def test_paper_host_guest_plumed_deck_main_and_aux_paces(tmp_path: Path) -> None:
+    from genai_tps.simulation.plumed_opes import (
+        PaperHostGuestOpesDeckConfig,
+        generate_paper_host_guest_plumed_opes_script_from_config,
+    )
+
+    ref = tmp_path / "ref.pdb"
+    ref.write_text("END\n", encoding="utf-8")
+    wo = tuple(range(200, 210))
+    cfg = PaperHostGuestOpesDeckConfig(
+        ligand_plumed_idx=[1, 2],
+        pocket_ca_plumed_idx=[3, 4, 5],
+        rmsd_reference_pdb=ref,
+        sigma_main=(0.2, 0.15),
+        biasfactor=8.0,
+        temperature=298.15,
+        save_opes_every=1000,
+        progress_every=500,
+        out_dir=tmp_path / "opes_paper",
+        replica_index=7,
+        funnel_axis_p0_plumed_idx=[3],
+        funnel_axis_p1_plumed_idx=[4],
+        ligand_axis_p0_plumed_idx=[1],
+        ligand_axis_p1_plumed_idx=[2],
+        auxiliary_guest_plumed_idx=(10, 11, 12, 13, 14, 15, 16),
+        water_oxygen_plumed_idx=wo,
+        main_pace=10_000,
+        main_barrier_kjmol=100.0,
+        auxiliary_pace=20_000,
+        auxiliary_barrier_kjmol=3.0,
+        multithermal_pace=100,
+        opes_expanded_temp_max=370.0,
+    )
+    script = generate_paper_host_guest_plumed_opes_script_from_config(cfg)
+    assert "cyl_z: MATHEVAL" in script
+    assert "cosang: MATHEVAL" in script
+    assert "opes: OPES_METAD_EXPLORE ..." in script
+    assert "ARG=cyl_z,cosang" in script
+    assert "PACE=10000" in script
+    assert "BARRIER=100" in script
+    assert "opes_aux_L4:" in script
+    assert "PACE=20000" in script
+    assert "BARRIER=3" in script
+    assert "opes_ecv: ECV_MULTITHERMAL" in script
+    assert "TEMP_MAX=370" in script
+    assert "opes_expanded: OPES_EXPANDED" in script
+    assert "PACE=100" in script
+    assert "R_0=2.5" in script and "D_MAX=0.8" in script
+    assert "NL_CUTOFF=1.5" in script and "NL_STRIDE=20" in script
+
+
+def test_paper_host_guest_rep0_skips_auxiliary_opes(tmp_path: Path) -> None:
+    from genai_tps.simulation.plumed_opes import (
+        PaperHostGuestOpesDeckConfig,
+        generate_paper_host_guest_plumed_opes_script_from_config,
+    )
+
+    ref = tmp_path / "ref2.pdb"
+    ref.write_text("END\n", encoding="utf-8")
+    wo = tuple(range(50, 55))
+    cfg = PaperHostGuestOpesDeckConfig(
+        ligand_plumed_idx=[1],
+        pocket_ca_plumed_idx=[2, 3, 4],
+        rmsd_reference_pdb=ref,
+        sigma_main=(0.2, 0.15),
+        biasfactor=8.0,
+        temperature=298.15,
+        save_opes_every=500,
+        progress_every=200,
+        out_dir=tmp_path / "opes_r0",
+        replica_index=0,
+        funnel_axis_p0_plumed_idx=[2],
+        funnel_axis_p1_plumed_idx=[3],
+        ligand_axis_p0_plumed_idx=[1],
+        ligand_axis_p1_plumed_idx=[2],
+        auxiliary_guest_plumed_idx=(10, 11, 12, 13, 14, 15, 16),
+        water_oxygen_plumed_idx=wo,
+        opes_expanded_temp_max=None,
+    )
+    script = generate_paper_host_guest_plumed_opes_script_from_config(cfg)
+    assert "opes_aux_L4:" not in script
+    assert "opes_expanded:" not in script
