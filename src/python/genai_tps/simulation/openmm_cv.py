@@ -138,6 +138,9 @@ class OpenMMLocalMinRMSD:
         ``{mol_dir}/{ccd}.pkl`` and passed to ``minimize_pdb`` as
         ``ligand_smiles``, enabling GAFF2 parameterisation of ligands.
         If ``None``, ligand chains are not parameterised (AMBER14-only mode).
+    openmm_device_index:
+        Optional CUDA/OpenCL ordinal passed to OpenMM as ``DeviceIndex`` when
+        *platform* is ``CUDA`` or ``OpenCL``.
     """
 
     def __init__(
@@ -148,9 +151,11 @@ class OpenMMLocalMinRMSD:
         cache_size: int = 256,
         fallback_value: float = 999.0,
         mol_dir: Path | str | None = None,
+        openmm_device_index: int | None = None,
     ):
         self.topo_npz = Path(topo_npz)
         self.platform = platform
+        self.openmm_device_index = openmm_device_index
         self.max_iter = max_iter
         self.cache_size = cache_size
         self.fallback_value = fallback_value
@@ -244,6 +249,7 @@ class OpenMMLocalMinRMSD:
         if str(scripts_dir) not in sys.path:
             sys.path.insert(0, str(scripts_dir))
         from compute_cv_rmsd import minimize_pdb  # type: ignore[import]
+        from genai_tps.utils.compute_device import openmm_device_index_properties
 
         pdb_str = self._coords_to_pdb_string(coords_angstrom)
 
@@ -251,6 +257,9 @@ class OpenMMLocalMinRMSD:
         if self._ligand_smiles_cache is None:
             self._ligand_smiles_cache = self._extract_ligand_smiles() or {}
         ligand_smiles = self._ligand_smiles_cache or None
+        omm_props = openmm_device_index_properties(
+            self.platform, self.openmm_device_index
+        )
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".pdb", delete=False, prefix="opes_cv_"
@@ -264,6 +273,7 @@ class OpenMMLocalMinRMSD:
                 max_iter=self.max_iter,
                 platform_name=self.platform,
                 ligand_smiles=ligand_smiles,
+                platform_properties=omm_props if omm_props else None,
             )
             if result["converged"] and result["ca_rmsd_angstrom"] is not None:
                 return float(result["ca_rmsd_angstrom"])
@@ -413,6 +423,8 @@ class OpenMMEnergy:
         LRU cache entries (coordinate hash → energy).
     mol_dir:
         Path to Boltz CCD molecule directory for ligand parameterization.
+    openmm_device_index:
+        Optional CUDA/OpenCL ordinal for OpenMM ``DeviceIndex``.
     """
 
     def __init__(
@@ -422,9 +434,11 @@ class OpenMMEnergy:
         fallback_value: float = 1e8,
         cache_size: int = 256,
         mol_dir: Path | str | None = None,
+        openmm_device_index: int | None = None,
     ):
         self.topo_npz = Path(topo_npz)
         self.platform = platform
+        self.openmm_device_index = openmm_device_index
         self.fallback_value = float(fallback_value)
         self.cache_size = cache_size
         self.mol_dir = Path(mol_dir) if mol_dir is not None else None
@@ -486,12 +500,16 @@ class OpenMMEnergy:
         if str(scripts_dir) not in sys.path:
             sys.path.insert(0, str(scripts_dir))
         from compute_cv_rmsd import minimize_pdb  # type: ignore[import]
+        from genai_tps.utils.compute_device import openmm_device_index_properties
 
         pdb_str = self._coords_to_pdb_string(coords_angstrom)
 
         if self._ligand_smiles_cache is None:
             self._ligand_smiles_cache = self._extract_ligand_smiles() or {}
         ligand_smiles = self._ligand_smiles_cache or None
+        omm_props = openmm_device_index_properties(
+            self.platform, self.openmm_device_index
+        )
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".pdb", delete=False, prefix="omm_energy_"
@@ -505,6 +523,7 @@ class OpenMMEnergy:
                 max_iter=1,
                 platform_name=self.platform,
                 ligand_smiles=ligand_smiles,
+                platform_properties=omm_props if omm_props else None,
             )
             if result["converged"] and result["energy_kj_mol"] is not None:
                 return float(result["energy_kj_mol"])

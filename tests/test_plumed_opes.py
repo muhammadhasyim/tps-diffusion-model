@@ -166,6 +166,7 @@ def test_build_md_simulation_from_pdb_exposes_extra_forces_hook() -> None:
     sig = inspect.signature(compute_cv_rmsd.build_md_simulation_from_pdb)
 
     assert "extra_forces" in sig.parameters
+    assert "platform_properties" in sig.parameters
 
 
 def test_add_plumed_opes_to_system_optional_runtime() -> None:

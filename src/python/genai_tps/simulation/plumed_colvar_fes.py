@@ -1,0 +1,146 @@
+"""Run PLUMED's OPES ``FES_from_Reweighting.py`` on a COLVAR file (subprocess).
+
+The implementation lives in the vendored PLUMED tree
+``plumed2/user-doc/tutorials/others/opes-metad/FES_from_Reweighting.py``
+(GPL-2.0 / LGPL per PLUMED).  This module only locates that script and invokes
+it with ``subprocess`` so we do not fork the reweighting mathematics into
+``genai_tps``.
+
+Typical Stage-0 layout::
+
+    <case>/openmm_opes_md/opes_states/COLVAR
+
+Output is written next to ``COLVAR`` (same directory as *outfile* basename
+when *cwd* is set to ``colvar_path.parent``).
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+from genai_tps.subprocess_support import repository_root
+
+
+def fes_from_reweighting_script_path(repo_root: Path | None = None) -> Path:
+    """Return path to PLUMED tutorial ``FES_from_Reweighting.py``."""
+    root = repo_root if repo_root is not None else repository_root()
+    return (
+        root
+        / "plumed2"
+        / "user-doc"
+        / "tutorials"
+        / "others"
+        / "opes-metad"
+        / "FES_from_Reweighting.py"
+    )
+
+
+def run_fes_from_reweighting_script(
+    *,
+    colvar_path: Path,
+    outfile: Path,
+    temperature_k: float,
+    sigma: str,
+    cv_names: str = "lig_rmsd,lig_dist",
+    bias_name: str = "opes.bias",
+    grid_min: str | None = None,
+    grid_max: str | None = None,
+    grid_bin: str = "100,100",
+    skiprows: int = 0,
+    blocks: int = 1,
+    repo_root: Path | None = None,
+) -> None:
+    """Run PLUMED's reweighted KDE FES script on *colvar_path*.
+
+    Parameters
+    ----------
+    colvar_path
+        Path to PLUMED ``COLVAR`` (must exist; first line must contain
+        ``FIELDS`` per PLUMED convention).
+    outfile
+        Destination path.  The script is run with ``cwd=colvar_path.parent``;
+        pass ``outfile`` under that directory so ``-o`` uses a plain filename.
+    temperature_k
+        Simulation temperature in Kelvin (passed as ``--temp``; kBT in kJ/mol
+        inside the PLUMED script uses 0.0083144621 × T).
+    sigma
+        KDE bandwidth(s), comma-separated (e.g. ``\"0.3,0.5\"`` for 2D OPES).
+    cv_names
+        Comma-separated CV labels matching ``FIELDS`` names.
+    bias_name
+        Bias column name (e.g. ``opes.bias``).
+    grid_min, grid_max
+        If set, forwarded as ``--min`` / ``--max`` (comma-separated per CV for
+        2D).  If ``None``, the PLUMED script auto-fits bounds from the data.
+    grid_bin
+        Comma-separated bin counts (default ``100,100`` for 2D).
+    skiprows
+        Rows to skip after the header (burn-in).
+    blocks
+        Block averaging for uncertainty (``1`` = single estimate).
+    repo_root
+        Repository root containing ``plumed2/``.  Default: auto-detect.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the tutorial script or ``colvar_path`` is missing.
+    subprocess.CalledProcessError
+        If the script exits non-zero.
+    """
+    colvar_path = colvar_path.expanduser().resolve()
+    outfile = outfile.expanduser().resolve()
+    if not colvar_path.is_file():
+        raise FileNotFoundError(f"COLVAR not found: {colvar_path}")
+    if colvar_path.stat().st_size < 32:
+        raise ValueError(f"COLVAR is empty or too small to contain FIELDS: {colvar_path}")
+    with colvar_path.open(encoding="utf-8", errors="replace") as fh:
+        head = fh.readline()
+    if "FIELDS" not in head:
+        raise ValueError(
+            f"COLVAR first line must contain PLUMED FIELDS marker: {colvar_path} "
+            f"(got {head[:120]!r})"
+        )
+    cwd = colvar_path.parent
+    if outfile.parent.resolve() != cwd.resolve():
+        raise ValueError(
+            f"outfile parent must match COLVAR directory ({cwd}); got {outfile.parent}"
+        )
+
+    script = fes_from_reweighting_script_path(repo_root)
+    if not script.is_file():
+        raise FileNotFoundError(
+            f"PLUMED tutorial script not found: {script}. "
+            "Initialize the plumed2 submodule or clone PLUMED with tutorials."
+        )
+
+    cmd: list[str] = [
+        sys.executable,
+        str(script),
+        "--colvar",
+        colvar_path.name,
+        "--outfile",
+        outfile.name,
+        "--sigma",
+        sigma,
+        "--temp",
+        str(float(temperature_k)),
+        "--cv",
+        cv_names,
+        "--bias",
+        bias_name,
+        "--bin",
+        grid_bin,
+        "--skiprows",
+        str(int(skiprows)),
+        "--blocks",
+        str(int(blocks)),
+    ]
+    if grid_min is not None:
+        cmd.extend(["--min", grid_min])
+    if grid_max is not None:
+        cmd.extend(["--max", grid_max])
+
+    subprocess.run(cmd, cwd=str(cwd), check=True)

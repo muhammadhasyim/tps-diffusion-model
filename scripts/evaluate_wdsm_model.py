@@ -31,6 +31,11 @@ _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+from genai_tps.utils.compute_device import (
+    maybe_set_torch_cuda_current_device,
+    parse_torch_device,
+)
+
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
 from genai_tps.backends.boltz.inference import (
     build_boltz_inference_session,
@@ -50,12 +55,21 @@ def main():
     parser.add_argument("--n-samples", type=int, default=500)
     parser.add_argument("--diffusion-steps", type=int, default=32)
     parser.add_argument("--recycling-steps", type=int, default=1)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="PyTorch device: cpu, cuda, or cuda:N (default: cuda).",
+    )
     args = parser.parse_args()
 
     yaml_path = args.yaml or (_REPO_ROOT / "inputs" / "tps_diagnostic" / "case1_mek1_fzc_novel.yaml")
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = parse_torch_device(args.device)
+        maybe_set_torch_cuda_current_device(device)
+    else:
+        device = torch.device("cpu")
     out = args.out.expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
 

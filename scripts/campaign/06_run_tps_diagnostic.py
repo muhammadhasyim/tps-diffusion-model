@@ -136,6 +136,7 @@ def _run_tps(
     n_fixed_point: int,
     diagnostic_cvs: str,
     opes_restart: Path | None,
+    openmm_device_index: int | None = None,
 ) -> None:
     """Invoke run_opes_tps.py as an isolated subprocess."""
     tps_script = _REPO_ROOT / "scripts" / "run_opes_tps.py"
@@ -164,6 +165,8 @@ def _run_tps(
         cmd += ["--finetuned-checkpoint", str(checkpoint)]
     if opes_restart is not None:
         cmd += ["--opes-restart", str(opes_restart)]
+    if openmm_device_index is not None:
+        cmd += ["--openmm-device-index", str(int(openmm_device_index))]
 
     print(f"  [06] Launching TPS: {' '.join(cmd[:8])} ...", flush=True)
     result = subprocess.run(cmd, check=False, env=child_env_with_repo_src_python())
@@ -198,7 +201,19 @@ def main() -> None:
     parser.add_argument("--diagnostic-cvs", type=str,
                         default="contact_order,clash_count,rg,ramachandran_outlier",
                         help="Additional CVs logged per MC step for post-hoc analysis.")
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="Forwarded to run_opes_tps.py: cpu, cuda, or cuda:N.",
+    )
+    parser.add_argument(
+        "--openmm-device-index",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Forwarded to run_opes_tps.py for OpenMM bias CVs (optional override).",
+    )
     parser.add_argument("--resume", action="store_true",
                         help="Skip if opes_state_final.json already exists for that run.")
     args = parser.parse_args()
@@ -276,6 +291,7 @@ def main() -> None:
                     n_fixed_point=args.n_fixed_point,
                     diagnostic_cvs=args.diagnostic_cvs,
                     opes_restart=opes_restart,
+                    openmm_device_index=args.openmm_device_index,
                 )
 
                 # Count checkpoints

@@ -185,7 +185,12 @@ def main() -> None:
                         help="Stop if val loss stalls for this many epochs.")
     parser.add_argument("--diffusion-steps", type=int, default=16)
     parser.add_argument("--recycling-steps", type=int, default=1)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="Forwarded to train_weighted_dsm.py: cpu, cuda, or cuda:N.",
+    )
     parser.add_argument("--resume", action="store_true",
                         help="Skip training if the final checkpoint already exists.")
     args = parser.parse_args()

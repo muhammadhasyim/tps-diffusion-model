@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -61,3 +62,22 @@ def test_assert_plumed_opes_metad_available_passes_when_opes_on(
     from genai_tps.simulation.plumed_kernel import assert_plumed_opes_metad_available
 
     assert_plumed_opes_metad_available()
+
+
+def test_assert_plumed_opes_hint_when_conda_prefix_mismatches_sys_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HPC setups often leave site Anaconda first on PATH while CONDA_PREFIX is the job env."""
+    from genai_tps.simulation import plumed_kernel as pk
+
+    env_root = tmp_path / "miniforge_env"
+    env_root.mkdir()
+    monkeypatch.setenv("CONDA_PREFIX", str(env_root))
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / "other_python_prefix"), raising=False)
+    monkeypatch.delenv("PLUMED_KERNEL", raising=False)
+    monkeypatch.setattr(pk, "plumed_kernel_path", lambda: None)
+
+    from genai_tps.simulation.plumed_kernel import assert_plumed_opes_metad_available
+
+    with pytest.raises(RuntimeError, match="Likely cause:.*python.*is not the interpreter"):
+        assert_plumed_opes_metad_available()

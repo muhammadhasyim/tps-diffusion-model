@@ -16,6 +16,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.utils.compute_device import (  # noqa: E402
+    maybe_set_torch_cuda_current_device,
+    parse_torch_device,
+)
+
 from genai_tps.backends.boltz.inference import build_boltz_inference_session  # noqa: E402
 from genai_tps.data.atlas import cache_zip_path, read_ids_file  # noqa: E402
 from genai_tps.data.atlas_convert import (  # noqa: E402
@@ -50,7 +55,12 @@ def main() -> None:
     parser.add_argument("--topo-npz-dir", type=Path, default=None,
                         help="Optional directory with preprocessed Boltz {atlas_id}.npz topologies.")
     parser.add_argument("--cache", type=Path, default=None)
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="PyTorch device for Boltz preprocessing: cpu, cuda, or cuda:N.",
+    )
     parser.add_argument("--diffusion-steps", type=int, default=1,
                         help="Only used when Boltz preprocessing is needed from YAML.")
     parser.add_argument("--recycling-steps", type=int, default=1,
@@ -66,7 +76,11 @@ def main() -> None:
     atlas_ids = read_ids_file(args.ids_file, limit=args.limit)
     yaml_map = _load_yaml_map(args.yaml_map)
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
-    device = torch.device(args.device)
+    if str(args.device).strip().lower() == "cpu" or not torch.cuda.is_available():
+        device = torch.device("cpu")
+    else:
+        device = parse_torch_device(args.device)
+        maybe_set_torch_cuda_current_device(device)
     combined_records = []
     frame_samples = []
 

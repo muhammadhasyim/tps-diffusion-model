@@ -69,6 +69,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import torch
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
@@ -76,6 +77,11 @@ if str(_REPO_ROOT / "src" / "python") not in sys.path:
 
 from genai_tps.simulation.openmm_md_runner import _parse_opes_nlist_parameters
 from genai_tps.subprocess_support import child_env_with_repo_src_python
+from genai_tps.utils.compute_device import (
+    cuda_device_index_for_openmm,
+    maybe_set_torch_cuda_current_device,
+    parse_torch_device,
+)
 
 # ---------------------------------------------------------------------------
 # System definitions — one entry per diagnostic case
@@ -169,6 +175,7 @@ def _run_openmm_md(
     opes_kernel_cutoff: float | None,
     opes_nlist_parameters: tuple[float, float] | None,
     plumed_colvar_heavy_flush: bool,
+    openmm_device_index: int | None = None,
 ) -> None:
     """Invoke the OpenMM OPES-MD runner via subprocess for isolation."""
     md_script = _REPO_ROOT / "scripts" / "run_openmm_opes_md.py"
@@ -202,6 +209,8 @@ def _run_openmm_md(
         cmd += ["--frame-npz", str(frame_npz)]
     if plumed_colvar_heavy_flush:
         cmd += ["--plumed-colvar-heavy-flush"]
+    if platform in ("CUDA", "OpenCL") and openmm_device_index is not None:
+        cmd += ["--openmm-device-index", str(int(openmm_device_index))]
 
     print(f"  [md] Command: {' '.join(cmd)}", flush=True)
     result = subprocess.run(cmd, check=False, env=child_env_with_repo_src_python())
@@ -225,8 +234,8 @@ def main() -> None:
         "--device",
         type=str,
         default="cuda",
-        help="PyTorch device for Boltz (default: cuda). Use ``cpu`` only for "
-        "debugging or CI without a GPU; structure sampling is impractically slow.",
+        help="PyTorch device for Boltz: cpu, cuda, or cuda:N (default: cuda). "
+        "Use cpu only for debugging or CI; structure sampling is very slow.",
     )
     parser.add_argument(
         "--init-sampling-steps",
@@ -267,6 +276,16 @@ def main() -> None:
         choices=["CUDA", "OpenCL", "CPU"],
         help="OpenMM platform (default: CUDA). CPU/OpenCL are fallbacks for "
         "machines without CUDA or for local debugging.",
+    )
+    parser.add_argument(
+        "--openmm-device-index",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "OpenMM CUDA/OpenCL DeviceIndex. Default: same ordinal as --device "
+            "for cuda:N (or 0 for bare cuda). Ignored when --platform is CPU."
+        ),
     )
     parser.add_argument("--minimize-steps", type=int, default=1000,
                         help="Energy minimisation steps before MD.")
@@ -314,6 +333,19 @@ def main() -> None:
                         help="If final OPES outputs already exist, skip that system.")
     args = parser.parse_args()
 
+    if torch.cuda.is_available():
+        _torch_dev = parse_torch_device(args.device)
+        maybe_set_torch_cuda_current_device(_torch_dev)
+        device_str = str(_torch_dev)
+    else:
+        _torch_dev = torch.device("cpu")
+        device_str = "cpu"
+    openmm_gpu_index = (
+        args.openmm_device_index
+        if args.openmm_device_index is not None
+        else cuda_device_index_for_openmm(_torch_dev)
+    )
+
     if args.opes_mode == "plumed":
         from genai_tps.simulation.plumed_kernel import assert_plumed_opes_metad_available
 
@@ -360,7 +392,7 @@ def main() -> None:
             yaml_path,
             system_out,
             cache,
-            args.device,
+            device_str,
             init_sampling_steps=args.init_sampling_steps,
             recycling_steps=args.recycling_steps,
         )
@@ -374,8 +406,6 @@ def main() -> None:
         init_coords = predict_sample_atom_coords_numpy(bundle)
         del bundle
         try:
-            import torch
-
             torch.cuda.empty_cache()
         except Exception:
             pass
@@ -418,6 +448,7 @@ def main() -> None:
             opes_kernel_cutoff=args.opes_kernel_cutoff,
             opes_nlist_parameters=args.opes_nlist_parameters,
             plumed_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
+            openmm_device_index=openmm_gpu_index,
         )
 
         # Count output shards

@@ -67,6 +67,7 @@ from genai_tps.simulation.openmm_boltz_bridge import (
     ligand_topology_relabeled_chain,
     try_ligand_pose_from_boltz_ccd,
 )
+from genai_tps.utils.compute_device import openmm_device_index_properties
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,10 @@ def get_ca_coords_angstrom(positions, ca_indices: list[int]) -> np.ndarray:
 _PLATFORM_PREFERENCE = ("CUDA", "OpenCL", "CPU")
 
 
-def _platform_runtime_smoke_test(platform) -> tuple[bool, str | None]:
+def _platform_runtime_smoke_test(
+    platform,
+    platform_properties: dict[str, str] | None = None,
+) -> tuple[bool, str | None]:
     """Return whether *platform* can run a minimal Context (energy evaluation).
 
     ``Platform.getPlatformByName('CUDA')`` can succeed while the first real
@@ -143,6 +147,9 @@ def _platform_runtime_smoke_test(platform) -> tuple[bool, str | None]:
     mismatch).  PDBFixer and ``Modeller.addHydrogens`` then break before our
     main :class:`Simulation` is built.  This test catches that case so we fall
     back to OpenCL or CPU.
+
+    When *platform_properties* is non-empty, it is passed to :class:`openmm.Context`
+    so the smoke test targets the same GPU as the eventual :class:`Simulation`.
     """
     import openmm as mm
     from openmm import unit as u
@@ -155,7 +162,11 @@ def _platform_runtime_smoke_test(platform) -> tuple[bool, str | None]:
         bond.addBond(0, 1, 0.15, 100000.0)
         system.addForce(bond)
         integrator = mm.VerletIntegrator(1.0 * u.femtoseconds)
-        ctx = mm.Context(system, integrator, platform)
+        props = dict(platform_properties or {})
+        if props:
+            ctx = mm.Context(system, integrator, platform, props)
+        else:
+            ctx = mm.Context(system, integrator, platform)
         ctx.setPositions([[0, 0, 0], [0.15, 0, 0]] * u.nanometers)
         ctx.getState(getEnergy=True)
         del ctx
@@ -164,7 +175,11 @@ def _platform_runtime_smoke_test(platform) -> tuple[bool, str | None]:
         return False, str(exc)
 
 
-def _get_platform(requested: str):
+def _get_platform(
+    requested: str,
+    *,
+    runtime_smoke_properties: dict[str, str] | None = None,
+):
     """Return the best available OpenMM Platform, falling back gracefully.
 
     CUDA is accepted only if a minimal Context runs on it; otherwise the next
@@ -174,6 +189,9 @@ def _get_platform(requested: str):
     ----------
     requested:
         Preferred platform name (``"CUDA"``, ``"OpenCL"``, or ``"CPU"``).
+    runtime_smoke_properties:
+        Optional OpenMM property map (e.g. ``DeviceIndex``) passed into the CUDA
+        runtime smoke test so the probe uses the same GPU as production.
 
     Returns
     -------
@@ -190,7 +208,16 @@ def _get_platform(requested: str):
             platform = openmm.Platform.getPlatformByName(name)
             if name == "CUDA":
                 platform.setPropertyDefaultValue("CudaPrecision", "mixed")
-                ok, err = _platform_runtime_smoke_test(platform)
+                smoke_props: dict[str, str] | None = None
+                if runtime_smoke_properties:
+                    smoke_props = dict(runtime_smoke_properties)
+                    try:
+                        prop_names = set(platform.getPropertyNames())
+                        if "Precision" in prop_names and "Precision" not in smoke_props:
+                            smoke_props["Precision"] = "mixed"
+                    except Exception:
+                        pass
+                ok, err = _platform_runtime_smoke_test(platform, smoke_props)
                 if not ok:
                     warnings.warn(
                         f"OpenMM CUDA failed runtime check ({err}); "
@@ -785,6 +812,7 @@ def build_md_simulation_from_pdb(
     boltz_mol_dir: Path | None = None,
     ligand_pose_policy: LigandPosePolicy = "pdb_only",
     ligand_pose_debug_sdf_dir: Path | None = None,
+    platform_properties: dict[str, str] | None = None,
 ) -> tuple[object, dict]:
     """Build AMBER14 + implicit GBn2 Langevin :class:`openmm.app.Simulation` without minimising.
 
@@ -798,6 +826,10 @@ def build_md_simulation_from_pdb(
         Heavy-atom PDB (e.g. Boltz ``npz_to_pdb`` export).
     platform_name:
         Preferred OpenMM platform (CUDA / OpenCL / CPU); may fall back.
+    platform_properties:
+        Optional map passed as ``platformProperties`` to :class:`openmm.app.Simulation``
+        (e.g. ``{"DeviceIndex": "1"}`` for CUDA/OpenCL). CUDA runs also merge
+        ``Precision: mixed`` when any property is set.
     temperature_k:
         Langevin bath temperature (K).
     ligand_smiles:
@@ -832,8 +864,18 @@ def build_md_simulation_from_pdb(
     meta: dict = {}
     meta["ligand_pose_policy"] = ligand_pose_policy
 
-    platform, actual_platform = _get_platform(platform_name)
+    sim_props = dict(platform_properties or {})
+    platform, actual_platform = _get_platform(
+        platform_name,
+        runtime_smoke_properties=sim_props if sim_props else None,
+    )
     meta["platform_used"] = actual_platform
+    if actual_platform == "CUDA":
+        sim_props.setdefault("Precision", "mixed")
+    elif actual_platform not in ("CUDA", "OpenCL"):
+        # Avoid passing GPU-only properties to Reference/CPU platforms.
+        sim_props.pop("DeviceIndex", None)
+        sim_props.pop("Precision", None)
 
     boltz_ctx_ok = (
         boltz_structure is not None
@@ -1084,7 +1126,16 @@ def build_md_simulation_from_pdb(
         2.0 * unit.femtoseconds,
     )
 
-    sim = openmm.app.Simulation(h_topology, system, integrator, platform)
+    if sim_props:
+        sim = openmm.app.Simulation(
+            h_topology,
+            system,
+            integrator,
+            platform,
+            platformProperties=sim_props,
+        )
+    else:
+        sim = openmm.app.Simulation(h_topology, system, integrator, platform)
     sim.context.setPositions(h_positions)
 
     meta["ca_orig_coords"] = ca_orig_coords
@@ -1103,6 +1154,7 @@ def minimize_pdb(
     platform_name: str = "CUDA",
     temperature_k: float = 300.0,
     ligand_smiles: Optional[dict[str, str]] = None,
+    platform_properties: dict[str, str] | None = None,
 ) -> dict:
     """Load a PDB, add hydrogens, minimise on GPU, return Cα-RMSD and energy.
 
@@ -1148,6 +1200,8 @@ def minimize_pdb(
     platform_name:
         Preferred OpenMM platform.  Falls back to softer platforms if
         unavailable.
+    platform_properties:
+        Optional OpenMM ``platformProperties`` (e.g. ``DeviceIndex`` for CUDA).
     temperature_k:
         Temperature used for the Langevin integrator (K).
     ligand_smiles:
@@ -1181,6 +1235,7 @@ def minimize_pdb(
             platform_name=platform_name,
             temperature_k=temperature_k,
             ligand_smiles=ligand_smiles,
+            platform_properties=platform_properties,
         )
         result["platform_used"] = meta["platform_used"]
         result["n_residues"] = meta["n_residues"]
@@ -1319,6 +1374,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Preferred OpenMM platform (default: CUDA; falls back automatically).",
     )
     p.add_argument(
+        "--openmm-device-index",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "CUDA/OpenCL GPU ordinal for OpenMM (maps to platform property "
+            "DeviceIndex). Ignored when the resolved platform is CPU."
+        ),
+    )
+    p.add_argument(
         "--temperature",
         type=float,
         default=300.0,
@@ -1381,12 +1446,16 @@ def main(argv: list[str] | None = None) -> None:
     results = []
     for i, pdb_path in enumerate(pdb_files, 1):
         logger.info("[%d/%d] Minimising %s …", i, len(pdb_files), pdb_path.name)
+        omm_props = openmm_device_index_properties(
+            args.platform, args.openmm_device_index
+        )
         res = minimize_pdb(
             pdb_path,
             max_iter=args.max_iter,
             platform_name=args.platform,
             temperature_k=args.temperature,
             ligand_smiles=ligand_smiles,
+            platform_properties=omm_props if omm_props else None,
         )
         results.append(res)
         status = (

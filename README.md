@@ -16,9 +16,18 @@ pip install -e ./boltz
 pip install -e "./boltz[cuda]"
 ```
 
-Or conda: `conda env create -f environment.yml` then `conda activate genai-tps` (that file includes **OpenMM** + **openmmforcefields** + **OpenFF Toolkit**, **ProDy**, **PyMOL**, **pymbar** stack, plus editable `boltz` and `genai-tps` with `[boltz,dev,sampling]`). Follow the header steps in `environment.yml` for PyTorch and optional PLUMED-from-submodule; you do **not** need to set `PYTHONPATH` manually—editable install plus `genai_tps.subprocess_support` handle driver subprocesses.
+Or conda: `conda env create -f environment.yml` then `conda activate genai-tps`. The file pulls **OpenMM**, **openmmforcefields**, **OpenFF Toolkit**, **ProDy**, **PyMOL**, **pymbar**, plus editable `boltz` and `genai-tps` with `[boltz,dev,sampling]`. You do **not** need `PYTHONPATH`—editable install plus `genai_tps.subprocess_support` cover driver subprocesses.
+
+After the first `env create`, finish setup in order (full rationale and pins live in the **`environment.yml` header**):
+
+1. **Refresh pins on an existing env** — Avoid `conda env update` for this stack (it can leave torch in a bad state). Use **Step 1b** in `environment.yml`: a one-shot `conda install` from conda-forge for OpenMM / PLUMED / build tools.
+2. **Optional PLUMED with OPES** — Conda’s `plumed` binary does not ship the `opes` module. For OPES-enabled MD, use the **`plumed2` git submodule**, pin it to the same 2.9.x line as in the env file (see comments there), then run [`scripts/build_plumed_opes.sh`](scripts/build_plumed_opes.sh) (installs into `$CONDA_PREFIX` and sets activate hooks). Skip if you do not need PLUMED OPES.
+3. **PyTorch matching your driver** — With the env activated, run [`scripts/install_torch_cuda.sh`](scripts/install_torch_cuda.sh). Pass `cu121` (driver CUDA 12.0–12.7), `cu128` (12.8+ / driver ≥ 550), `cpu`, or omit the argument for **`auto`** (uses `nvidia-smi` when a GPU is present). This replaces the conda-forge torch install with the correct PyTorch wheel index and avoids broken partial reinstalls.
+4. **Re-activate** — `conda deactivate && conda activate genai-tps` so **LD_LIBRARY_PATH** (torch CUDA libs) and **PLUMED_KERNEL** (if you built OPES) apply.
 
 **Optional pip extras** (see `pyproject.toml`): `[viz]` (PyMOL), `[analysis]` (ProDy), `[sampling]` (OpenMM + pymbar + GAFF/OpenFF pins), `[cli]` (Typer + Hydra). For a **single pip line** without conda: `pip install -e ./boltz` and `pip install -e ".[boltz,dev,full]"` (`full` bundles PyMOL, ProDy, and the full OpenMM/ligand/MBAR set).
+
+**GPU selection:** Boltz/training CLIs accept `--device cuda` or `--device cuda:N` and set the current CUDA device when PyTorch uses CUDA. OpenMM drivers accept `--openmm-device-index` (OpenMM platform property `DeviceIndex`); when omitted, scripts that tie OpenMM to Boltz infer the index from `cuda:N` (bare `cuda` is treated as device `0`). You can still use `CUDA_VISIBLE_DEVICES` to limit which GPUs a process sees.
 
 ## Example: TPS-style sampling on Boltz-2 diffusion
 

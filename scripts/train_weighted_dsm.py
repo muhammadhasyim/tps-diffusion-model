@@ -31,6 +31,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.utils.compute_device import (  # noqa: E402
+    maybe_set_torch_cuda_current_device,
+    parse_torch_device,
+)
+
 from genai_tps.backends.boltz.inference import build_boltz_inference_session
 from genai_tps.training.trainer import run_weighted_dsm_training
 
@@ -43,7 +48,12 @@ def main() -> None:
     parser.add_argument("--cache", type=Path, default=None)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--data", type=Path, required=True, help="NPZ with coords, logw, atom_mask.")
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="PyTorch device: cpu, cuda, or cuda:N (default: cuda).",
+    )
     parser.add_argument("--diffusion-steps", type=int, default=16)
     parser.add_argument("--recycling-steps", type=int, default=1)
     parser.add_argument("--kernels", action="store_true")
@@ -95,7 +105,11 @@ def main() -> None:
         sys.exit(1)
 
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = parse_torch_device(args.device)
+        maybe_set_torch_cuda_current_device(device)
+    else:
+        device = torch.device("cpu")
     work_root = args.out.expanduser().resolve()
     work_root.mkdir(parents=True, exist_ok=True)
 

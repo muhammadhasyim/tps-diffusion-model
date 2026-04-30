@@ -68,6 +68,11 @@ import numpy as np
 import torch
 from openpathsampling.engines.trajectory import Trajectory
 
+from genai_tps.utils.compute_device import (
+    maybe_set_torch_cuda_current_device,
+    parse_torch_device,
+)
+
 from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
 from genai_tps.backends.boltz.engine import BoltzDiffusionEngine
 from genai_tps.backends.boltz.gpu_core import BoltzSamplerCore
@@ -379,7 +384,12 @@ def main() -> None:
         help="Output directory for work and artifacts",
     )
     parser.add_argument("--cache", type=Path, default=None, help="Boltz cache (~/.boltz)")
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="PyTorch device: cpu, cuda, or cuda:N (default: cuda).",
+    )
     parser.add_argument("--recycling-steps", type=int, default=3)
     parser.add_argument(
         "--diffusion-steps",
@@ -547,7 +557,11 @@ def main() -> None:
     mol_dir = cache / "mols"
     download_boltz2(cache)
 
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = parse_torch_device(args.device)
+        maybe_set_torch_cuda_current_device(device)
+    else:
+        device = torch.device("cpu")
     if device.type == "cpu":
         print("Warning: running on CPU will be very slow.", file=sys.stderr)
 

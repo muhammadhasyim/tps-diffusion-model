@@ -42,6 +42,12 @@ import numpy as np
 import torch
 from openpathsampling.engines.trajectory import Trajectory
 
+from genai_tps.utils.compute_device import (
+    cuda_device_index_for_openmm,
+    maybe_set_torch_cuda_current_device,
+    parse_torch_device,
+)
+
 from genai_tps.backends.boltz.boltz2_trunk import boltz2_trunk_to_network_kwargs
 from genai_tps.backends.boltz.collective_variables import (
     PoseCVIndexer,
@@ -142,6 +148,7 @@ def _make_cv_function(
     topo_npz: Path | None = None,
     openmm_platform: str = "CUDA",
     openmm_max_iter: int = 500,
+    openmm_device_index: int | None = None,
     mol_dir: Path | None = None,
     lddt_reference: torch.Tensor | None = None,
     pocket_radius: float = 6.0,
@@ -247,6 +254,7 @@ def _make_cv_function(
             platform=openmm_platform,
             max_iter=openmm_max_iter,
             mol_dir=mol_dir,
+            openmm_device_index=openmm_device_index,
         )
         return openmm_cv
     elif cv_type == "openmm_energy":
@@ -259,6 +267,7 @@ def _make_cv_function(
             topo_npz=topo_npz,
             platform=openmm_platform,
             mol_dir=mol_dir,
+            openmm_device_index=openmm_device_index,
         )
         return openmm_energy_cv
     elif cv_type == "contact_order":
@@ -396,6 +405,7 @@ def _make_multi_cv_function(
     topo_npz: Path | None = None,
     openmm_platform: str = "CUDA",
     openmm_max_iter: int = 500,
+    openmm_device_index: int | None = None,
     mol_dir: Path | None = None,
     lddt_reference: torch.Tensor | None = None,
     pocket_radius: float = 6.0,
@@ -459,6 +469,7 @@ def _make_multi_cv_function(
                 topo_npz=topo_npz,
                 openmm_platform=openmm_platform,
                 openmm_max_iter=openmm_max_iter,
+                openmm_device_index=openmm_device_index,
                 mol_dir=mol_dir,
                 lddt_reference=lddt_reference,
                 pocket_radius=pocket_radius,
@@ -554,7 +565,12 @@ def main() -> None:
             "When provided, TPS runs against this model instead of the baseline checkpoint."
         ),
     )
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="PyTorch device: cpu, cuda, or cuda:N (default: cuda).",
+    )
     parser.add_argument("--recycling-steps", type=int, default=3)
     parser.add_argument("--diffusion-steps", type=int, default=32)
     parser.add_argument("--shoot-rounds", type=int, default=2000)
@@ -723,6 +739,16 @@ def main() -> None:
     opes_group.add_argument(
         "--openmm-max-iter", type=int, default=500,
         help="Max L-BFGS iterations per minimization (default: 500).",
+    )
+    opes_group.add_argument(
+        "--openmm-device-index",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "CUDA/OpenCL ordinal for OpenMM bias CVs (DeviceIndex). "
+            "Default: same GPU index as --device for cuda:N (or 0 for bare cuda)."
+        ),
     )
     opes_group.add_argument(
         "--pocket-radius", type=float, default=6.0,
@@ -926,7 +952,16 @@ def main() -> None:
     mol_dir = cache / "mols"
     download_boltz2(cache)
 
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = parse_torch_device(args.device)
+        maybe_set_torch_cuda_current_device(device)
+    else:
+        device = torch.device("cpu")
+    openmm_gpu_index = (
+        args.openmm_device_index
+        if args.openmm_device_index is not None
+        else cuda_device_index_for_openmm(device)
+    )
     work_root = args.out.expanduser().resolve()
     work_root.mkdir(parents=True, exist_ok=True)
     boltz_run_dir = work_root / f"boltz_results_{yaml_path.stem}"
@@ -1358,6 +1393,7 @@ def main() -> None:
         topo_npz=topo_npz,
         openmm_platform=args.openmm_platform,
         openmm_max_iter=args.openmm_max_iter,
+        openmm_device_index=openmm_gpu_index,
         mol_dir=mol_dir,
         lddt_reference=lddt_reference,
         pocket_radius=args.pocket_radius,

@@ -19,6 +19,7 @@ Outputs::
     outputs/campaign/case{1,2,3}/
         training_dataset.npz        # coords (N,M,3), logw (N,), atom_mask (N,M)
         training_dataset_val.npz    # 10% held-out split (optional)
+        openmm_opes_md/opes_states/fes_reweighted_2d.dat  # if --plumed-fes
         01_assembly_log.json        # per-system N_eff / statistics
 
 Example::
@@ -27,6 +28,10 @@ Example::
         --out outputs/campaign \\
         --max-log-ratio 10.0 \\
         --val-fraction 0.1
+
+    # Same run, plus PLUMED COLVAR → reweighted FES (non-fatal on failure unless
+    # ``--plumed-fes-strict``):
+    python scripts/campaign/01_assemble_datasets.py --out outputs/campaign --plumed-fes
 """
 
 from __future__ import annotations
@@ -103,6 +108,44 @@ def main() -> None:
                         help="Discard shards with mc_step < this (removes equilibration).")
     parser.add_argument("--val-fraction", type=float, default=0.1,
                         help="Fraction held out as validation set (0 = no split).")
+    parser.add_argument(
+        "--plumed-fes",
+        action="store_true",
+        help=(
+            "After assembling each case, run PLUMED FES_from_Reweighting.py on "
+            "openmm_opes_md/opes_states/COLVAR (skip if missing). Failures log a "
+            "warning unless --plumed-fes-strict."
+        ),
+    )
+    parser.add_argument(
+        "--plumed-fes-strict",
+        action="store_true",
+        help="With --plumed-fes, raise if COLVAR is missing or the FES script fails.",
+    )
+    parser.add_argument(
+        "--plumed-fes-temperature",
+        type=float,
+        default=300.0,
+        help="Kelvin passed to PLUMED reweighting script.",
+    )
+    parser.add_argument(
+        "--plumed-fes-sigma",
+        type=str,
+        default="0.3,0.5",
+        help="KDE sigma string for PLUMED FES (comma-separated, Å).",
+    )
+    parser.add_argument(
+        "--plumed-fes-skiprows",
+        type=int,
+        default=0,
+        help="COLVAR burn-in rows for PLUMED FES.",
+    )
+    parser.add_argument(
+        "--plumed-fes-blocks",
+        type=int,
+        default=1,
+        help="Block count for PLUMED FES uncertainty.",
+    )
     args = parser.parse_args()
 
     from genai_tps.simulation.dataset_assembly import assemble_wdsm_from_directory, save_assembled_npz
@@ -157,6 +200,35 @@ def main() -> None:
         out_npz = case_out / "training_dataset.npz"
         save_assembled_npz(out_npz, assembled)
         print(f"  [01] Saved: {out_npz}", flush=True)
+
+        if args.plumed_fes:
+            from genai_tps.simulation.plumed_colvar_fes import run_fes_from_reweighting_script
+
+            colvar = md_out / "opes_states" / "COLVAR"
+            outfile = colvar.parent / "fes_reweighted_2d.dat"
+            if not colvar.is_file():
+                msg = f"No COLVAR at {colvar}; skip PLUMED FES."
+                if args.plumed_fes_strict:
+                    raise FileNotFoundError(msg)
+                print(f"  [01] {msg}", flush=True)
+            else:
+                try:
+                    run_fes_from_reweighting_script(
+                        colvar_path=colvar,
+                        outfile=outfile,
+                        temperature_k=args.plumed_fes_temperature,
+                        sigma=args.plumed_fes_sigma,
+                        grid_min=None,
+                        grid_max=None,
+                        grid_bin="100,100",
+                        skiprows=args.plumed_fes_skiprows,
+                        blocks=args.plumed_fes_blocks,
+                    )
+                    print(f"  [01] PLUMED FES: {outfile}", flush=True)
+                except Exception as exc:
+                    if args.plumed_fes_strict:
+                        raise
+                    print(f"  [01] PLUMED FES failed (non-fatal): {exc}", flush=True)
 
         # Optional train/val split
         val_path = None

@@ -97,9 +97,24 @@ def assert_plumed_opes_metad_available() -> None:
             f"config.txt: {cfg if cfg else '(not found next to kernel)'}",
         )
 
+    hint = ""
+    cpx = os.environ.get("CONDA_PREFIX")
+    if kernel is None and cpx:
+        try:
+            if Path(cpx).resolve() != Path(sys.prefix).resolve():
+                hint = (
+                    "\n\nLikely cause: `python` is not the interpreter inside CONDA_PREFIX. "
+                    f"CONDA_PREFIX={cpx} but sys.prefix={sys.prefix}. "
+                    "Put this env's bin ahead on PATH (e.g. export PATH=\"${CONDA_PREFIX}/bin:$PATH\") "
+                    "or run scripts with `${CONDA_PREFIX}/bin/python` so PLUMED is resolved from the same prefix."
+                )
+        except OSError:
+            pass
+
     raise RuntimeError(
         "Could not determine whether PLUMED includes the 'opes' module "
         f"(kernel={kernel_msg}, config.txt={cfg}). "
         "If OPES_METAD fails at runtime, build PLUMED with --enable-modules=opes "
-        "or use --opes-mode observer.",
+        "or use --opes-mode observer."
+        f"{hint}",
     )

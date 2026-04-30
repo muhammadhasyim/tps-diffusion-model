@@ -16,6 +16,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.utils.compute_device import (  # noqa: E402
+    maybe_set_torch_cuda_current_device,
+    parse_torch_device,
+)
+
 from genai_tps.training.config import WeightedDSMConfig  # noqa: E402
 from genai_tps.training.multi_protein_dataset import (  # noqa: E402
     MultiProteinWdsmDataset,
@@ -97,7 +102,12 @@ def main() -> None:
     parser.add_argument("--extra-mols-dir", type=Path, default=None)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--cache", type=Path, default=None)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="PyTorch device: cpu, cuda, or cuda:N (default: cuda).",
+    )
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--learning-rate", type=float, default=3e-6)
@@ -127,7 +137,11 @@ def main() -> None:
 
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
     mol_dir = args.mol_dir.expanduser() if args.mol_dir else cache / "mols"
-    device = torch.device(args.device)
+    if torch.cuda.is_available():
+        device = parse_torch_device(args.device)
+        maybe_set_torch_cuda_current_device(device)
+    else:
+        device = torch.device("cpu")
     manifest = Manifest.load(args.manifest.expanduser())
     samples = read_frame_map(args.frame_map.expanduser())
     train_samples, val_samples = _split_samples(samples, val_fraction=args.val_fraction, seed=args.seed)

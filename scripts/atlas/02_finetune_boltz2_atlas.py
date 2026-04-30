@@ -122,7 +122,12 @@ def main() -> None:
     parser.add_argument("--early-stopping-patience", type=int, default=20)
     parser.add_argument("--diffusion-steps", type=int, default=16)
     parser.add_argument("--recycling-steps", type=int, default=1)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="Forwarded to train_weighted_dsm.py: cpu, cuda, or cuda:N.",
+    )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

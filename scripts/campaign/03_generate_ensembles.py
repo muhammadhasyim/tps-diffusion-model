@@ -55,6 +55,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT / "src" / "python") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src" / "python"))
 
+from genai_tps.utils.compute_device import (
+    maybe_set_torch_cuda_current_device,
+    parse_torch_device,
+)
+
 _CASE_YAMLS = {
     "case1_mek1_fzc_novel":    "inputs/tps_diagnostic/case1_mek1_fzc_novel.yaml",
     "case2_cdk2_atp_wildtype": "inputs/tps_diagnostic/case2_cdk2_atp_wildtype.yaml",
@@ -162,7 +167,12 @@ def main() -> None:
                         help="Number of structures to generate per variant.")
     parser.add_argument("--diffusion-steps", type=int, default=200)
     parser.add_argument("--recycling-steps", type=int, default=1)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="PyTorch device: cpu, cuda, or cuda:N (default: cuda).",
+    )
     parser.add_argument("--export-pdbs", action="store_true",
                         help="Write individual PDB files in addition to the NPZ.")
     parser.add_argument("--resume", action="store_true",
@@ -171,7 +181,11 @@ def main() -> None:
 
     cache = Path(args.cache).expanduser() if args.cache else Path.home() / ".boltz"
     out_root = args.out.expanduser().resolve()
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = parse_torch_device(args.device)
+        maybe_set_torch_cuda_current_device(device)
+    else:
+        device = torch.device("cpu")
     selected_cases = {int(c.strip()) for c in args.cases.split(",")}
     variants = [v.strip() for v in args.variants.split(",")]
     case_names = list(_CASE_YAMLS.keys())
