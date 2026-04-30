@@ -8,6 +8,7 @@ import json
 import shutil
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -498,7 +499,451 @@ def parse_opes_md_args(argv: list[str] | None = None) -> Namespace:
     return args
 
 
-def run_opes_md(args: argparse.Namespace) -> None:
+def build_plumed_extra_forces_callback(
+    args: Namespace,
+    *,
+    structure: Any,
+    indexer: Any,
+    ref_coords: np.ndarray,
+    n_s: int,
+    pdb_path: Path,
+    md_out_dir: Path,
+    opes_wall_dist_resolved: float | None,
+    plumed_context: dict[str, object],
+    sigma: list[float],
+    force_empty_oneopes_hydration: bool = False,
+    oneopes_hydration_site_cap: int | None = None,
+    opes_expanded_temp_max_override: float | None = None,
+    opes_expanded_pace_override: int | None = None,
+    plumed_state_rfile_override: Path | None = None,
+    oneopes_protocol: str = "legacy_boltz",
+    paper_replica_index: int | None = None,
+) -> Callable[[Any, Any, Any, dict], None]:
+    """Return the ``extra_forces`` callback used by :func:`run_opes_md` for PLUMED OPES.
+
+    Parameters
+    ----------
+    md_out_dir
+        Per-replica MD output root (e.g. ``<run>/rep000``). PLUMED files are written to
+        ``md_out_dir / "plumed_opes.dat"``, ``md_out_dir / "plumed_rmsd_reference.pdb"``,
+        and ``md_out_dir / "opes_states"``.
+    force_empty_oneopes_hydration
+        When ``True`` and ``--bias-cv oneopes``, omit auxiliary hydration ``OPES_METAD``
+        blocks even if ``--oneopes-auto-hydration`` would otherwise add sites. Used for
+        stratified replica 0 in OneOPES Hamiltonian exchange ladders.
+    oneopes_hydration_site_cap
+        When set, keep at most this many auxiliary hydration sites (ordered as inferred
+        or as listed in ``--oneopes-hydration-boltz``). Ignored when
+        *force_empty_oneopes_hydration* is ``True``.
+    opes_expanded_temp_max_override, opes_expanded_pace_override
+        Optional overrides for multithermal ``OPES_EXPANDED`` (replicas 4–7 in the
+        literature ladder). When *opes_expanded_temp_max_override* is ``None``,
+        ``args.opes_expanded_temp_max`` is used.
+    plumed_state_rfile_override
+        When set, passed as ``STATE_RFILE`` to the PLUMED deck instead of
+        ``args.opes_restart``. Used for evaluator contexts that must restart from a
+        copied ``STATE`` snapshot without mutating the production replica tree.
+    oneopes_protocol
+        ``legacy_boltz`` (default) or ``paper_host_guest`` for Febrer Martinez-style
+        ``cyl_z`` + ``cosang`` CVs and Pefema auxiliary ladders.
+    paper_replica_index
+        Replica index ``0…7`` for paper stratified decks; defaults to ``0`` when unset.
+    """
+
+    def _add_plumed_force(system: Any, h_topology: Any, h_positions: Any, meta: dict) -> None:
+        """Build atom selections after hydrogenation and inject PLUMED force."""
+        import openmm.unit as u
+
+        from genai_tps.simulation.openmm_boltz_bridge import (
+            boltz_to_plumed_indices,
+            build_openmm_indices_for_boltz_atoms,
+        )
+        from genai_tps.simulation.plumed_opes import (
+            PaperHostGuestOpesDeckConfig,
+            add_plumed_opes_to_system,
+            default_oneopes_axis_boltz_indices,
+            default_oneopes_contact_pairs_boltz,
+            generate_paper_host_guest_plumed_opes_script_from_config,
+            generate_plumed_opes_script,
+            write_rmsd_reference_pdb,
+        )
+
+        out = md_out_dir.expanduser().resolve()
+        opes_dir = out / "opes_states"
+
+        h_pos_nm = np.asarray(h_positions.value_in_unit(u.nanometer), dtype=np.float64)
+        omm_idx_cb = build_openmm_indices_for_boltz_atoms(
+            structure,
+            h_topology,
+            ref_coords_angstrom=ref_coords,
+            omm_positions_nm=h_pos_nm,
+        )
+        if int(np.min(omm_idx_cb)) < 0:
+            raise RuntimeError(
+                "[MD-OPES] Invalid Boltz→OpenMM index map before PLUMED setup "
+                f"(min={int(np.min(omm_idx_cb))})."
+            )
+
+        rmsd_align_boltz = (
+            indexer.pocket_ca_idx
+            if len(indexer.pocket_ca_idx) >= 3
+            else indexer.protein_ca_idx
+        )
+        if len(rmsd_align_boltz) < 3:
+            raise RuntimeError(
+                "[MD-OPES] PLUMED ligand RMSD requires at least three protein "
+                "C-alpha alignment atoms."
+            )
+        if len(indexer.pocket_ca_idx) == 0:
+            raise RuntimeError(
+                "[MD-OPES] PLUMED ligand-pocket distance requires at least one "
+                "pocket C-alpha atom."
+            )
+        if args.bias_cv == "3d" and len(indexer.pocket_heavy_idx) == 0:
+            raise RuntimeError(
+                "[MD-OPES] --bias-cv 3d requires pocket heavy atoms; "
+                "increase --pocket-radius or check the reference structure."
+            )
+        if args.bias_cv == "oneopes":
+            if len(indexer.pocket_ca_idx) < 2:
+                raise RuntimeError(
+                    "[MD-OPES] --bias-cv oneopes requires at least two pocket Cα atoms."
+                )
+            if args.oneopes_contact_pairs_boltz is None and len(indexer.pocket_heavy_idx) == 0:
+                raise RuntimeError(
+                    "[MD-OPES] --bias-cv oneopes needs pocket heavy atoms for default "
+                    "CONTACTMAP pairs unless --oneopes-contact-pairs-boltz is set; "
+                    "increase --pocket-radius or supply explicit pairs."
+                )
+
+        ligand_plumed_idx = boltz_to_plumed_indices(indexer.ligand_idx, omm_idx_cb)
+        pocket_plumed_idx = boltz_to_plumed_indices(indexer.pocket_ca_idx, omm_idx_cb)
+        pocket_heavy_plumed_idx = (
+            boltz_to_plumed_indices(indexer.pocket_heavy_idx, omm_idx_cb)
+            if args.bias_cv in ("3d", "oneopes")
+            else None
+        )
+        align_plumed_idx = boltz_to_plumed_indices(rmsd_align_boltz, omm_idx_cb)
+        solute_boltz = np.unique(
+            np.concatenate([indexer.protein_idx, indexer.ligand_idx])
+        )
+        whole_molecule_plumed_idx = sorted(
+            boltz_to_plumed_indices(solute_boltz, omm_idx_cb)
+        )
+        ref_pdb = out / "plumed_rmsd_reference.pdb"
+        script_path = out / "plumed_opes.dat"
+        write_rmsd_reference_pdb(
+            h_topology,
+            h_positions,
+            ligand_plumed_idx,
+            align_plumed_idx,
+            ref_pdb,
+        )
+        expanded_state_rfile: Path | None = None
+        opes_expanded_temp_max_resolved = (
+            opes_expanded_temp_max_override
+            if opes_expanded_temp_max_override is not None
+            else args.opes_expanded_temp_max
+        )
+        opes_expanded_pace_resolved = (
+            int(opes_expanded_pace_override)
+            if opes_expanded_pace_override is not None
+            else int(args.opes_expanded_pace)
+        )
+        if opes_expanded_temp_max_resolved is not None and args.opes_restart is not None:
+            cand_exp = opes_dir / "STATE_EXPANDED"
+            if cand_exp.is_file():
+                expanded_state_rfile = cand_exp
+
+        state_rfile_resolved = (
+            plumed_state_rfile_override
+            if plumed_state_rfile_override is not None
+            else args.opes_restart
+        )
+
+        oneopes_kw: dict = {}
+        protocol = str(oneopes_protocol).replace("-", "_")
+        if args.bias_cv == "oneopes":
+            assert pocket_heavy_plumed_idx is not None
+            p_axes = args.oneopes_axis_p0_boltz
+            q_axes = args.oneopes_axis_p1_boltz
+            if (p_axes is None) ^ (q_axes is None):
+                raise RuntimeError(
+                    "[MD-OPES] Supply both --oneopes-axis-p0-boltz and "
+                    "--oneopes-axis-p1-boltz, or omit both for automatic pocket Cα split."
+                )
+            if p_axes is None:
+                bp0, bp1 = default_oneopes_axis_boltz_indices(
+                    indexer.pocket_ca_idx, ref_coords[:n_s], indexer.ligand_idx
+                )
+            else:
+                bp0 = np.asarray(p_axes, dtype=np.int64)
+                bp1 = np.asarray(q_axes, dtype=np.int64)
+            p0_pl = boltz_to_plumed_indices(bp0.tolist(), omm_idx_cb)
+            p1_pl = boltz_to_plumed_indices(bp1.tolist(), omm_idx_cb)
+            if protocol == "paper_host_guest":
+                pap0 = np.asarray(args.paper_oneopes_ligand_axis_p0_boltz, dtype=np.int64)
+                pap1 = np.asarray(args.paper_oneopes_ligand_axis_p1_boltz, dtype=np.int64)
+                la0_pl = boltz_to_plumed_indices(pap0.tolist(), omm_idx_cb)
+                la1_pl = boltz_to_plumed_indices(pap1.tolist(), omm_idx_cb)
+                aux_guest_b = list(args.paper_oneopes_aux_guest_boltz)
+                aux_guest_pl = tuple(
+                    int(boltz_to_plumed_indices([int(x)], omm_idx_cb)[0]) for x in aux_guest_b
+                )
+                if args.oneopes_water_oxygen_plumed is not None and len(
+                    args.oneopes_water_oxygen_plumed
+                ) > 0:
+                    wo_paper = [int(x) for x in args.oneopes_water_oxygen_plumed]
+                else:
+                    wo_paper = collect_water_oxygen_plumed_1based(h_topology)
+                if not wo_paper:
+                    raise RuntimeError(
+                        "[MD-OPES] paper_host_guest requires explicit solvent: pass "
+                        "--oneopes-water-oxygen-plumed or use a solvated topology."
+                    )
+                sig_parts = [float(x.strip()) for x in str(args.opes_sigma).split(",") if x.strip()]
+                if len(sig_parts) != 2:
+                    raise RuntimeError(
+                        "[MD-OPES] paper_host_guest expects two --opes-sigma values "
+                        "(main cyl_z, cosang kernel widths)."
+                    )
+                ridx = int(paper_replica_index) if paper_replica_index is not None else 0
+                paper_cfg = PaperHostGuestOpesDeckConfig(
+                    ligand_plumed_idx=ligand_plumed_idx,
+                    pocket_ca_plumed_idx=pocket_plumed_idx,
+                    rmsd_reference_pdb=ref_pdb,
+                    sigma_main=(sig_parts[0], sig_parts[1]),
+                    biasfactor=float(args.opes_biasfactor),
+                    temperature=float(args.temperature),
+                    save_opes_every=int(args.save_opes_every),
+                    progress_every=int(args.progress_every),
+                    out_dir=opes_dir,
+                    replica_index=ridx,
+                    funnel_axis_p0_plumed_idx=p0_pl,
+                    funnel_axis_p1_plumed_idx=p1_pl,
+                    ligand_axis_p0_plumed_idx=la0_pl,
+                    ligand_axis_p1_plumed_idx=la1_pl,
+                    auxiliary_guest_plumed_idx=aux_guest_pl,
+                    water_oxygen_plumed_idx=wo_paper,
+                    state_rfile=state_rfile_resolved,
+                    whole_molecule_plumed_idx=whole_molecule_plumed_idx,
+                    kernel_cutoff=args.opes_kernel_cutoff,
+                    nlist_parameters=args.opes_nlist_parameters,
+                    print_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
+                    use_pbc=True,
+                    main_pace=int(getattr(args, "paper_oneopes_main_pace", 10_000)),
+                    main_barrier_kjmol=float(getattr(args, "paper_oneopes_main_barrier", 100.0)),
+                    auxiliary_pace=int(getattr(args, "paper_oneopes_aux_pace", 20_000)),
+                    auxiliary_barrier_kjmol=float(
+                        getattr(args, "paper_oneopes_aux_barrier", 3.0)
+                    ),
+                    multithermal_pace=int(getattr(args, "paper_oneopes_multithermal_pace", 100)),
+                    opes_expanded_temp_max=float(opes_expanded_temp_max_resolved)
+                    if opes_expanded_temp_max_resolved is not None
+                    else None,
+                    opes_expanded_state_rfile=expanded_state_rfile,
+                )
+                script = generate_paper_host_guest_plumed_opes_script_from_config(paper_cfg)
+                script_path.write_text(script, encoding="utf-8")
+                force, force_index = add_plumed_opes_to_system(
+                    system,
+                    script,
+                    temperature=args.temperature,
+                    force_group=args.plumed_force_group,
+                    restart=state_rfile_resolved is not None,
+                )
+                plumed_context.update(
+                    {
+                        "omm_idx": omm_idx_cb,
+                        "force": force,
+                        "force_index": force_index,
+                        "force_group": int(args.plumed_force_group),
+                        "script_path": script_path,
+                        "reference_pdb": ref_pdb,
+                    }
+                )
+                meta["plumed_force_index"] = force_index
+                meta["plumed_force_group"] = int(args.plumed_force_group)
+                meta["plumed_script"] = str(script_path)
+                meta["plumed_reference_pdb"] = str(ref_pdb)
+                meta["oneopes_cv_params"] = {
+                    "oneopes_protocol": "paper_host_guest",
+                    "paper_replica_index": ridx,
+                    "funnel_axis_p0_boltz": np.asarray(bp0, dtype=np.int64).tolist(),
+                    "funnel_axis_p1_boltz": np.asarray(bp1, dtype=np.int64).tolist(),
+                    "ligand_axis_p0_boltz": pap0.tolist(),
+                    "ligand_axis_p1_boltz": pap1.tolist(),
+                    "aux_guest_boltz": [int(x) for x in aux_guest_b],
+                }
+                return
+
+            if args.oneopes_contact_pairs_boltz is not None:
+                pairs_b = args.oneopes_contact_pairs_boltz
+            else:
+                pairs_b = default_oneopes_contact_pairs_boltz(
+                    indexer.pocket_heavy_idx, indexer.ligand_idx, max_pairs=6
+                )
+            cmap_pairs: list[tuple[int, int]] = []
+            for pr, li in pairs_b:
+                pp_i = boltz_to_plumed_indices([int(pr)], omm_idx_cb)[0]
+                li_i = boltz_to_plumed_indices([int(li)], omm_idx_cb)[0]
+                cmap_pairs.append((int(pp_i), int(li_i)))
+            if force_empty_oneopes_hydration:
+                hydr_b = []
+            else:
+                hydr_explicit = args.oneopes_hydration_boltz
+                if hydr_explicit is not None and len(hydr_explicit) > 0:
+                    hydr_b = [int(x) for x in hydr_explicit]
+                elif bool(args.oneopes_auto_hydration):
+                    from genai_tps.simulation.hydration_site_inference import (
+                        default_oneopes_hydration_boltz_indices,
+                    )
+
+                    hydr_b = default_oneopes_hydration_boltz_indices(
+                        ref_coords[:n_s],
+                        indexer,
+                        pdb_path=pdb_path,
+                        max_sites=int(args.oneopes_hydration_max_sites),
+                        use_3drism=bool(args.oneopes_hydration_use_3drism),
+                        rism_min_density=float(args.oneopes_hydration_min_density),
+                    )
+                    if hydr_b:
+                        print(
+                            "[MD-OPES] OneOPES auto hydration spots (Boltz global indices): "
+                            f"{hydr_b}",
+                            flush=True,
+                        )
+                else:
+                    hydr_b = []
+            if (
+                not force_empty_oneopes_hydration
+                and oneopes_hydration_site_cap is not None
+                and hydr_b
+            ):
+                cap = max(0, int(oneopes_hydration_site_cap))
+                hydr_b = hydr_b[:cap]
+            hydr_pl = (
+                boltz_to_plumed_indices(hydr_b, omm_idx_cb) if hydr_b else []
+            )
+            wo_pl: list[int] | None = None
+            if hydr_b:
+                if args.oneopes_water_oxygen_plumed is not None and len(
+                    args.oneopes_water_oxygen_plumed
+                ) > 0:
+                    wo_pl = [int(x) for x in args.oneopes_water_oxygen_plumed]
+                else:
+                    wo_pl = collect_water_oxygen_plumed_1based(h_topology)
+                if not wo_pl:
+                    raise RuntimeError(
+                        "[MD-OPES] OneOPES hydration CVs requested but no water "
+                        "oxygens found in topology; pass --oneopes-water-oxygen-plumed."
+                    )
+            oneopes_kw = {
+                "oneopes_axis_p0_plumed_idx": p0_pl,
+                "oneopes_axis_p1_plumed_idx": p1_pl,
+                "oneopes_contactmap_pairs_plumed": cmap_pairs,
+                "oneopes_hydration_spot_plumed_idx": hydr_pl if hydr_pl else None,
+                "water_oxygen_plumed_idx": wo_pl,
+                "oneopes_water_pace": int(args.oneopes_water_pace),
+                "oneopes_water_barrier": float(args.oneopes_water_barrier),
+                "oneopes_water_biasfactor": float(args.oneopes_water_biasfactor),
+                "oneopes_water_sigma": float(args.oneopes_water_sigma),
+            }
+            meta["oneopes_cv_params"] = {
+                "axis_p0_boltz": np.asarray(bp0, dtype=np.int64).tolist(),
+                "axis_p1_boltz": np.asarray(bp1, dtype=np.int64).tolist(),
+                "ligand_boltz": np.asarray(indexer.ligand_idx, dtype=np.int64).tolist(),
+                "contact_pairs_boltz": [(int(pr), int(li)) for pr, li in pairs_b],
+                "contactmap_switch_r0": 5.5,
+                "contactmap_switch_d0": 0.0,
+                "contactmap_switch_nn": 4,
+                "contactmap_switch_mm": 10,
+            }
+
+        script = generate_plumed_opes_script(
+            ligand_plumed_idx=ligand_plumed_idx,
+            pocket_ca_plumed_idx=pocket_plumed_idx,
+            rmsd_reference_pdb=ref_pdb,
+            sigma=sigma,
+            pace=args.deposit_pace,
+            barrier=args.opes_barrier,
+            biasfactor=args.opes_biasfactor,
+            temperature=args.temperature,
+            save_opes_every=args.save_opes_every,
+            progress_every=args.progress_every,
+            out_dir=opes_dir,
+            state_rfile=state_rfile_resolved,
+            kernel_cutoff=args.opes_kernel_cutoff,
+            nlist_parameters=args.opes_nlist_parameters,
+            print_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
+            cv_mode=args.bias_cv,
+            pocket_heavy_plumed_idx=pocket_heavy_plumed_idx,
+            coordination_r0=float(args.coordination_r0),
+            opes_variant="explore" if args.opes_explore else "metad",
+            upper_wall_dist=opes_wall_dist_resolved,
+            upper_wall_kappa=float(args.opes_wall_kappa),
+            use_pbc=True,
+            whole_molecule_plumed_idx=whole_molecule_plumed_idx,
+            opes_expanded_temp_max=opes_expanded_temp_max_resolved,
+            opes_expanded_pace=opes_expanded_pace_resolved,
+            opes_expanded_state_rfile=expanded_state_rfile,
+            **oneopes_kw,
+        )
+        script_path.write_text(script, encoding="utf-8")
+        force, force_index = add_plumed_opes_to_system(
+            system,
+            script,
+            temperature=args.temperature,
+            force_group=args.plumed_force_group,
+            restart=state_rfile_resolved is not None,
+        )
+        plumed_context.update(
+            {
+                "omm_idx": omm_idx_cb,
+                "force": force,
+                "force_index": force_index,
+                "force_group": int(args.plumed_force_group),
+                "script_path": script_path,
+                "reference_pdb": ref_pdb,
+            }
+        )
+        meta["plumed_force_index"] = force_index
+        meta["plumed_force_group"] = int(args.plumed_force_group)
+        meta["plumed_script"] = str(script_path)
+        meta["plumed_reference_pdb"] = str(ref_pdb)
+
+    return _add_plumed_force
+
+
+def run_opes_md(
+    args: argparse.Namespace,
+    *,
+    md_out_dir: Path | None = None,
+    plumed_factory_extra_kwargs: dict[str, Any] | None = None,
+    stop_after_initialization: bool = False,
+    return_after_initialization: bool = False,
+) -> Any:
+    """Run OPES-biased OpenMM MD.
+
+    Parameters
+    ----------
+    md_out_dir
+        Optional override for the run output root (defaults to ``args.out``).
+        Used by Hamiltonian replica exchange drivers so each replica writes under
+        ``<ensemble>/repNNN/``.
+    plumed_factory_extra_kwargs
+        Forwarded into :func:`build_plumed_extra_forces_callback` (e.g. stratified
+        hydration caps).
+    stop_after_initialization
+        When ``True``, return immediately after system build, minimization, and
+        coordinate validation (skips the production MD loops). Intended for PLUMED
+        deck dry-runs.
+    return_after_initialization
+        When ``True``, return a dictionary with ``sim``, ``meta``, ``plumed_context``,
+        ``structure``, ``indexer``, ``ref_coords``, ``n_s``, ``pdb_path``, ``out``,
+        ``opes_wall_dist_resolved``, and ``kbt_kjmol`` instead of entering the MD loops.
+        Incompatible with *stop_after_initialization* (mutually exclusive).
+    """
     from genai_tps.backends.boltz.collective_variables import PoseCVIndexer
     from genai_tps.io.boltz_npz_export import coords_frame_from_npz, load_topo, npz_to_pdb
     from genai_tps.simulation.openmm_boltz_bridge import (
@@ -509,7 +954,7 @@ def run_opes_md(args: argparse.Namespace) -> None:
     from genai_tps.utils.compute_device import openmm_device_index_properties
     from genai_tps.simulation.gpu_util_csv_logger import GpuUtilCsvLogger
 
-    out = args.out.expanduser().resolve()
+    out = (md_out_dir if md_out_dir is not None else args.out).expanduser().resolve()
     out.mkdir(parents=True, exist_ok=True)
     wdsm_dir = out / "wdsm_samples"
     wdsm_dir.mkdir(parents=True, exist_ok=True)
@@ -664,236 +1109,30 @@ def run_opes_md(args: argparse.Namespace) -> None:
     )
     build_md = load_build_md_simulation_from_pdb()
     plumed_context: dict[str, object] = {}
-
-    def _add_plumed_force(system, h_topology, h_positions, meta):
-        """Build atom selections after hydrogenation and inject PLUMED force."""
-        import openmm.unit as u
-
-        from genai_tps.simulation.plumed_opes import (
-            add_plumed_opes_to_system,
-            default_oneopes_axis_boltz_indices,
-            default_oneopes_contact_pairs_boltz,
-            generate_plumed_opes_script,
-            write_rmsd_reference_pdb,
-        )
-
-        h_pos_nm = np.asarray(h_positions.value_in_unit(u.nanometer), dtype=np.float64)
-        omm_idx_cb = build_openmm_indices_for_boltz_atoms(
-            structure,
-            h_topology,
-            ref_coords_angstrom=ref_coords,
-            omm_positions_nm=h_pos_nm,
-        )
-        if int(np.min(omm_idx_cb)) < 0:
-            raise RuntimeError(
-                "[MD-OPES] Invalid Boltz→OpenMM index map before PLUMED setup "
-                f"(min={int(np.min(omm_idx_cb))})."
-            )
-
-        rmsd_align_boltz = (
-            indexer.pocket_ca_idx
-            if len(indexer.pocket_ca_idx) >= 3
-            else indexer.protein_ca_idx
-        )
-        if len(rmsd_align_boltz) < 3:
-            raise RuntimeError(
-                "[MD-OPES] PLUMED ligand RMSD requires at least three protein "
-                "C-alpha alignment atoms."
-            )
-        if len(indexer.pocket_ca_idx) == 0:
-            raise RuntimeError(
-                "[MD-OPES] PLUMED ligand-pocket distance requires at least one "
-                "pocket C-alpha atom."
-            )
-        if args.bias_cv == "3d" and len(indexer.pocket_heavy_idx) == 0:
-            raise RuntimeError(
-                "[MD-OPES] --bias-cv 3d requires pocket heavy atoms; "
-                "increase --pocket-radius or check the reference structure."
-            )
-        if args.bias_cv == "oneopes":
-            if len(indexer.pocket_ca_idx) < 2:
-                raise RuntimeError(
-                    "[MD-OPES] --bias-cv oneopes requires at least two pocket Cα atoms."
-                )
-            if args.oneopes_contact_pairs_boltz is None and len(indexer.pocket_heavy_idx) == 0:
-                raise RuntimeError(
-                    "[MD-OPES] --bias-cv oneopes needs pocket heavy atoms for default "
-                    "CONTACTMAP pairs unless --oneopes-contact-pairs-boltz is set; "
-                    "increase --pocket-radius or supply explicit pairs."
-                )
-
-        ligand_plumed_idx = boltz_to_plumed_indices(indexer.ligand_idx, omm_idx_cb)
-        pocket_plumed_idx = boltz_to_plumed_indices(indexer.pocket_ca_idx, omm_idx_cb)
-        pocket_heavy_plumed_idx = (
-            boltz_to_plumed_indices(indexer.pocket_heavy_idx, omm_idx_cb)
-            if args.bias_cv in ("3d", "oneopes")
-            else None
-        )
-        align_plumed_idx = boltz_to_plumed_indices(rmsd_align_boltz, omm_idx_cb)
-        solute_boltz = np.unique(
-            np.concatenate([indexer.protein_idx, indexer.ligand_idx])
-        )
-        whole_molecule_plumed_idx = sorted(
-            boltz_to_plumed_indices(solute_boltz, omm_idx_cb)
-        )
-        ref_pdb = out / "plumed_rmsd_reference.pdb"
-        script_path = out / "plumed_opes.dat"
-        write_rmsd_reference_pdb(
-            h_topology,
-            h_positions,
-            ligand_plumed_idx,
-            align_plumed_idx,
-            ref_pdb,
-        )
-        expanded_state_rfile: Path | None = None
-        if args.opes_expanded_temp_max is not None and args.opes_restart is not None:
-            cand_exp = opes_dir / "STATE_EXPANDED"
-            if cand_exp.is_file():
-                expanded_state_rfile = cand_exp
-
-        oneopes_kw: dict = {}
-        if args.bias_cv == "oneopes":
-            assert pocket_heavy_plumed_idx is not None
-            p_axes = args.oneopes_axis_p0_boltz
-            q_axes = args.oneopes_axis_p1_boltz
-            if (p_axes is None) ^ (q_axes is None):
-                raise RuntimeError(
-                    "[MD-OPES] Supply both --oneopes-axis-p0-boltz and "
-                    "--oneopes-axis-p1-boltz, or omit both for automatic pocket Cα split."
-                )
-            if p_axes is None:
-                bp0, bp1 = default_oneopes_axis_boltz_indices(
-                    indexer.pocket_ca_idx, ref_coords[:n_s], indexer.ligand_idx
-                )
-            else:
-                bp0 = np.asarray(p_axes, dtype=np.int64)
-                bp1 = np.asarray(q_axes, dtype=np.int64)
-            p0_pl = boltz_to_plumed_indices(bp0.tolist(), omm_idx_cb)
-            p1_pl = boltz_to_plumed_indices(bp1.tolist(), omm_idx_cb)
-            if args.oneopes_contact_pairs_boltz is not None:
-                pairs_b = args.oneopes_contact_pairs_boltz
-            else:
-                pairs_b = default_oneopes_contact_pairs_boltz(
-                    indexer.pocket_heavy_idx, indexer.ligand_idx, max_pairs=6
-                )
-            cmap_pairs: list[tuple[int, int]] = []
-            for pr, li in pairs_b:
-                pp_i = boltz_to_plumed_indices([int(pr)], omm_idx_cb)[0]
-                li_i = boltz_to_plumed_indices([int(li)], omm_idx_cb)[0]
-                cmap_pairs.append((int(pp_i), int(li_i)))
-            hydr_explicit = args.oneopes_hydration_boltz
-            if hydr_explicit is not None and len(hydr_explicit) > 0:
-                hydr_b = [int(x) for x in hydr_explicit]
-            elif bool(args.oneopes_auto_hydration):
-                from genai_tps.simulation.hydration_site_inference import (
-                    default_oneopes_hydration_boltz_indices,
-                )
-
-                hydr_b = default_oneopes_hydration_boltz_indices(
-                    ref_coords[:n_s],
-                    indexer,
-                    pdb_path=pdb_path,
-                    max_sites=int(args.oneopes_hydration_max_sites),
-                    use_3drism=bool(args.oneopes_hydration_use_3drism),
-                    rism_min_density=float(args.oneopes_hydration_min_density),
-                )
-                if hydr_b:
-                    print(
-                        "[MD-OPES] OneOPES auto hydration spots (Boltz global indices): "
-                        f"{hydr_b}",
-                        flush=True,
-                    )
-            else:
-                hydr_b = []
-            hydr_pl = (
-                boltz_to_plumed_indices(hydr_b, omm_idx_cb) if hydr_b else []
-            )
-            wo_pl: list[int] | None = None
-            if hydr_b:
-                if args.oneopes_water_oxygen_plumed is not None and len(
-                    args.oneopes_water_oxygen_plumed
-                ) > 0:
-                    wo_pl = [int(x) for x in args.oneopes_water_oxygen_plumed]
-                else:
-                    wo_pl = collect_water_oxygen_plumed_1based(h_topology)
-                if not wo_pl:
-                    raise RuntimeError(
-                        "[MD-OPES] OneOPES hydration CVs requested but no water "
-                        "oxygens found in topology; pass --oneopes-water-oxygen-plumed."
-                    )
-            oneopes_kw = {
-                "oneopes_axis_p0_plumed_idx": p0_pl,
-                "oneopes_axis_p1_plumed_idx": p1_pl,
-                "oneopes_contactmap_pairs_plumed": cmap_pairs,
-                "oneopes_hydration_spot_plumed_idx": hydr_pl if hydr_pl else None,
-                "water_oxygen_plumed_idx": wo_pl,
-                "oneopes_water_pace": int(args.oneopes_water_pace),
-                "oneopes_water_barrier": float(args.oneopes_water_barrier),
-                "oneopes_water_biasfactor": float(args.oneopes_water_biasfactor),
-                "oneopes_water_sigma": float(args.oneopes_water_sigma),
-            }
-            meta["oneopes_cv_params"] = {
-                "axis_p0_boltz": np.asarray(bp0, dtype=np.int64).tolist(),
-                "axis_p1_boltz": np.asarray(bp1, dtype=np.int64).tolist(),
-                "ligand_boltz": np.asarray(indexer.ligand_idx, dtype=np.int64).tolist(),
-                "contact_pairs_boltz": [(int(pr), int(li)) for pr, li in pairs_b],
-                "contactmap_switch_r0": 5.5,
-                "contactmap_switch_d0": 0.0,
-                "contactmap_switch_nn": 4,
-                "contactmap_switch_mm": 10,
-            }
-
-        script = generate_plumed_opes_script(
-            ligand_plumed_idx=ligand_plumed_idx,
-            pocket_ca_plumed_idx=pocket_plumed_idx,
-            rmsd_reference_pdb=ref_pdb,
-            sigma=sigma,
-            pace=args.deposit_pace,
-            barrier=args.opes_barrier,
-            biasfactor=args.opes_biasfactor,
-            temperature=args.temperature,
-            save_opes_every=args.save_opes_every,
-            progress_every=args.progress_every,
-            out_dir=opes_dir,
-            state_rfile=args.opes_restart,
-            kernel_cutoff=args.opes_kernel_cutoff,
-            nlist_parameters=args.opes_nlist_parameters,
-            print_colvar_heavy_flush=bool(args.plumed_colvar_heavy_flush),
-            cv_mode=args.bias_cv,
-            pocket_heavy_plumed_idx=pocket_heavy_plumed_idx,
-            coordination_r0=float(args.coordination_r0),
-            opes_variant="explore" if args.opes_explore else "metad",
-            upper_wall_dist=opes_wall_dist_resolved,
-            upper_wall_kappa=float(args.opes_wall_kappa),
-            use_pbc=True,
-            whole_molecule_plumed_idx=whole_molecule_plumed_idx,
-            opes_expanded_temp_max=args.opes_expanded_temp_max,
-            opes_expanded_pace=int(args.opes_expanded_pace),
-            opes_expanded_state_rfile=expanded_state_rfile,
-            **oneopes_kw,
-        )
-        script_path.write_text(script, encoding="utf-8")
-        force, force_index = add_plumed_opes_to_system(
-            system,
-            script,
-            temperature=args.temperature,
-            force_group=args.plumed_force_group,
-            restart=args.opes_restart is not None,
-        )
-        plumed_context.update(
-            {
-                "omm_idx": omm_idx_cb,
-                "force": force,
-                "force_index": force_index,
-                "force_group": int(args.plumed_force_group),
-                "script_path": script_path,
-                "reference_pdb": ref_pdb,
-            }
-        )
-        meta["plumed_force_index"] = force_index
-        meta["plumed_force_group"] = int(args.plumed_force_group)
-        meta["plumed_script"] = str(script_path)
-        meta["plumed_reference_pdb"] = str(ref_pdb)
+    _factory_kw: dict[str, Any] = dict(
+        args=args,
+        structure=structure,
+        indexer=indexer,
+        ref_coords=ref_coords,
+        n_s=n_s,
+        pdb_path=pdb_path,
+        md_out_dir=out,
+        opes_wall_dist_resolved=opes_wall_dist_resolved,
+        plumed_context=plumed_context,
+        sigma=sigma,
+        force_empty_oneopes_hydration=False,
+        oneopes_hydration_site_cap=None,
+        opes_expanded_temp_max_override=None,
+        opes_expanded_pace_override=None,
+        plumed_state_rfile_override=None,
+        oneopes_protocol=str(getattr(args, "oneopes_protocol", "legacy-boltz")).replace(
+            "-", "_"
+        ),
+        paper_replica_index=None,
+    )
+    if plumed_factory_extra_kwargs:
+        _factory_kw.update(plumed_factory_extra_kwargs)
+    _add_plumed_force = build_plumed_extra_forces_callback(**_factory_kw)
 
     md_boltz_pose: dict = {}
     if args.mol_dir is not None:
@@ -920,7 +1159,11 @@ def run_opes_md(args: argparse.Namespace) -> None:
     if args.opes_mode == "plumed":
         colvar_p = opes_dir / "COLVAR"
         if args.bias_cv == "oneopes":
-            cv_fes = "pp.proj,cmap"
+            _op = str(getattr(args, "oneopes_protocol", "legacy-boltz")).replace("-", "_")
+            if _op == "paper_host_guest":
+                cv_fes = "cyl_z,cosang"
+            else:
+                cv_fes = "pp.proj,cmap"
             grid_hint = "100,100"
             fes_name = "fes_reweighted_2d.dat"
         elif args.bias_cv == "3d":
@@ -1121,6 +1364,43 @@ def run_opes_md(args: argparse.Namespace) -> None:
                 gpu_logger = None
                 gpu_csv = None
 
+    if stop_after_initialization and return_after_initialization:
+        raise ValueError("stop_after_initialization and return_after_initialization are mutually exclusive.")
+
+    if stop_after_initialization or return_after_initialization:
+        if gpu_logger is not None:
+            gpu_logger.stop()
+        if stop_after_initialization:
+            print("[MD-OPES] stop_after_initialization: skipping MD loops.", flush=True)
+            with open(out / "cv_log.json", "w") as f:
+                json.dump([], f)
+            with open(out / "md_summary.json", "w") as f:
+                json.dump(
+                    {
+                        "total_steps": 0,
+                        "n_saved": 0,
+                        "stopped": "after_initialization",
+                        "md_out": str(out),
+                    },
+                    f,
+                    indent=2,
+                )
+            return None
+        print("[MD-OPES] return_after_initialization: returning simulation bundle.", flush=True)
+        return {
+            "sim": sim,
+            "meta": meta,
+            "plumed_context": plumed_context,
+            "structure": structure,
+            "indexer": indexer,
+            "ref_coords": ref_coords,
+            "n_s": n_s,
+            "pdb_path": pdb_path,
+            "out": out,
+            "opes_wall_dist_resolved": opes_wall_dist_resolved,
+            "kbt_kjmol": kbt_kjmol,
+        }
+
     if args.opes_mode == "observer":
         if opes is None:
             raise RuntimeError("[MD-OPES] Observer mode did not initialize OPESBias.")
@@ -1301,6 +1581,7 @@ def run_opes_md(args: argparse.Namespace) -> None:
     else:
         print(f"  OPES: PLUMED force group {plumed_context.get('force_group')}")
     print(f"{'='*60}", flush=True)
+    return None
 
 
 def main() -> None:

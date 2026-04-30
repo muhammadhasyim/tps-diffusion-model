@@ -8,6 +8,7 @@ __pycache__/
 opes*case2/
 muhammad*/
 openmm-plumed*
+OneOPES*
 
 # plumed2/ is a tracked git submodule (PLUMED v2.9.x + OPES overlay build).
 

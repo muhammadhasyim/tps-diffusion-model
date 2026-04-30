@@ -35,8 +35,28 @@ from typing import Any, Literal
 
 import numpy as np
 
+from genai_tps.simulation.oneopes_upstream_reference import (
+    PAPER_WATER_COORD_D_MAX_ANGSTROM,
+    PAPER_WATER_COORD_NL_CUTOFF_ANGSTROM,
+    PAPER_WATER_COORD_NL_STRIDE,
+    PAPER_WATER_COORD_R0_ANGSTROM,
+    PAPER_WH_COORD_MM,
+    PAPER_WH_COORD_NN,
+    PAPER_WL_COORD_MM,
+    PAPER_WL_COORD_NN,
+    PEFEMA_AUXILIARY_CV_LABELS,
+    PEFEMA_AUXILIARY_OPES_BARRIER_KJMOL,
+    PEFEMA_AUXILIARY_OPES_PACE,
+    PEFEMA_MAIN_OPES_METAD_EXPLORE_BARRIER_KJMOL,
+    PEFEMA_MAIN_OPES_METAD_EXPLORE_PACE,
+    PEFEMA_MULTITHERMAL_OPES_EXPANDED_PACE,
+    pefema_auxiliary_labels_for_replica,
+)
+
 __all__ = [
     "OpesPlumedDeckConfig",
+    "PaperHostGuestOpesDeckConfig",
+    "generate_paper_host_guest_plumed_opes_script_from_config",
     "add_plumed_opes_to_system",
     "compute_oneopes_pp_ext_angstrom",
     "compute_oneopes_pp_proj_cmap_from_boltz_coords",
@@ -107,6 +127,49 @@ class OpesPlumedDeckConfig:
     oneopes_water_nl_cutoff: float = 16.0
     oneopes_water_nl_stride: int = 20
     oneopes_water_kernel_cutoff: float | None = None
+
+
+@dataclass(frozen=True)
+class PaperHostGuestOpesDeckConfig:
+    """PLUMED deck inputs for the paper-style host–guest OneOPES ladder (funnel *z* + COS).
+
+    Main bias dimension uses ``cyl_z`` (projection along the pocket funnel axis) and
+    ``cosang`` (cosine of the angle between the ligand axis and the funnel axis), plus
+    optional water coordination auxiliaries ``L4``, ``V6``, … matching
+    :data:`genai_tps.simulation.oneopes_upstream_reference.PEFEMA_AUXILIARY_CV_LABELS`.
+    """
+
+    ligand_plumed_idx: Sequence[int]
+    pocket_ca_plumed_idx: Sequence[int]
+    rmsd_reference_pdb: Path
+    sigma_main: tuple[float, float]
+    biasfactor: float
+    temperature: float
+    save_opes_every: int
+    progress_every: int
+    out_dir: Path
+    replica_index: int
+    funnel_axis_p0_plumed_idx: Sequence[int]
+    funnel_axis_p1_plumed_idx: Sequence[int]
+    ligand_axis_p0_plumed_idx: Sequence[int]
+    ligand_axis_p1_plumed_idx: Sequence[int]
+    auxiliary_guest_plumed_idx: tuple[int, ...]
+    water_oxygen_plumed_idx: Sequence[int]
+    state_rfile: Path | None = None
+    whole_molecule_plumed_idx: Sequence[int] | None = None
+    kernel_cutoff: float | None = None
+    nlist_parameters: tuple[float, float] | None = None
+    print_colvar_heavy_flush: bool = False
+    use_pbc: bool = False
+    main_pace: int = PEFEMA_MAIN_OPES_METAD_EXPLORE_PACE
+    main_barrier_kjmol: float = PEFEMA_MAIN_OPES_METAD_EXPLORE_BARRIER_KJMOL
+    auxiliary_pace: int = PEFEMA_AUXILIARY_OPES_PACE
+    auxiliary_barrier_kjmol: float = PEFEMA_AUXILIARY_OPES_BARRIER_KJMOL
+    multithermal_pace: int = PEFEMA_MULTITHERMAL_OPES_EXPANDED_PACE
+    opes_expanded_temp_max: float | None = None
+    opes_expanded_observation_steps: int = 100
+    opes_expanded_print_stride: int = 100
+    opes_expanded_state_rfile: Path | None = None
 
 
 def _format_float(value: float) -> str:
@@ -927,6 +990,250 @@ def generate_plumed_opes_script_from_config(cfg: OpesPlumedDeckConfig) -> str:
         [
             "PRINT "
             f"STRIDE={int(progress_every)} FILE={colvar_path} "
+            f"ARG={print_cv_str}"
+            f"{colvar_print_suffix}",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def generate_paper_host_guest_plumed_opes_script_from_config(
+    cfg: PaperHostGuestOpesDeckConfig,
+) -> str:
+    """Emit a paper-style OneOPES PLUMED deck (main ``cyl_z`` + ``cosang``, WL/WH tiering).
+
+    Replica **0** biases only the two main CVs. Replicas **1–7** add auxiliary
+    ``OPES_METAD_EXPLORE`` blocks on the first *replica_index* coordination CVs
+    from :func:`~genai_tps.simulation.oneopes_upstream_reference.pefema_auxiliary_labels_for_replica`.
+    Replicas **4–7** additionally emit ``ECV_MULTITHERMAL`` + ``OPES_EXPANDED`` when
+    *opes_expanded_temp_max* is set.
+
+    Water coordination switching constants follow the Febrer Martinez host–guest
+    protocol (2.5 Å ``R_0``, 0.8 Å ``D_MAX``, 1.5 Å neighbor list cutoff, …).
+    """
+    if len(cfg.auxiliary_guest_plumed_idx) != len(PEFEMA_AUXILIARY_CV_LABELS):
+        raise ValueError(
+            "auxiliary_guest_plumed_idx must have one guest atom index per "
+            f"PEFEMA label ({len(PEFEMA_AUXILIARY_CV_LABELS)} entries)."
+        )
+    if int(cfg.replica_index) < 0 or int(cfg.replica_index) > 7:
+        raise ValueError("replica_index must be in 0..7.")
+    if cfg.use_pbc:
+        if cfg.whole_molecule_plumed_idx is None or len(list(cfg.whole_molecule_plumed_idx)) == 0:
+            raise ValueError("use_pbc=True requires non-empty whole_molecule_plumed_idx.")
+
+    out = cfg.out_dir.expanduser().resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    ligand_atoms = _format_indices(cfg.ligand_plumed_idx)
+    pocket_atoms = _format_indices(cfg.pocket_ca_plumed_idx)
+    rmsd_reference_pdb = cfg.rmsd_reference_pdb.expanduser().resolve()
+
+    kernels_path = out / "KERNELS"
+    state_path = out / "STATE"
+    colvar_path = out / "COLVAR"
+    expanded_delta_path = out / "OPES_EXPANDED_DELTAFS"
+    expanded_state_path = out / "STATE_EXPANDED"
+
+    sigma_t = (float(cfg.sigma_main[0]), float(cfg.sigma_main[1]))
+    cutoff_plumed_default = _opes_metad_default_kernel_cutoff_sigma(
+        float(cfg.main_barrier_kjmol), float(cfg.biasfactor), float(cfg.temperature)
+    )
+    if cfg.kernel_cutoff is None:
+        kernel_cutoff_resolved = max(3.5, cutoff_plumed_default)
+    else:
+        kernel_cutoff_resolved = float(cfg.kernel_cutoff)
+        if kernel_cutoff_resolved <= 0.0:
+            raise ValueError("kernel_cutoff must be positive when set explicitly.")
+
+    pbc_token = "" if cfg.use_pbc else " NOPBC"
+    colvar_print_suffix = " HEAVY_FLUSH" if cfg.print_colvar_heavy_flush else ""
+
+    lines: list[str] = ["UNITS LENGTH=A", ""]
+    if cfg.use_pbc and cfg.whole_molecule_plumed_idx is not None:
+        lines.append(
+            "WHOLEMOLECULES ENTITY0=" + _format_indices(list(cfg.whole_molecule_plumed_idx))
+        )
+        lines.append("")
+
+    lines.extend(
+        [
+            "# Paper-style OneOPES host–guest CVs (funnel projection + ligand-axis cosine).",
+            f"lig_rmsd: RMSD TYPE=OPTIMAL{pbc_token} REFERENCE={rmsd_reference_pdb}",
+            f"lig_com: CENTER{pbc_token} ATOMS={ligand_atoms}",
+            f"pocket_com: CENTER{pbc_token} ATOMS={pocket_atoms}",
+            f"lig_dist: DISTANCE{pbc_token} ATOMS=lig_com,pocket_com",
+            "",
+        ]
+    )
+
+    fp0 = _format_indices(list(cfg.funnel_axis_p0_plumed_idx))
+    fp1 = _format_indices(list(cfg.funnel_axis_p1_plumed_idx))
+    lp0 = _format_indices(list(cfg.ligand_axis_p0_plumed_idx))
+    lp1 = _format_indices(list(cfg.ligand_axis_p1_plumed_idx))
+    lines.extend(
+        [
+            f"oneopes_axis_p0: CENTER{pbc_token} ATOMS={fp0}",
+            f"oneopes_axis_p1: CENTER{pbc_token} ATOMS={fp1}",
+            (
+                "pp: PROJECTION_ON_AXIS AXIS_ATOMS=oneopes_axis_p0,oneopes_axis_p1 "
+                f"ATOM=lig_com{pbc_token}"
+            ),
+            "cyl_z: MATHEVAL ARG=pp.proj VAR=pz FUNC=pz PERIODIC=NO",
+            f"lig_axis_p0: CENTER{pbc_token} ATOMS={lp0}",
+            f"lig_axis_p1: CENTER{pbc_token} ATOMS={lp1}",
+            f"lig_vec: DISTANCE ATOMS=lig_axis_p0,lig_axis_p1 COMPONENTS{pbc_token}",
+            f"fun_vec: DISTANCE ATOMS=oneopes_axis_p0,oneopes_axis_p1 COMPONENTS{pbc_token}",
+            (
+                "cosang: MATHEVAL ARG=lig_vec.x,lig_vec.y,lig_vec.z,fun_vec.x,fun_vec.y,fun_vec.z "
+                "VAR=lx,ly,lz,fx,fy,fz "
+                "FUNC=(lx*fx+ly*fy+lz*fz)/sqrt((lx*lx+ly*ly+lz*lz)*(fx*fx+fy*fy+fz*fz)+1.e-12) "
+                "PERIODIC=NO"
+            ),
+            "",
+        ]
+    )
+
+    use_expanded = cfg.opes_expanded_temp_max is not None
+    if use_expanded:
+        lines.extend(
+            [
+                "# Multithermal expanded ensemble (replicas 4–7 in the paper ladder).",
+                "ene: ENERGY",
+                "",
+            ]
+        )
+
+    active_aux = pefema_auxiliary_labels_for_replica(int(cfg.replica_index))
+    wo = _format_indices(list(cfg.water_oxygen_plumed_idx))
+    if active_aux:
+        lines.append(f"WO: GROUP ATOMS={wo}")
+        lines.append("")
+        for li, label in enumerate(PEFEMA_AUXILIARY_CV_LABELS):
+            if label not in active_aux:
+                continue
+            guest = int(cfg.auxiliary_guest_plumed_idx[li])
+            is_wl = li % 2 == 0
+            nn = PAPER_WL_COORD_NN if is_wl else PAPER_WH_COORD_NN
+            mm = PAPER_WL_COORD_MM if is_wl else PAPER_WH_COORD_MM
+            w_sw = (
+                "SWITCH={RATIONAL "
+                f"D_0=0.0 R_0={_format_float(PAPER_WATER_COORD_R0_ANGSTROM)} "
+                f"NN={int(nn)} MM={int(mm)} "
+                f"D_MAX={_format_float(PAPER_WATER_COORD_D_MAX_ANGSTROM)}"
+                "}"
+            )
+            lines.append(
+                f"{label}: COORDINATION GROUPA={guest} GROUPB=WO {w_sw}"
+                f" NLIST NL_CUTOFF={_format_float(PAPER_WATER_COORD_NL_CUTOFF_ANGSTROM)} "
+                f"NL_STRIDE={int(PAPER_WATER_COORD_NL_STRIDE)}{pbc_token}"
+            )
+        lines.append("")
+
+    cv_names = ("cyl_z", "cosang")
+    sigma_str = ",".join(_format_float(s) for s in sigma_t)
+    print_cv_parts = [
+        "lig_rmsd",
+        "lig_dist",
+        "pp.proj",
+        "pp.ext",
+        "cyl_z",
+        "cosang",
+    ]
+    print_cv_parts += list(active_aux)
+    print_cv_str = ",".join(print_cv_parts) + ",opes.bias,opes.rct,opes.nker,opes.zed,opes.neff"
+    for label in active_aux:
+        print_cv_str += f",opes_aux_{label}.bias,opes_aux_{label}.rct,opes_aux_{label}.nker"
+        print_cv_str += f",opes_aux_{label}.zed,opes_aux_{label}.neff"
+    if use_expanded:
+        print_cv_str += ",ene,opes_expanded.bias"
+
+    opes_lines = [
+        "opes: OPES_METAD_EXPLORE ...",
+        f"  ARG={','.join(cv_names)}",
+        f"  SIGMA={sigma_str}",
+        f"  PACE={int(cfg.main_pace)}",
+        f"  BARRIER={_format_float(float(cfg.main_barrier_kjmol))}",
+        f"  BIASFACTOR={_format_float(float(cfg.biasfactor))}",
+        f"  TEMP={_format_float(float(cfg.temperature))}",
+        f"  KERNEL_CUTOFF={_format_float(kernel_cutoff_resolved)}",
+        f"  FILE={kernels_path}",
+        f"  STATE_WFILE={state_path}",
+        f"  STATE_WSTRIDE={int(cfg.save_opes_every)}",
+        "  NLIST",
+    ]
+    lines.extend(opes_lines)
+    if cfg.nlist_parameters is not None:
+        a, b = (float(cfg.nlist_parameters[0]), float(cfg.nlist_parameters[1]))
+        lines.append(f"  NLIST_PARAMETERS={_format_float(a)},{_format_float(b)}")
+    if cfg.state_rfile is not None:
+        lines.append(f"  STATE_RFILE={cfg.state_rfile.expanduser().resolve()}")
+    lines.extend(["...", "", ""])
+
+    for label in active_aux:
+        w_barrier = float(cfg.auxiliary_barrier_kjmol)
+        w_bf = float(cfg.biasfactor)
+        w_temp = float(cfg.temperature)
+        w_cutoff_default = _opes_metad_default_kernel_cutoff_sigma(w_barrier, w_bf, w_temp)
+        w_kernel_cut = max(3.5, w_cutoff_default)
+        w_sig = _format_float(0.05)
+        w_kernels = out / f"KERNELS_AUX_{label}"
+        w_state = out / f"STATE_AUX_{label}"
+        lines.extend(
+            [
+                f"# Auxiliary OPES (paper ladder): {label}",
+                f"opes_aux_{label}: OPES_METAD_EXPLORE ...",
+                f"  ARG={label}",
+                f"  SIGMA={w_sig}",
+                f"  PACE={int(cfg.auxiliary_pace)}",
+                f"  BARRIER={_format_float(w_barrier)}",
+                f"  BIASFACTOR={_format_float(w_bf)}",
+                f"  TEMP={_format_float(w_temp)}",
+                f"  KERNEL_CUTOFF={_format_float(w_kernel_cut)}",
+                f"  FILE={w_kernels}",
+                f"  STATE_WFILE={w_state}",
+                f"  STATE_WSTRIDE={int(cfg.save_opes_every)}",
+                "  NLIST",
+                "...",
+                "",
+            ]
+        )
+
+    if use_expanded:
+        t_max = float(cfg.opes_expanded_temp_max)  # type: ignore[arg-type]
+        t0 = float(cfg.temperature)
+        if t_max <= t0 + 1e-9:
+            raise ValueError("opes_expanded_temp_max must exceed temperature for multithermal.")
+        ep = int(cfg.multithermal_pace)
+        wstride = max(ep, int(cfg.save_opes_every) // ep * ep)
+        if wstride < int(cfg.save_opes_every):
+            wstride += ep
+        lines.extend(
+            [
+                (
+                    f"opes_ecv: ECV_MULTITHERMAL ARG=ene TEMP={_format_float(t0)} "
+                    f"TEMP_MIN={_format_float(t0)} TEMP_MAX={_format_float(t_max)}"
+                ),
+                "opes_expanded: OPES_EXPANDED ...",
+                "  ARG=opes_ecv.*",
+                f"  PACE={ep}",
+                f"  OBSERVATION_STEPS={int(cfg.opes_expanded_observation_steps)}",
+                f"  FILE={expanded_delta_path}",
+                f"  PRINT_STRIDE={int(cfg.opes_expanded_print_stride)}",
+                f"  STATE_WFILE={expanded_state_path}",
+                f"  STATE_WSTRIDE={int(wstride)}",
+            ]
+        )
+        if cfg.opes_expanded_state_rfile is not None:
+            lines.append(
+                f"  STATE_RFILE={cfg.opes_expanded_state_rfile.expanduser().resolve()}"
+            )
+        lines.extend(["...", "", ""])
+
+    lines.extend(
+        [
+            "PRINT "
+            f"STRIDE={int(cfg.progress_every)} FILE={colvar_path} "
             f"ARG={print_cv_str}"
             f"{colvar_print_suffix}",
             "",
