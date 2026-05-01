@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -17,11 +15,11 @@ from genai_tps.simulation.oneopes_repex import (
     copy_opes_state_snapshot,
     count_active_contexts_per_device,
     default_expanded_temp_max_for_replica,
-    initialize_replicas_parallel,
     literature_oneopes_replica_specs,
     multithermal_temp_max_k_for_replica,
     log_acceptance_two_replica_hrex,
     metropolis_accept_two_replica_hrex,
+    minimum_max_active_contexts_per_device,
     opes_states_fingerprint,
     paper_host_guest_replica_strats,
     plan_evaluator_device_assignments,
@@ -29,14 +27,22 @@ from genai_tps.simulation.oneopes_repex import (
     prepare_evaluator_scratch_tree,
     register_oneopes_repex_arguments,
     relocate_plumed_deck_paths,
-    resolve_replica_step_workers,
-    step_replicas_parallel,
+    repex_active_context_counts_for_json,
     validate_oneopes_repex_cli_args,
+    write_repex_config_json,
+)
+from genai_tps.simulation.oneopes_repex_smoke_validate import (
+    validate_exchange_log_multi_rows,
+    validate_exchange_log_two_replica_rows,
+    validate_repex_smoke_directory,
 )
 from genai_tps.simulation.oneopes_upstream_reference import (
+    HREX_NEIGHBOR_PAIRS_PHASE_A,
+    HREX_NEIGHBOR_PAIRS_PHASE_B,
     PEFEMA_AUXILIARY_CV_LABELS,
     PEFEMA_MULTITHERMAL_TEMP_MAX_K,
     neighbor_hrex_pairs_for_phase,
+    neighbor_hrex_pairs_for_phase_n,
     pefema_auxiliary_labels_for_replica,
     pefema_multithermal_temp_max_k,
 )
@@ -90,6 +96,176 @@ def test_literature_eight_replica_multithermal_flags() -> None:
     )
 
 
+def test_literature_replica_specs_truncates_full_ladder() -> None:
+    full = literature_oneopes_replica_specs(n_replicas=8)
+    for n in (3, 4, 5, 6, 7):
+        cut = literature_oneopes_replica_specs(n_replicas=n)
+        assert len(cut) == n
+        assert cut == full[:n]
+
+
+def test_literature_replica_specs_rejects_out_of_range() -> None:
+    with pytest.raises(ValueError, match="2..8"):
+        literature_oneopes_replica_specs(n_replicas=1)
+    with pytest.raises(ValueError, match="2..8"):
+        literature_oneopes_replica_specs(n_replicas=9)
+
+
+def test_neighbor_hrex_pairs_for_phase_n_matches_eight() -> None:
+    assert neighbor_hrex_pairs_for_phase_n(0, 8) == HREX_NEIGHBOR_PAIRS_PHASE_A
+    assert neighbor_hrex_pairs_for_phase_n(1, 8) == HREX_NEIGHBOR_PAIRS_PHASE_B
+    assert neighbor_hrex_pairs_for_phase(0) == HREX_NEIGHBOR_PAIRS_PHASE_A
+    assert neighbor_hrex_pairs_for_phase(1) == HREX_NEIGHBOR_PAIRS_PHASE_B
+
+
+def test_neighbor_hrex_pairs_for_phase_n_three_replicas() -> None:
+    assert neighbor_hrex_pairs_for_phase_n(0, 3) == ((0, 1),)
+    assert neighbor_hrex_pairs_for_phase_n(1, 3) == ((1, 2),)
+
+
+@pytest.mark.parametrize(
+    ("n", "phase", "expected"),
+    [
+        (4, 0, ((0, 1), (2, 3))),
+        (4, 1, ((1, 2),)),
+        (5, 0, ((0, 1), (2, 3))),
+        (5, 1, ((1, 2), (3, 4))),
+        (6, 0, ((0, 1), (2, 3), (4, 5))),
+        (6, 1, ((1, 2), (3, 4))),
+        (7, 0, ((0, 1), (2, 3), (4, 5))),
+        (7, 1, ((1, 2), (3, 4), (5, 6))),
+    ],
+)
+def test_neighbor_hrex_pairs_for_phase_n_four_to_seven(
+    n: int, phase: int, expected: tuple[tuple[int, int], ...]
+) -> None:
+    assert neighbor_hrex_pairs_for_phase_n(phase, n) == expected
+
+
+def test_repex_active_context_counts_for_json_two_vs_multi() -> None:
+    rep3 = [0, 0, 0]
+    ev3 = plan_evaluator_device_assignments(rep3, placement="same-device")
+    assert repex_active_context_counts_for_json(3, rep3, ev3) == {0: 5}
+    assert minimum_max_active_contexts_per_device(3, rep3, ev3) == 5
+
+    rep2 = [0, 0]
+    ev2 = plan_evaluator_device_assignments(rep2, placement="same-device")
+    assert repex_active_context_counts_for_json(2, rep2, ev2) == count_active_contexts_per_device(
+        rep2, ev2
+    )
+    assert repex_active_context_counts_for_json(2, rep2, ev2)[0] == 4
+
+
+def test_write_repex_config_json_uses_peak_for_three_replicas(tmp_path: Path) -> None:
+    import json
+
+    rep = [0, 0, 0]
+    ev = plan_evaluator_device_assignments(rep, placement="same-device")
+    path = tmp_path / "repex_config.json"
+    write_repex_config_json(
+        path,
+        replica_devices=rep,
+        evaluator_devices=ev,
+        max_active_contexts_per_device=5,
+        exchange_every=2000,
+        n_replicas=3,
+    )
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["active_context_counts_by_device"]["0"] == 5
+    assert data["max_active_contexts_per_device"] == 5
+
+
+def test_validate_exchange_log_two_replica_rows_ok() -> None:
+    row = {
+        "md_step": "3000",
+        "u00": "-1.0",
+        "u01": "-2.0",
+        "u10": "-3.0",
+        "u11": "-4.0",
+        "log_accept": "0.0",
+        "accepted": "1",
+        "rng_u": "0.5",
+        "md_elapsed_s": "1",
+        "exchange_elapsed_s": "1",
+        "elapsed_s": "2",
+    }
+    assert validate_exchange_log_two_replica_rows([row]) == []
+
+
+def test_validate_exchange_log_two_replica_rows_rejects_nan() -> None:
+    row = {
+        "md_step": "3000",
+        "u00": "nan",
+        "u01": "0.0",
+        "u10": "0.0",
+        "u11": "0.0",
+        "log_accept": "0.0",
+        "accepted": "0",
+        "rng_u": "0.5",
+        "md_elapsed_s": "1",
+        "exchange_elapsed_s": "1",
+        "elapsed_s": "2",
+    }
+    errs = validate_exchange_log_two_replica_rows([row])
+    assert any("non-finite" in e for e in errs)
+
+
+def test_validate_repex_smoke_directory_minimal_two_replica(tmp_path: Path) -> None:
+    import json
+
+    root = tmp_path / "smoke"
+    root.mkdir()
+    (root / "repex_config.json").write_text(
+        json.dumps({"n_replicas": 2, "exchange_every": 3000}),
+        encoding="utf-8",
+    )
+    header = (
+        "md_step,u00,u01,u10,u11,log_accept,accepted,rng_u,"
+        "md_elapsed_s,exchange_elapsed_s,elapsed_s\n"
+    )
+    row = "3000,-1.0,-2.0,-3.0,-4.0,0.0,1,0.5,1.0,1.0,3.0\n"
+    (root / "exchange_log.csv").write_text(header + row, encoding="utf-8")
+    (root / "barrier_timing.jsonl").write_text(
+        json.dumps({"md_step": 3000, "elapsed_s": 3.0, "n_replicas": 2}) + "\n",
+        encoding="utf-8",
+    )
+    rep = root / "rep000"
+    rep.mkdir()
+    opes = rep / "opes_states"
+    opes.mkdir()
+    (opes / "KERNELS").write_text("k", encoding="utf-8")
+    (opes / "STATE").write_text("s", encoding="utf-8")
+
+    errs = validate_repex_smoke_directory(root)
+    assert errs == []
+
+
+def test_validate_exchange_log_multi_rows_ok() -> None:
+    row = {
+        "md_step": "2000",
+        "phase_mod_2": "0",
+        "pair_i": "0",
+        "pair_j": "1",
+        "u_ii": "-1.0",
+        "u_jj": "-2.0",
+        "u_ij": "-1.5",
+        "u_ji": "-1.5",
+        "log_accept": "0.0",
+        "accepted": "0",
+        "rng_u": "0.9",
+        "md_elapsed_s": "1",
+        "exchange_elapsed_s": "0.5",
+        "elapsed_s": "2",
+    }
+    assert validate_exchange_log_multi_rows([row]) == []
+
+
+def test_minimum_max_active_contexts_three_on_one_gpu() -> None:
+    rep = [0, 0, 0]
+    ev = plan_evaluator_device_assignments(rep, placement="same-device")
+    assert minimum_max_active_contexts_per_device(3, rep, ev) == 5
+
+
 def test_assign_replicas_round_robin_and_packed() -> None:
     assert assign_replicas_to_devices(3, [0, 1], "round-robin") == [0, 1, 0]
     assert assign_replicas_to_devices(3, [0, 1], "packed") == [0, 0, 1]
@@ -120,88 +296,22 @@ def test_count_active_contexts() -> None:
     assert c[1] == 1
 
 
-def test_resolve_replica_step_workers_auto_and_explicit() -> None:
-    assert resolve_replica_step_workers(0, n_replicas=8) == 8
-    assert resolve_replica_step_workers(None, n_replicas=8) == 8
-    assert resolve_replica_step_workers(3, n_replicas=8) == 3
-    with pytest.raises(ValueError, match="positive"):
-        resolve_replica_step_workers(-1, n_replicas=8)
+def test_minimum_max_active_contexts_two_replica_same_device() -> None:
+    rep = [0, 0]
+    ev = plan_evaluator_device_assignments(rep, placement="same-device")
+    assert minimum_max_active_contexts_per_device(2, rep, ev) == 4
 
 
-def test_step_replicas_parallel_runs_concurrently() -> None:
-    class _FakeSimulation:
-        def __init__(self) -> None:
-            self.calls: list[int] = []
-
-        def step(self, chunk: int) -> None:
-            time.sleep(0.05)
-            self.calls.append(chunk)
-
-    sims = [_FakeSimulation() for _ in range(8)]
-    t0 = time.perf_counter()
-    elapsed = step_replicas_parallel(sims, 17, max_workers=8)
-    wall = time.perf_counter() - t0
-
-    assert all(sim.calls == [17] for sim in sims)
-    assert elapsed <= wall
-    assert wall < 0.20
+def test_minimum_max_active_contexts_eight_on_one_gpu() -> None:
+    rep = [0] * 8
+    ev = plan_evaluator_device_assignments(rep, placement="same-device")
+    assert minimum_max_active_contexts_per_device(8, rep, ev) == 10
 
 
-def test_step_replicas_parallel_propagates_failures() -> None:
-    started: set[int] = set()
-    lock = threading.Lock()
-
-    class _FakeSimulation:
-        def __init__(self, replica_index: int) -> None:
-            self.replica_index = replica_index
-
-        def step(self, chunk: int) -> None:
-            del chunk
-            with lock:
-                started.add(self.replica_index)
-            if self.replica_index == 3:
-                raise RuntimeError("replica failed")
-            time.sleep(0.01)
-
-    sims = [_FakeSimulation(i) for i in range(8)]
-    with pytest.raises(RuntimeError, match="replica failed"):
-        step_replicas_parallel(sims, 5, max_workers=8)
-    assert started == set(range(8))
-
-
-def test_initialize_replicas_parallel_runs_concurrently_and_preserves_order() -> None:
-    started: set[int] = set()
-    lock = threading.Lock()
-
-    def _make_initializer(replica_index: int):
-        def _initializer() -> dict[str, int]:
-            with lock:
-                started.add(replica_index)
-            time.sleep(0.05)
-            return {"replica": replica_index}
-
-        return _initializer
-
-    initializers = [_make_initializer(i) for i in range(8)]
-    t0 = time.perf_counter()
-    packs, elapsed = initialize_replicas_parallel(initializers, max_workers=8)
-    wall = time.perf_counter() - t0
-
-    assert [p["replica"] for p in packs] == list(range(8))
-    assert started == set(range(8))
-    assert elapsed <= wall
-    assert wall < 0.20
-
-
-def test_initialize_replicas_parallel_propagates_failures() -> None:
-    def _ok() -> str:
-        return "ok"
-
-    def _bad() -> str:
-        raise RuntimeError("initialization failed")
-
-    with pytest.raises(RuntimeError, match="initialization failed"):
-        initialize_replicas_parallel([_ok, _bad], max_workers=2)
+def test_minimum_max_active_contexts_eight_split_gpus() -> None:
+    rep = [0, 0, 0, 0, 1, 1, 1, 1]
+    ev = plan_evaluator_device_assignments(rep, placement="same-device")
+    assert minimum_max_active_contexts_per_device(8, rep, ev) == 6
 
 
 def test_plan_evaluator_devices() -> None:

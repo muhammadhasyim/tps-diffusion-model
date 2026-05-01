@@ -1,4 +1,8 @@
-"""Background CSV logger for NVIDIA GPU utilization via ``nvidia-smi``."""
+"""Background CSV logger for NVIDIA GPU utilization via ``nvidia-smi``.
+
+For higher-rate logs or DCGM-based sampling from a separate process, see
+``scripts/profile/run_gpu_monitor.sh``.
+"""
 
 from __future__ import annotations
 

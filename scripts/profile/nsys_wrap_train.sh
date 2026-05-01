@@ -41,7 +41,7 @@ Example:
     python scripts/train_weighted_dsm.py --yaml inputs/tps_diagnostic/case1_mek1_fzc_novel.yaml \\
       --data path/to/training_dataset.npz --out /tmp/wdsm_prof --epochs 2 --batch-size 2 --device cuda
 
-For NVTX ranges in the trainer, set:  export GENAI_TPS_NVTX=1
+For NVTX ranges (trainer, OneOPES, etc.), set:  export GENAI_TPS_NVTX=1
 EOF
 }
 

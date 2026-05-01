@@ -1,11 +1,17 @@
-"""Optional NVTX ranges for Nsight Systems timelines (CUDA + Python correlation).
+"""Optional NVTX ranges for NVIDIA Nsight Systems timelines.
 
-Enable with environment variable ``GENAI_TPS_NVTX`` set to ``1``, ``true``, or
-``yes`` (case-insensitive). When disabled or when the ``nvtx`` package is
-missing, :func:`nvtx_range` is a no-op context manager with negligible overhead.
+Enable with ``GENAI_TPS_NVTX`` set to ``1``, ``true``, ``yes``, or ``on``
+(case-insensitive). When disabled, :func:`nvtx_range` is a no-op.
 
-Install the marker library with the project extra ``profiling`` (``pip install
--e .[profiling]``) or ``conda install nvtx``.
+Resolution order when enabled:
+
+1. If PyTorch is importable, CUDA is available, and ``torch.cuda.nvtx`` exists,
+   use ``torch.cuda.nvtx.range`` (no extra pip package; typical WDSM training).
+2. Otherwise use the ``nvtx`` Python package if installed (``pip install -e
+   .[profiling]`` or ``conda install nvtx``), for CPU-heavy or non-torch code.
+
+If profiling is enabled but neither path works, a warning is logged once per
+process for the ``nvtx`` import failure; missing PyTorch is silent fallback.
 """
 
 from __future__ import annotations
@@ -44,12 +50,30 @@ def _load_nvtx() -> Any | None:
         return None
 
 
+def _torch_cuda_nvtx_range(message: str):
+    """Return a context manager from ``torch.cuda.nvtx.range`` or ``None``."""
+    try:
+        import torch
+    except ImportError:
+        return None
+    if not torch.cuda.is_available() or not hasattr(torch.cuda, "nvtx"):
+        return None
+    return torch.cuda.nvtx.range(message)
+
+
 @contextmanager
 def nvtx_range(message: str) -> Iterator[None]:
-    """Enter an NVTX named range when profiling is enabled; otherwise no-op."""
+    """NVTX named range when profiling is enabled; otherwise no-op."""
     if not _env_nvtx_enabled():
         yield
         return
+
+    torch_cm = _torch_cuda_nvtx_range(message)
+    if torch_cm is not None:
+        with torch_cm:
+            yield
+        return
+
     mod = _load_nvtx()
     if mod is None:
         yield

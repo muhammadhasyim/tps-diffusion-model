@@ -416,7 +416,6 @@ def _run_openmm_oneopes_repex(
     devices: str,
     replica_device_map: str,
     replica_devices: str | None,
-    replica_step_workers: int,
     max_active_contexts_per_device: int,
     evaluator_placement: str,
     paper_oneopes_ligand_axis_p0_boltz: str | None,
@@ -448,7 +447,6 @@ def _run_openmm_oneopes_repex(
         "--oneopes-protocol", str(oneopes_protocol),
         "--devices", str(devices),
         "--replica-device-map", str(replica_device_map),
-        "--replica-step-workers", str(int(replica_step_workers)),
         "--max-active-contexts-per-device", str(int(max_active_contexts_per_device)),
         "--evaluator-placement", str(evaluator_placement),
     ]
@@ -631,8 +629,7 @@ def main() -> None:
         "--repex-n-replicas",
         type=int,
         default=8,
-        choices=[2, 8],
-        help="Replica count forwarded to the OneOPES REPEX driver.",
+        help="Replica count (2–8) forwarded to the OneOPES REPEX driver.",
     )
     parser.add_argument(
         "--oneopes-protocol",
@@ -659,12 +656,6 @@ def main() -> None:
         type=str,
         default=None,
         help="Explicit comma-separated replica device list when --replica-device-map explicit.",
-    )
-    parser.add_argument(
-        "--replica-step-workers",
-        type=int,
-        default=8,
-        help="Parallel replica propagation workers for OneOPES REPEX (0 = one per replica).",
     )
     parser.add_argument(
         "--max-active-contexts-per-device",
@@ -909,10 +900,10 @@ def main() -> None:
             parser.error("--oneopes-repex requires --bias-cv oneopes")
         if args.platform == "CPU":
             parser.error("--oneopes-repex requires --platform CUDA or OpenCL")
+        if int(args.repex_n_replicas) < 2 or int(args.repex_n_replicas) > 8:
+            parser.error("--repex-n-replicas must be in 2..8 for --oneopes-repex")
         if args.oneopes_protocol == "paper-host-guest" and int(args.repex_n_replicas) != 8:
             parser.error("--oneopes-protocol paper-host-guest requires --repex-n-replicas 8")
-        if int(args.replica_step_workers) < 0:
-            parser.error("--replica-step-workers must be >= 0")
         if args.oneopes_protocol == "paper-host-guest":
             if args.paper_oneopes_ligand_axis_p0_boltz is None:
                 parser.error("--oneopes-repex paper-host-guest requires --paper-oneopes-ligand-axis-p0-boltz")
@@ -1086,7 +1077,6 @@ def main() -> None:
                 devices=str(args.devices),
                 replica_device_map=str(args.replica_device_map),
                 replica_devices=args.replica_devices,
-                replica_step_workers=int(args.replica_step_workers),
                 max_active_contexts_per_device=int(args.max_active_contexts_per_device),
                 evaluator_placement=str(args.evaluator_placement),
                 paper_oneopes_ligand_axis_p0_boltz=args.paper_oneopes_ligand_axis_p0_boltz,

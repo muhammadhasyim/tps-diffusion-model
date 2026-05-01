@@ -64,16 +64,35 @@ HREX_NEIGHBOR_PAIRS_PHASE_B: Final[tuple[tuple[int, int], ...]] = (
 )
 
 
-def neighbor_hrex_pairs_for_phase(phase_index: int) -> tuple[tuple[int, int], ...]:
-    """Return neighbor replica pairs for alternating H-REX phases.
+def neighbor_hrex_pairs_for_phase_n(
+    phase_index: int, n_replicas: int
+) -> tuple[tuple[int, int], ...]:
+    """Alternating even/odd bond pairs for *n_replicas* (GROMACS ``-hrex`` schedule).
 
-    *phase_index* even → phase A ``(0,1),(2,3),(4,5),(6,7)``; odd → phase B
-    ``(1,2),(3,4),(5,6)``, matching ``gmx mdrun -replex … -hrex`` bond schedules
-    on an eight-replica ladder.
+    Even *phase_index*: ``(0,1),(2,3),…``; odd *phase_index*: ``(1,2),(3,4),…``.
+    Indices are skipped when they would exceed ``n_replicas - 1`` (same pattern as
+    replica 7 idle in phase B on an eight-replica ring).
     """
+    n = int(n_replicas)
+    if n < 2:
+        raise ValueError("n_replicas must be >= 2.")
+    pairs: list[tuple[int, int]] = []
     if int(phase_index) % 2 == 0:
-        return HREX_NEIGHBOR_PAIRS_PHASE_A
-    return HREX_NEIGHBOR_PAIRS_PHASE_B
+        k = 0
+        while k + 1 < n:
+            pairs.append((k, k + 1))
+            k += 2
+    else:
+        k = 1
+        while k + 1 < n:
+            pairs.append((k, k + 1))
+            k += 2
+    return tuple(pairs)
+
+
+def neighbor_hrex_pairs_for_phase(phase_index: int) -> tuple[tuple[int, int], ...]:
+    """Same as :func:`neighbor_hrex_pairs_for_phase_n` with eight replicas."""
+    return neighbor_hrex_pairs_for_phase_n(phase_index, 8)
 
 
 def pefema_auxiliary_labels_for_replica(replica_index: int) -> tuple[str, ...]:
@@ -98,6 +117,7 @@ def pefema_multithermal_temp_max_k(replica_index: int) -> float | None:
 __all__ = [
     "HREX_NEIGHBOR_PAIRS_PHASE_A",
     "HREX_NEIGHBOR_PAIRS_PHASE_B",
+    "neighbor_hrex_pairs_for_phase_n",
     "PAPER_WATER_COORD_D_MAX_ANGSTROM",
     "PAPER_WATER_COORD_NL_CUTOFF_ANGSTROM",
     "PAPER_WATER_COORD_NL_STRIDE",

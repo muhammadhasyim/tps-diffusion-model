@@ -8,7 +8,6 @@ import csv
 import json
 import os
 import sys
-from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -26,17 +25,7 @@ from genai_tps.training.loss import (
     true_quotient_dsm_loss,
 )
 from genai_tps.training.noise_schedule import EDMNoiseParams
-
-
-def _nvtx_enabled() -> bool:
-    return os.environ.get("GENAI_TPS_NVTX", "").strip().lower() in ("1", "true", "yes")
-
-
-def _nvtx_range(name: str):
-    """Nsight Systems NVTX range; no-op unless GENAI_TPS_NVTX is set and CUDA nvtx exists."""
-    if _nvtx_enabled() and torch.cuda.is_available() and hasattr(torch.cuda, "nvtx"):
-        return torch.cuda.nvtx.range(name)
-    return nullcontext()
+from genai_tps.utils.nvtx_util import nvtx_range
 
 
 def run_weighted_dsm_training(
@@ -159,7 +148,7 @@ def run_weighted_dsm_training(
             if n_batches <= skip_batches:
                 continue
 
-            with _nvtx_range(f"wdsm_train_e{epoch}_b{n_batches}"):
+            with nvtx_range(f"wdsm_train_e{epoch}_b{n_batches}"):
                 x0 = batch["coords"].float().to(device)
                 lw = batch["logw"].float().to(device)
                 am = batch["atom_mask"].float().to(device)
@@ -239,7 +228,7 @@ def run_weighted_dsm_training(
             val_n = 0
             with torch.no_grad():
                 for vbatch in val_loader:
-                    with _nvtx_range("wdsm_val_batch"):
+                    with nvtx_range("wdsm_val_batch"):
                         vx0 = vbatch["coords"].float().to(device)
                         vlw = vbatch["logw"].float().to(device)
                         vam = vbatch["atom_mask"].float().to(device)

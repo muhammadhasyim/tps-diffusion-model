@@ -10,3 +10,6 @@
 [submodule "papers/PriceofFreedom"]
 	path = papers/PriceofFreedom
 	url = https://github.com/atomicarchitects/PriceofFreedom.git
+[submodule "openmm-lm"]
+	path = openmm-lm
+	url = https://github.com/muhammadhasyim/openmm-lm

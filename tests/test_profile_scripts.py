@@ -13,6 +13,7 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _MONITOR = _REPO_ROOT / "scripts" / "profile" / "run_gpu_monitor.sh"
 _NSYS_WRAP = _REPO_ROOT / "scripts" / "profile" / "nsys_wrap_train.sh"
+_REPEX_SCALEUP = _REPO_ROOT / "scripts" / "smoke" / "run_oneopes_repex_scaleup.sh"
 
 
 def _run_bash(script: Path, args: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -35,6 +36,16 @@ def test_run_gpu_monitor_help():
 def test_run_gpu_monitor_bash_syntax():
     r = subprocess.run(
         ["/bin/bash", "-n", str(_MONITOR)],
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stderr
+
+
+def test_run_oneopes_repex_scaleup_bash_syntax():
+    r = subprocess.run(
+        ["/bin/bash", "-n", str(_REPEX_SCALEUP)],
         cwd=str(_REPO_ROOT),
         capture_output=True,
         text=True,

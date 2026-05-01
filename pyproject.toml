@@ -34,7 +34,8 @@ dependencies = [
 
 [project.optional-dependencies]
 profiling = [
-  # NVTX Python markers for NVIDIA Nsight Systems timelines (set GENAI_TPS_NVTX=1).
+  # Optional ``nvtx`` package for Nsight when not using PyTorch's built-in
+  # ``torch.cuda.nvtx`` (set GENAI_TPS_NVTX=1; see genai_tps.utils.nvtx_util).
   "nvtx",
 ]
 boltz = [
