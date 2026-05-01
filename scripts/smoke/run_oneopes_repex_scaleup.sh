@@ -18,6 +18,7 @@
 #   PYTHON — interpreter (must exist and be executable; invalid values are ignored
 #            and ``python3`` from PATH is used — activate conda first if needed)
 #   MASTER_PORT — torch.distributed rendezvous port (default: 29581)
+#   SKIP_PREFLIGHT=1 — skip scripts/smoke/preflight_oneopes_repex.sh (not recommended)
 #
 # Default stages are n2→n6 (3–6 replica counts are n3–n6). Enable stage7/8 to push
 # until GPU OOM on your hardware.
@@ -72,6 +73,14 @@ fi
 
 echo "[repex-scaleup] Checking PLUMED opes module..."
 "${PYTHON}" -c "from genai_tps.simulation.plumed_kernel import assert_plumed_opes_metad_available; assert_plumed_opes_metad_available()"
+
+PREFLIGHT="${REPO_ROOT}/scripts/smoke/preflight_oneopes_repex.sh"
+if [[ "${SKIP_PREFLIGHT:-0}" != "1" ]]; then
+  echo "[repex-scaleup] Preflight (CPU checks; see ${PREFLIGHT})..."
+  bash "${PREFLIGHT}"
+else
+  echo "[repex-scaleup] WARN: SKIP_PREFLIGHT=1 — skipping CPU preflight." >&2
+fi
 
 # Shared CLI args for run_openmm_oneopes_repex.py (excluding --out and per-stage flags).
 driver_args=(

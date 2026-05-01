@@ -155,3 +155,89 @@ def test_cpu_reference_position_fallback_returns_cpu_tensor() -> None:
     assert isinstance(tensor, torch.Tensor)
     assert not tensor.is_cuda
     assert tuple(tensor.shape) == (1, 3)
+
+
+def test_prepare_evaluator_contexts_matches_keyword_only_scratch_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: prepare_evaluator_scratch_tree is keyword-only; _prepare_evaluator must match."""
+    prod = tmp_path / "rep000"
+    prod.mkdir()
+    opes = prod / "opes_states"
+    opes.mkdir()
+    (opes / "STATE").write_text("state", encoding="utf-8")
+    (opes / "KERNELS").write_text("k", encoding="utf-8")
+    raw = "\n".join(
+        [
+            f"REF={prod / 'plumed_rmsd_reference.pdb'}",
+            f"FILE={opes / 'KERNELS'}",
+            f"  STATE_WFILE={opes / 'STATE'}",
+            "",
+        ]
+    )
+    (prod / "plumed_opes.dat").write_text(raw, encoding="utf-8")
+    (prod / "plumed_rmsd_reference.pdb").write_text("HEADER\n", encoding="utf-8")
+
+    out_root = tmp_path / "run_out"
+    out_root.mkdir()
+    group = rd.GPUReplicaGroup(rank=0, gpu_id=0, replica_indices=[0], out_root=out_root)
+    group.replica_dirs[0] = prod
+
+    class _State:
+        def getPositions(self) -> list:
+            return []
+
+        def getPeriodicBoxVectors(self) -> None:
+            return None
+
+    class _Ctx:
+        def getState(self, getPositions: bool = False) -> _State:
+            return _State()
+
+    class _Sys:
+        pass
+
+    class _Sim:
+        system = _Sys()
+        context = _Ctx()
+
+    group.sims = {0: _Sim()}
+    group.plumed_contexts = {0: {"force_index": 0, "force_group": 30}}
+
+    monkeypatch.setattr(rd, "_serialize_system", lambda system: "<System/>")
+
+    refreshed: list[object] = []
+
+    def _fake_refresh(**kw: object) -> object:
+        refreshed.append(kw)
+        return object()
+
+    monkeypatch.setattr(rd, "refresh_evaluator_context", _fake_refresh)
+
+    import sys
+
+    fake_mm = type(sys)("fake_openmm")
+
+    class _Platform:
+        @staticmethod
+        def getPlatformByName(name: str) -> str:
+            return "plat"
+
+    fake_mm.Platform = _Platform
+    monkeypatch.setitem(sys.modules, "openmm", fake_mm)
+    monkeypatch.setattr(
+        "genai_tps.utils.compute_device.openmm_device_index_properties",
+        lambda platform, gpu_id: {},
+    )
+
+    class _Args:
+        platform = "CUDA"
+        temperature = 298.0
+
+    rd._prepare_evaluator_contexts(group, _Args())
+    assert len(refreshed) == 1
+    saved = refreshed[0]
+    assert isinstance(saved, dict)
+    plumed_path = saved["plumed_script_path"]
+    assert Path(plumed_path).name == "plumed_opes.dat"
+    assert (Path(plumed_path).parent / "opes_states" / "STATE").is_file()

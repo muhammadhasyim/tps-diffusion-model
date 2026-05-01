@@ -17,7 +17,7 @@
 
 \begin{document}
 
-\title{Probing Generative Protein Structure Models with Transition Path Sampling}
+\title{Supervised Fine-Tuning of Protein-Ligand Diffusion Models and Their Evaluations via Transition Path Sampling}
 
 \author{Muhammad R.~Hasyim}
 \affiliation{Simons Center for Computational Physical Chemistry,
@@ -27,29 +27,33 @@ New York University, New York, NY~10003}
 \date{\today}
 
 \begin{abstract}
-Diffusion-based structure generators sample protein conformations by reversing
-a stochastic denoising process, yet the stochastic landscape underlying a
-given prediction remains largely unexplored. Here we introduce a framework
-that treats the reverse diffusion of Boltz-2 as a discrete-time Markov chain
-on an extended state comprising coordinates, SE(3) augmentation, and per-step
-Gaussian noise draws, and applies transition path sampling (TPS) to collect
-statistically unbiased ensembles of denoising trajectories. Applied to a
-228-residue two-chain co-folding task run without MSA information, 100 TPS
-Monte Carlo steps yield an ensemble of predicted structures with C$\alpha$ RMSD
-spread of only $0.48$--$0.69$~\AA{} and a $\approx 53\%$ shooting acceptance
-rate, revealing that the model's stochastic landscape is sharply concentrated
-near a single structural attractor. We further augment TPS with On-the-fly
-Probability Enhanced Sampling (OPES) using a two-dimensional collective variable
-comprising ligand pose RMSD and ligand--pocket distance, enabling systematic
-exploration of the projected free-energy surface for protein--ligand co-folding.
-Despite the strong concentration of the distribution near the native pose, TPS+OPES
-discovers rare but persistent metastable configurations with substantially
-elevated pose RMSD ($>1.0$~\AA) and larger pocket distances, revealing
-that generative models can produce surprisingly distant alternative binding
-geometries even for well-constrained inputs. The approach provides a principled
-diagnostic for characterizing generative model confidence, identifying
-structurally ambiguous predictions, and evaluating the physical quality of
-generated structures.
+Score-based diffusion models are among the most popular choices for generative
+AI, including cofolding models that can now generate plausible protein-ligand
+complexes. These models can produce protein-ligand structures at high
+throughput, but it remains unclear whether the structures they generate
+represent physically meaningful conformational ensembles or isolated,
+training-set-like poses. This project develops infrastructure for fine-tuning
+such models into Boltzmann generators, i.e., samplers whose output distributions
+conform to the free energy surface of the system. We propose a workflow that
+begins with enhanced-sampling molecular simulations, particularly OneOPES—an
+enhanced-sampling technique that combines replica exchange with on-the-fly
+probability enhanced sampling (OPES). These simulations generate diverse
+protein-ligand conformations and reweighting factors needed to recompute
+unbiased statistical averages. These data define a supervised fine-tuning
+objective based on weighted denoising score matching, allowing the pretrained
+diffusion model to be nudged toward simulation-consistent conformational states
+rather than a single docked pose. Once fine-tuning is completed, we propose an
+evaluation technique that uses the fact that diffusion models perform inference
+through stochastic dynamics, which can themselves be biased by the same
+enhanced-sampling techniques used in simulations. In particular, we employ
+transition path sampling (TPS) to bias denoising trajectories of a generative
+model and probe the full distribution of terminal structures produced by the
+generator, while OPES further biases this search along ligand-pose collective
+variables. Preliminary experiments on Boltz-2 show that even a baseline
+cofolding model can generate multiple stable ligand poses under TPS+OPES,
+including rare displaced states invisible to single-shot prediction. These
+results show how simulations and physics can help overcome the limitations of
+data-driven generative models.
 \end{abstract}
 
 \maketitle

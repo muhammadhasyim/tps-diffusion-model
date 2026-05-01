@@ -698,7 +698,10 @@ def _prepare_evaluator_contexts(group: GPUReplicaGroup, args: Any) -> None:
         opes_states = prod_dir / "opes_states"
         if opes_states.is_dir():
             copy_opes_state_snapshot(opes_states, scratch_dir / "opes_states")
-        script = prepare_evaluator_scratch_tree(prod_dir, scratch_dir)
+        script = prepare_evaluator_scratch_tree(
+            production_rep_root=prod_dir,
+            scratch_root=scratch_dir,
+        )
         state = sim.context.getState(getPositions=True)
         group.eval_ctxs[rep] = refresh_evaluator_context(
             template_system_xml=_serialize_system(sim.system),
